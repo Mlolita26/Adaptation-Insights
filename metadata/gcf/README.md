@@ -1,0 +1,1 @@
+﻿No GCF document catalogue CSV exists yet — the gcf.R scraper logged downloads but never wrote a metadata file. The 18 downloaded documents (7 evaluation/completion, 11 funding proposals) are in OneDrive under Data\Project_doc\gcf\Docs\. Adding a catalogue (and RIS) is on the roadmap.

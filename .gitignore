@@ -1,19 +1,27 @@
+# R session artefacts
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
+.Renviron
 
-# Downloaded PDFs (large binary files)
-downloads/**/*.pdf
-downloads/**/*.PDF
+# Pipeline scratch outputs (canonical data lives on OneDrive, not in git)
+data/**
+!data/.gitkeep
 
-# Generated data files (CSVs with metadata/logs)
-data/*.csv
+# Downloaded documents (large binaries; corpus lives in OneDrive Data/Project_doc)
+downloads/**
+!downloads/.gitkeep
+
+# Generated reports and logs
+reports/
 logs/*.csv
 
-# Keep placeholder files so folders are tracked in git
-!downloads/.gitkeep
-!data/.gitkeep
-!logs/.gitkeep
+# OS junk
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Keep placeholder files so empty folders are tracked
 !docs/.gitkeep
 !tests/.gitkeep

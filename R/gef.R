@@ -57,10 +57,6 @@ GEF_EXPORT_URL <- paste0(GEF_DB_URL, "/export")
 GEF_FOCAL_CLIMATE_CHANGE  <- "2207"
 GEF_FOCAL_LAND_DEGRADATION <- "2210"  # optional: uncomment in run_gef_scraper() if needed
 
-# Status IDs
-GEF_STATUS_COMPLETED <- "396"
-GEF_STATUS_APPROVED  <- "412"
-
 # African country IDs for project_country_national facet
 GEF_AFRICA_COUNTRIES <- c(
   Algeria = "15", Angola = "16", Benin = "27", Botswana = "31",
@@ -104,20 +100,16 @@ GEF_DOC_TYPE_PATTERNS <- c(
 # ── Helper: Build GEF filter URL ──────────────────────────────────────────
 build_gef_url <- function(country_id = NULL,
                           focal_area = GEF_FOCAL_CLIMATE_CHANGE,
-                          statuses = c(GEF_STATUS_COMPLETED, GEF_STATUS_APPROVED),
                           page = NULL) {
+  # Note: no status filter — Drupal facets AND separate f[N] indices across
+  # status values, making it impossible to match (Completed AND Approved = 0 results).
+  # All project statuses are included; document-type filtering handles relevance.
   filters <- c()
   idx <- 0
 
   # Focal area
   filters <- c(filters, paste0("f[", idx, "]=focal_areas:", focal_area))
   idx <- idx + 1
-
-  # Statuses
-  for (s in statuses) {
-    filters <- c(filters, paste0("f[", idx, "]=latest_timeline_status:", s))
-    idx <- idx + 1
-  }
 
   # Country (optional — omit to get all)
   if (!is.null(country_id)) {
@@ -195,7 +187,7 @@ collect_project_metadata <- function() {
       }
 
       # Check for next page
-      next_link <- html %>% rvest::html_node("li.pager-next a, a[rel='next']")
+      next_link <- html %>% rvest::html_node("a[rel='next']")
       if (is.null(next_link)) break
 
       page <- page + 1
@@ -473,9 +465,57 @@ filter_target_documents <- function(docs) {
   target_docs
 }
 
-# ── Step 5: Download documents ────────────────────────────────────────────
+# ── Step 5: Select best document per project ──────────────────────────────
+# Document type priority: lower number = preferred
+GEF_DOC_PRIORITY <- c(
+  "Terminal Evaluation"          = 1L,
+  "Mid-Term Review"              = 2L,
+  "Completion Report"            = 3L,
+  "Evaluation"                   = 4L,
+  "Project Document"             = 5L,
+  "Review Sheet"                 = 6L,
+  "CEO Endorsement"              = 7L,
+  "Project Implementation Report"= 8L,
+  "Agency Project Document"      = 9L,
+  "Tracking Tool"                = 10L,
+  "Project Identification Form"  = 11L
+)
+
+select_best_gef_document <- function(docs) {
+  cli::cli_h2("Step 5: Selecting best document per project")
+
+  if (nrow(docs) == 0) return(docs)
+
+  # Assign priority integer; NA doc_type gets lowest priority
+  docs$priority <- GEF_DOC_PRIORITY[docs$doc_type]
+  docs$priority[is.na(docs$priority)] <- 99L
+
+  # Within each project (gef_id), keep the row with the best (lowest) priority.
+  # Tie-break: first row wins (documents are already ordered by page as scraped).
+  best <- docs %>%
+    dplyr::group_by(gef_id) %>%
+    dplyr::slice_min(order_by = priority, n = 1, with_ties = FALSE) %>%
+    dplyr::ungroup()
+
+  best$priority <- NULL
+
+  cli::cli_alert_success(
+    "One-per-project selection: {nrow(docs)} docs -> {nrow(best)} (one per project)"
+  )
+
+  type_counts <- best %>% dplyr::count(doc_type) %>% dplyr::arrange(desc(n))
+  for (j in seq_len(min(nrow(type_counts), 15))) {
+    cli::cli_alert_info(
+      "  {coalesce(type_counts$doc_type[j], '(unknown)')}: {type_counts$n[j]}"
+    )
+  }
+
+  best
+}
+
+# ── Step 6: Download documents ────────────────────────────────────────────
 download_documents <- function(docs) {
-  cli::cli_h2("Step 5: Downloading documents")
+  cli::cli_h2("Step 6: Downloading documents")
 
   if (nrow(docs) == 0) {
     cli::cli_alert_warning("No documents to download.")
@@ -489,8 +529,10 @@ download_documents <- function(docs) {
   skipped <- 0
 
   for (i in seq_len(nrow(docs))) {
-    gef_id <- as.character(docs$gef_id[i])
-    dtype  <- as.character(docs$doc_type[i] %||% "doc")
+    gef_id  <- as.character(docs$gef_id[i])
+    dtype   <- docs$doc_type[i]
+    if (is.na(dtype) || !nzchar(dtype)) dtype <- "unknown"
+    dtype   <- as.character(dtype)
     doc_url <- as.character(docs$doc_url[i])
 
     # Determine file extension from URL
@@ -588,7 +630,7 @@ save_metadata <- function(data, filename) {
 run_gef_scraper <- function() {
   cli::cli_h1("GEF Grey Literature Scraper")
   cli::cli_alert_info("Download directory: {DOWNLOAD_DIR}")
-  cli::cli_alert_info("Filters: Climate Change, Africa, Approved + Completed, >= {GEF_MIN_YEAR}")
+  cli::cli_alert_info("Filters: Climate Change, Africa (all statuses), >= {GEF_MIN_YEAR}")
 
   # Step 1: Collect project metadata by scraping HTML tables
   raw_projects <- collect_project_metadata()
@@ -631,8 +673,12 @@ run_gef_scraper <- function() {
   # Save target documents metadata
   save_metadata(target_docs, "gef_target_documents.csv")
 
-  # Step 5: Download
-  download_documents(target_docs)
+  # Step 5: One-per-project selection
+  best_docs <- select_best_gef_document(target_docs)
+  save_metadata(best_docs, "gef_best_documents.csv")
+
+  # Step 6: Download
+  download_documents(best_docs)
 
   # Summary
   print_source_summary(SOURCE_NAME)

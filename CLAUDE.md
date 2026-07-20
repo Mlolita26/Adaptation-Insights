@@ -66,8 +66,8 @@ AI_grey_litterature/
 | World Bank | `worldbank.R` | ✅ Working | REST API (search.worldbank.org/api/v3/wds) |
 | GCF | `gcf.R` | ✅ Working | Drupal AJAX scraping |
 | GEF | `gef.R` | ✅ Working | HTML table scraping |
-| AfDB | `afdb.R` | 🔲 Not started | TBD (research needed) |
-| IFAD | `ifad.R` | 🔲 Not started | TBD |
+| AfDB | `afdb.R` | ✅ Built | Sector-filtered HTML scraping (Drupal 7 Views, Environment+Climate Change) |
+| IFAD | `ifad.R` | ✅ Built | IATI XML (registry API) → D-Portal fallback; www.ifad.org blocks scrapers (403) |
 | Adaptation Fund | `af.R` | 🔲 Not started | TBD |
 | FAO | `fao.R` | 🔲 Not started | TBD |
 | UNDP | `undp.R` | 🔲 Not started | TBD |
