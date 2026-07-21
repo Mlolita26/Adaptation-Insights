@@ -47,18 +47,24 @@ merely mention "resilience" or "drought". They are kept in the catalogue with
 batched LLM) before extraction. Nothing is silently discarded: `dropped` rows
 had no positive signal in any field the World Bank publishes.
 
-## Corpus status
+## Corpus status (reconciled 2026-07-21)
 
-- **On disk** (`Docs/2015_2026/`, 204 files): the corpus from the original
-  2026-07 scrape, date-filtered only — it still contains ~43 documents the new
-  rule excludes (17 DPOs, 4 non-African, off-topic) and misses ~163 in-scope
-  projects the new method finds.
-- **New-method catalogue** (2026-07-21, verified): 275 in-scope projects
-  (112 already on disk + 163 to download) + 476 to_screen projects.
-  Gold-standard projects (TerrAfrica P149269, Kenya KACCAL, Uganda ACDP) all
-  confirmed present.
+The on-disk corpus now matches the verified new-method catalogue
+(`wb_new_method_catalogue.csv`):
+
+- `Docs/2015_2026/` — **276 files ≈ 275 in-scope projects** (113 kept from the
+  original scrape + 163 newly downloaded, 0 failures). Gold-standard projects
+  (TerrAfrica P149269, Kenya KACCAL, Uganda ACDP) all present.
+- `Docs/to_screen/` — 48 files whose only agriculture/adaptation evidence is
+  in the abstract; must pass screening before extraction. (A further 428
+  to_screen projects exist in the catalogue but are not downloaded — screen
+  first, download keepers.)
+- `Docs/screened_out/` — 43 files excluded by the new rule (17 budget-support
+  DPOs/PRSCs, 4 non-African, off-topic ICRs). Parked, not deleted.
+- `Docs/pre_2015/` — 115 files outside the time window. Parked.
 - `renamed_long_paths.csv` maps 124 files renamed for the Windows 260-char
-  path limit.
+  path limit. Note: the Zotero RIS predates this reorganisation and needs
+  regenerating.
 
 ## Why the method changed (2026-07-21 comparison findings)
 
