@@ -23,7 +23,7 @@ AI_grey_litterature/
 │   ├── worldbank.R       # ✅ Working
 │   ├── gcf.R             # ✅ Working
 │   ├── gef.R             # ✅ Working
-│   ├── afdb.R            # 🔲 To build
+│   ├── afdb.R            # ✅ Working
 │   ├── ifad.R            # 🔲 To build
 │   └── run_all.R         # Master runner
 ├── data/                 # Metadata CSVs + download_log.csv
@@ -66,7 +66,7 @@ AI_grey_litterature/
 | World Bank | `worldbank.R` | ✅ Working | REST API (search.worldbank.org/api/v3/wds) |
 | GCF | `gcf.R` | ✅ Working | Drupal AJAX scraping |
 | GEF | `gef.R` | ✅ Working | HTML table scraping |
-| AfDB | `afdb.R` | ✅ Built | Sector-filtered HTML scraping (Drupal 7 Views, Environment+Climate Change) |
+| AfDB | `afdb.R` | ✅ Working | Category listings on www.afdb.org (PCR/PCREN/PPER/agri evaluations) + IDEV faceted search (taxonomy discovered at runtime); per-host session cookies + browser headers defeat the WAF; modes: AFDB_MODE=probe/capped/load/full |
 | IFAD | `ifad.R` | ✅ Built | IATI XML (registry API) → D-Portal fallback; www.ifad.org blocks scrapers (403) |
 | Adaptation Fund | `af.R` | 🔲 Not started | TBD |
 | FAO | `fao.R` | 🔲 Not started | TBD |

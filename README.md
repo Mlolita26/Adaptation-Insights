@@ -61,7 +61,7 @@ are parked in clearly named folders, never deleted.
 │   ├── worldbank.R              World Bank Documents & Reports API scraper ✅
 │   ├── gcf.R                    Green Climate Fund scraper (Drupal AJAX) ✅
 │   ├── gef.R                    Global Environment Facility scraper (HTML) ✅
-│   ├── afdb.R                   AfDB scraper (PCRs, PARs, IDEV) — in progress 🚧
+│   ├── afdb.R                   AfDB scraper (PCRs, PCR reviews, PPERs, IDEV) ✅
 │   ├── ifad.R                   stub — to build 🔲
 │   ├── worldbank_project_info.R project-level metadata from WB project pages
 │   ├── gef_doc_dates.R          document date recovery (see below)
@@ -157,7 +157,8 @@ Two routes:
 - [ ] Align `gef.R` / `gcf.R` to scope (evaluation doc types only)
 - [ ] Write GCF document catalogue CSV + RIS
 - [ ] Relevance screening (rules first, LLM for the ambiguous remainder)
-- [ ] Finish AfDB scraper (session warm-up / 403 handling in progress); then IFAD, Adaptation Fund, FAO, UNDP
+- [x] AfDB scraper (category listings + IDEV faceted search, WAF session handling, evaluation-only scope 2015–2025)
+- [ ] Remaining scrapers: IFAD, Adaptation Fund, FAO, UNDP
 - [ ] Automate the full flow for newly published documents
 
 ## Contributing
