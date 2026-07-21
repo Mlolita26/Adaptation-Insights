@@ -1,34 +1,46 @@
 ##############################################################################
 # worldbank.R — World Bank Documents & Reports API Scraper
 #
-# Targets: Implementation Completion and Results Reports (ICRs),
+# Targets: EVALUATION documents only (scope decision 2026-07-17):
+#          Implementation Completion and Results Reports (ICRs) and
 #          Project Performance Assessment Reviews (PPARs),
-#          Project Appraisal Documents (PADs) for Africa agriculture/adaptation
+#          2015+, Africa agriculture/adaptation.
 #
 # API docs: https://documents.worldbank.org/en/publication/documents-reports/api
 # Base URL: https://search.worldbank.org/api/v3/wds
 #
+# Server-side filters (verified live 2026-07-21):
+#   docty_exact    — evaluation document types only
+#   count_exact    — each African country
+#   teratopic_exact— WB's own topic classification ("Agriculture") — catches
+#                    agriculture projects regardless of title wording
+#   strdate        — document date floor 2015-01-01
+#
 # Strategy:
-#   1. Query by document type (ICR, PPAR) — these are structured fields
-#   2. Filter by African countries using count_exact
-#   3. Also run keyword-based queries for agriculture + adaptation + Africa
-#   4. Deduplicate by document ID
-#   5. Download PDFs, validate, log everything
+#   1. Query docty × African country × Agriculture topic, date >= 2015
+#   2. Keyword queries (date-filtered) as a recall net for adaptation docs
+#      not topic-tagged Agriculture
+#   3. Deduplicate by document ID; relevance screen; drop budget-support
+#      instruments (DPO/DPF/PRSC — policy lending, nothing implemented)
+#   4. Download PDFs from documents1.worldbank.org with a browser UA
+#      (documents.worldbank.org returns 403 to non-browser clients)
+#
+# Run modes via env var WB_MODE: probe | capped | load | full (default)
 ##############################################################################
 
 # ── Setup ──────────────────────────────────────────────────────────────────
 # Find and source config + utils. Works with Rscript, source(), and interactive R.
 .find_r_dir <- function() {
-  # Try sys.frame (works with source())
+  # returns the directory containing this script (the R/ folder)
   tryCatch({
     d <- dirname(sys.frame(2)$ofile)
-    if (!is.null(d) && nzchar(d)) return(normalizePath(file.path(d, ".."), mustWork = FALSE))
+    if (!is.null(d) && nzchar(d)) return(normalizePath(d, mustWork = FALSE))
   }, error = function(e) NULL)
   # Try commandArgs (works with Rscript)
   tryCatch({
     args <- commandArgs(trailingOnly = FALSE)
     fa <- grep("^--file=", args, value = TRUE)
-    if (length(fa)) return(normalizePath(file.path(dirname(sub("^--file=", "", fa[1])), ".."), mustWork = FALSE))
+    if (length(fa)) return(normalizePath(dirname(sub("^--file=", "", fa[1])), mustWork = FALSE))
   }, error = function(e) NULL)
   # Fall back to working directory
   wd <- getwd()
@@ -76,8 +88,29 @@ WB_KEYWORD_QUERIES <- c(
   "agricultural development climate Africa"
 )
 
+# ── Scope filters (team decision 2026-07-17) ───────────────────────────────
+# Document date floor — applied CLIENT-SIDE on docdt. The API's strdate
+# param is unreliable in combination with teratopic_exact/count_exact
+# (verified 2026-07-21: Kenya+topic+strdate returns 0 despite matching
+# docs existing). No ceiling: evaluations of 2015-2025 activity keep
+# being published.
+WB_MIN_YEAR <- 2015L
+
+# WB topic classification for Strategy 1 (teratopic_exact). Independent of
+# title wording — assigned by the World Bank itself.
+WB_TOPICS <- c("Agriculture")
+
+# Budget-support / policy-lending instruments: excluded — nothing is
+# implemented on the ground, so there are no adaptation actions to extract.
+WB_EXCLUDE_TITLE_RE <- paste(
+  "Development Policy", "Poverty Reduction Support", "Budget Support",
+  "Policy Financing", "\\bDPO\\b", "\\bDPF\\b", "\\bDPL\\b", "\\bPRSC\\b",
+  sep = "|"
+)
+
 # ── Helper: Build WB API URL ──────────────────────────────────────────────
 build_wb_url <- function(qterm = NULL, docty = NULL, country = NULL,
+                         topic = NULL, strdate = NULL,
                          rows = 50, offset = 0) {
   params <- list(
     format = "json",
@@ -85,9 +118,11 @@ build_wb_url <- function(qterm = NULL, docty = NULL, country = NULL,
     rows   = rows,
     os     = offset
   )
-  if (!is.null(qterm))   params$qterm        <- qterm
-  if (!is.null(docty))   params$docty_exact   <- docty
-  if (!is.null(country)) params$count_exact   <- country
+  if (!is.null(qterm))   params$qterm          <- qterm
+  if (!is.null(docty))   params$docty_exact    <- docty
+  if (!is.null(country)) params$count_exact    <- country
+  if (!is.null(topic))   params$teratopic_exact <- topic
+  if (!is.null(strdate)) params$strdate        <- strdate
 
   url <- paste0(WB_API_BASE, "?", paste(
     mapply(function(k, v) paste0(k, "=", utils::URLencode(as.character(v), reserved = TRUE)),
@@ -137,29 +172,71 @@ parse_wb_response <- function(json_data) {
   bind_rows(records)
 }
 
-# ── Strategy 1: Search by document type for each African country ──────────
-search_by_doctype_country <- function() {
-  cli::cli_h2("Strategy 1: Search by document type × African country")
+# ── Strategy 1: doc type × African country × Agriculture topic ────────────
+search_by_doctype_country <- function(countries = unname(WB_AFRICA_NAMES)) {
+  cli::cli_h2("Strategy 1: doc type × country × topic ({paste(WB_TOPICS, collapse='/')})")
 
   all_results <- tibble()
-  country_names <- unname(WB_AFRICA_NAMES)
 
-  total_combos <- length(WB_DOC_TYPES) * length(country_names)
+  total_combos <- length(WB_DOC_TYPES) * length(countries) * length(WB_TOPICS)
   combo_count <- 0
 
   for (docty in WB_DOC_TYPES) {
-    for (country in country_names) {
-      combo_count <- combo_count + 1
+    for (country in countries) {
+      for (topic in WB_TOPICS) {
+        combo_count <- combo_count + 1
 
-      if (combo_count %% 20 == 0) {
-        cli::cli_alert_info("Progress: {combo_count}/{total_combos} combinations...")
+        if (combo_count %% 20 == 0) {
+          cli::cli_alert_info("Progress: {combo_count}/{total_combos} combinations...")
+        }
+
+        offset <- 0
+        page_size <- 50
+
+        repeat {
+          url <- build_wb_url(docty = docty, country = country, topic = topic,
+                              rows = page_size, offset = offset)
+          json <- safe_get_json(url)
+
+          if (is.null(json)) break
+
+          total <- as.numeric(json$total %||% 0)
+          if (total == 0) break
+
+          records <- parse_wb_response(json)
+          if (nrow(records) == 0) break
+
+          all_results <- bind_rows(all_results, records)
+          offset <- offset + page_size
+
+          if (offset >= total) break
+        }
       }
+    }
+  }
 
+  cli::cli_alert_success("Strategy 1 found {nrow(all_results)} raw results")
+  all_results
+}
+
+# ── Strategy 2: Keyword searches (recall net) ─────────────────────────────
+#' Catches agriculture/adaptation evaluation docs the WB did not topic-tag
+#' "Agriculture". Restricted to the evaluation doc types and the date floor.
+search_by_keywords <- function(max_queries = length(WB_KEYWORD_QUERIES)) {
+  cli::cli_h2("Strategy 2: Keyword-based searches (evaluation doc types)")
+
+  all_results <- tibble()
+
+  for (query in head(WB_KEYWORD_QUERIES, max_queries)) {
+    cli::cli_alert_info("Searching: {query}")
+
+    for (docty in WB_DOC_TYPES) {
       offset <- 0
       page_size <- 50
+      max_results <- 500  # cap per query
 
       repeat {
-        url <- build_wb_url(docty = docty, country = country,
+        url <- build_wb_url(qterm = query, docty = docty,
                             rows = page_size, offset = offset)
         json <- safe_get_json(url)
 
@@ -174,44 +251,8 @@ search_by_doctype_country <- function() {
         all_results <- bind_rows(all_results, records)
         offset <- offset + page_size
 
-        if (offset >= total) break
+        if (offset >= total || offset >= max_results) break
       }
-    }
-  }
-
-  cli::cli_alert_success("Strategy 1 found {nrow(all_results)} raw results")
-  all_results
-}
-
-# ── Strategy 2: Keyword searches ──────────────────────────────────────────
-search_by_keywords <- function() {
-  cli::cli_h2("Strategy 2: Keyword-based searches")
-
-  all_results <- tibble()
-
-  for (query in WB_KEYWORD_QUERIES) {
-    cli::cli_alert_info("Searching: {query}")
-
-    offset <- 0
-    page_size <- 50
-    max_results <- 500  # cap per query
-
-    repeat {
-      url <- build_wb_url(qterm = query, rows = page_size, offset = offset)
-      json <- safe_get_json(url)
-
-      if (is.null(json)) break
-
-      total <- as.numeric(json$total %||% 0)
-      if (total == 0) break
-
-      records <- parse_wb_response(json)
-      if (nrow(records) == 0) break
-
-      all_results <- bind_rows(all_results, records)
-      offset <- offset + page_size
-
-      if (offset >= total || offset >= max_results) break
     }
   }
 
@@ -228,6 +269,14 @@ filter_relevant <- function(results) {
   # Deduplicate by document ID
   results <- results %>% distinct(id, .keep_all = TRUE)
   cli::cli_alert_info("After dedup: {nrow(results)} documents")
+
+  # Date floor (client-side; the API strdate param is unreliable)
+  n_before <- nrow(results)
+  results <- results %>%
+    mutate(.yr = suppressWarnings(as.integer(substr(doc_date, 1, 4)))) %>%
+    filter(is.na(.yr) | .yr >= WB_MIN_YEAR) %>%
+    select(-.yr)
+  cli::cli_alert_info("Date floor >= {WB_MIN_YEAR}: dropped {n_before - nrow(results)}")
 
   # Build combined text for filtering
   results <- results %>%
@@ -252,7 +301,67 @@ filter_relevant <- function(results) {
     select(-combined_text, -relevant)
 
   cli::cli_alert_success("After relevance filter: {nrow(results)} documents")
+
+  # Drop budget-support / policy-lending instruments (nothing implemented)
+  n_before <- nrow(results)
+  results <- results %>%
+    filter(!grepl(WB_EXCLUDE_TITLE_RE,
+                  paste(coalesce(title, ""), coalesce(report_name, "")),
+                  ignore.case = FALSE))
+  cli::cli_alert_info("Budget-support instruments dropped: {n_before - nrow(results)}")
+
   results
+}
+
+# ── Download one PDF (documents1 host + browser UA) ───────────────────────
+#' documents.worldbank.org returns 403 Forbidden to non-browser clients.
+#' Fetch from the documents1 CDN host with a browser User-Agent instead;
+#' fall back to the original URL via the shared util. Validation mirrors
+#' download_pdf() (min size + %PDF- magic, delete on fail).
+WB_BROWSER_UA <- paste0(
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ",
+  "AppleWebKit/537.36 (KHTML, like Gecko) ",
+  "Chrome/126.0.0.0 Safari/537.36"
+)
+
+wb_download_pdf <- function(url, dest) {
+  if (file.exists(dest)) return("skipped")
+  url1 <- sub("^https?://documents\\.worldbank\\.org",
+              "https://documents1.worldbank.org", url)
+  Sys.sleep(runif(1, HTTP_CONFIG$delay_min, HTTP_CONFIG$delay_max))
+  resp <- tryCatch(
+    httr::GET(url1, httr::user_agent(WB_BROWSER_UA),
+              httr::timeout(HTTP_CONFIG$timeout_sec)),
+    error = function(e) NULL
+  )
+  if (is.null(resp) || httr::status_code(resp) != 200) {
+    # fall back to the original host (https), still with the browser UA —
+    # some documents only resolve there; remaining failures are dead links
+    resp <- tryCatch(
+      httr::GET(sub("^http:", "https:", url), httr::user_agent(WB_BROWSER_UA),
+                httr::timeout(HTTP_CONFIG$timeout_sec)),
+      error = function(e) NULL
+    )
+    if (is.null(resp) || httr::status_code(resp) != 200) return(FALSE)
+  }
+  ok <- tryCatch({
+    dir.create(dirname(dest), recursive = TRUE, showWarnings = FALSE)
+    writeBin(httr::content(resp, as = "raw"), dest)
+    fsize <- file.info(dest)$size
+    valid <- FALSE
+    if (!is.na(fsize) && fsize >= HTTP_CONFIG$min_pdf_bytes) {
+      con   <- file(dest, "rb")
+      magic <- rawToChar(readBin(con, "raw", n = 5))
+      close(con)
+      valid <- identical(magic, "%PDF-")
+    }
+    if (!valid && file.exists(dest)) file.remove(dest)
+    valid
+  }, error = function(e) {
+    if (file.exists(dest)) file.remove(dest)
+    FALSE
+  })
+  ok
 }
 
 # ── Download PDFs ─────────────────────────────────────────────────────────
@@ -295,7 +404,7 @@ download_results <- function(results) {
     }
 
     # Download
-    result <- download_pdf(row$pdf_url, dest)
+    result <- wb_download_pdf(row$pdf_url, dest)
 
     if (identical(result, TRUE)) {
       log_download(SOURCE_NAME, row$project_id, row$doc_type,
@@ -333,14 +442,39 @@ save_metadata <- function(results) {
   cli::cli_alert_success("Metadata saved to: {meta_path}")
 }
 
+# ── Access/filter probe ────────────────────────────────────────────────────
+#' One cheap query verifying the server-side filters work: Kenya ICRs with
+#' the Agriculture topic and 2015+ date floor.
+wb_probe <- function() {
+  cli::cli_h2("World Bank API filter probe (Kenya ICRs)")
+  base_url  <- build_wb_url(docty = WB_DOC_TYPES[1], country = "Kenya", rows = 0)
+  topic_url <- build_wb_url(docty = WB_DOC_TYPES[1], country = "Kenya",
+                            topic = WB_TOPICS[1], rows = 50)
+  n_base <- as.numeric(safe_get_json(base_url)$total %||% -1)
+  topic_json <- safe_get_json(topic_url)
+  n_topic <- as.numeric(topic_json$total %||% -1)
+  recs <- parse_wb_response(topic_json)
+  n_2015 <- sum(suppressWarnings(as.integer(substr(recs$doc_date, 1, 4))) >= WB_MIN_YEAR,
+                na.rm = TRUE)
+  cli::cli_alert_info("Kenya ICRs, no filters:              {n_base}")
+  cli::cli_alert_info("Kenya ICRs, Agriculture topic:       {n_topic}")
+  cli::cli_alert_info("  of which >= {WB_MIN_YEAR} (client-side):   {n_2015}")
+  ok <- n_base > 0 && n_topic > 0 && n_topic < n_base && n_2015 > 0
+  if (ok) cli::cli_alert_success("Topic filter + client-side date floor working")
+  else    cli::cli_alert_danger("Unexpected counts — check API params")
+  invisible(c(base = n_base, topic = n_topic, in_scope = n_2015))
+}
+
 # ── Main execution ────────────────────────────────────────────────────────
-run_worldbank_scraper <- function() {
+run_worldbank_scraper <- function(countries = unname(WB_AFRICA_NAMES),
+                                  max_keyword_queries = length(WB_KEYWORD_QUERIES)) {
   cli::cli_h1("World Bank Grey Literature Scraper")
   cli::cli_alert_info("Download directory: {DOWNLOAD_DIR}")
+  cli::cli_alert_info("Scope: {paste(WB_DOC_TYPES, collapse=' | ')}; topic {paste(WB_TOPICS, collapse='/')}; date >= {WB_MIN_YEAR}")
 
   # Collect results from both strategies
-  results1 <- search_by_doctype_country()
-  results2 <- search_by_keywords()
+  results1 <- search_by_doctype_country(countries)
+  results2 <- search_by_keywords(max_keyword_queries)
 
   # Combine and deduplicate
   all_results <- bind_rows(results1, results2)
@@ -362,7 +496,13 @@ run_worldbank_scraper <- function() {
   invisible(relevant)
 }
 
-# Run if called directly
+# Run if called directly. WB_MODE: probe | capped | load | full (default)
 if (sys.nframe() == 0 || !interactive()) {
-  run_worldbank_scraper()
+  switch(Sys.getenv("WB_MODE", "full"),
+    probe  = wb_probe(),
+    capped = run_worldbank_scraper(countries = c("Kenya", "Mozambique"),
+                                   max_keyword_queries = 1),
+    load   = invisible(NULL),   # source functions only, no run
+    run_worldbank_scraper()
+  )
 }

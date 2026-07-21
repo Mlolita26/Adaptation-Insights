@@ -3,13 +3,14 @@
 Scraper: `Script/AI_grey_litterature/R/worldbank.R` (REST API: search.worldbank.org/api/v3/wds)
 Metadata: `worldbank_metadata.csv` (354 documents). Last corpus update: 2026-07-20.
 
-## 1. Query-time filters (what was requested from the API)
+## 1. Query-time filters (what is requested from the API)
 
 | Filter | Value |
 |---|---|
 | Document types (exact) | Implementation Completion and Results Report; Implementation Completion Report; Project Performance Assessment Review |
 | Countries | each of the 54 African Union member states (one query per doc type × country) |
-| Keyword sweep (2nd strategy) | 7 queries, e.g. "agriculture adaptation climate Africa", "climate smart agriculture Africa", "livestock resilience Africa drought" |
+| **Topic (since 2026-07-21)** | `teratopic_exact=Agriculture` on Strategy 1 — the World Bank's own document classification, independent of title wording |
+| Keyword sweep (2nd strategy, recall net) | 7 queries, e.g. "agriculture adaptation climate Africa" — now also restricted to the evaluation doc types |
 
 Evaluation-type documents only by construction — appraisal documents (PADs) and
 proposals were never requested.
@@ -17,9 +18,19 @@ proposals were never requested.
 ## 2. Post-query filters (applied in the scraper)
 
 - Deduplication by API document id.
+- **Date floor `docdt` >= 2015 (since 2026-07-21)** — applied client-side; the
+  API's `strdate` parameter proved unreliable in combination with other filters.
 - Relevance screen on title+abstract text: must contain an **Africa term** AND
   (an **agriculture** keyword OR an **adaptation** keyword). Keyword lists (EN/FR/PT)
   in `R/00_config.R`.
+- **Budget-support instrument exclusion (since 2026-07-21)**: titles matching
+  `Development Policy | DPO | DPF | DPL | Poverty Reduction Support | Budget
+  Support | PRSC` are dropped — policy lending implements nothing on the ground.
+
+Note: the current corpus (Docs/, catalogued in `worldbank_metadata.csv`, 354 rows)
+predates the 2026-07-21 scraper filters — it was filtered post-hoc by date only,
+so it still contains budget-support and off-topic ICRs pending the screening pass.
+Future scraper runs apply all filters at source.
 
 ## 3. Corpus organisation (2026-07-20, after download)
 
