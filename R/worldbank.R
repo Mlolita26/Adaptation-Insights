@@ -70,10 +70,11 @@ WB_DOC_TYPES <- c(
   "Project Performance Assessment Review"
 )
 
-# Fields to return in API response
+# Fields to return in API response (teratopic = WB's own topic
+# classification, used as keep/drop evidence in filter_relevant)
 WB_FIELDS <- paste(
   "id", "display_title", "pdfurl", "docdt", "docty", "count",
-  "repnme", "projn", "abstracts", "lang_exact", "url",
+  "repnme", "projn", "abstracts", "lang_exact", "url", "teratopic",
   sep = ","
 )
 
@@ -96,9 +97,22 @@ WB_KEYWORD_QUERIES <- c(
 # being published.
 WB_MIN_YEAR <- 2015L
 
-# WB topic classification for Strategy 1 (teratopic_exact). Independent of
-# title wording — assigned by the World Bank itself.
+# WB topic classification used as KEEP EVIDENCE (not as a query filter:
+# topic coverage is incomplete on recent documents — using it server-side
+# verifiably loses in-scope projects, e.g. Uganda ACDP 2024, TerrAfrica).
+# A document is kept if its topics include this OR its title matches
+# agriculture/adaptation keywords.
 WB_TOPICS <- c("Agriculture")
+
+# Regional/global 'count' values: multi-country projects are NOT filed
+# under their member countries (verified 2026-07-21: Regional Pastoral
+# Livelihoods = 'Africa'; some docs even carry count='World', e.g. DRC
+# Agriculture Rehabilitation). Swept in addition to the 54 countries.
+WB_REGIONAL_COUNTS <- c(
+  "Africa", "Eastern Africa", "Western Africa", "Southern Africa",
+  "Central Africa", "Western and Central Africa",
+  "Eastern and Southern Africa", "World"
+)
 
 # Budget-support / policy-lending instruments: excluded — nothing is
 # implemented on the ground, so there are no adaptation actions to extract.
@@ -163,7 +177,8 @@ parse_wb_response <- function(json_data) {
         project_id    = flatten_field(doc$projn),
         abstract      = flatten_field(doc$abstracts),
         language      = flatten_field(doc$lang_exact),
-        web_url       = flatten_field(doc$url)
+        web_url       = flatten_field(doc$url),
+        topics        = flatten_field(doc$teratopic)
       )
     }, error = function(e) NULL)
   }))
@@ -172,45 +187,46 @@ parse_wb_response <- function(json_data) {
   bind_rows(records)
 }
 
-# ── Strategy 1: doc type × African country × Agriculture topic ────────────
-search_by_doctype_country <- function(countries = unname(WB_AFRICA_NAMES)) {
-  cli::cli_h2("Strategy 1: doc type × country × topic ({paste(WB_TOPICS, collapse='/')})")
+# ── Strategy 1: doc type × African country (recall-first, no topic) ───────
+#' Fetches ALL evaluation docs per country; scope precision is applied in
+#' filter_relevant() using the returned teratopic field + title keywords.
+search_by_doctype_country <- function(countries = c(unname(WB_AFRICA_NAMES),
+                                                    WB_REGIONAL_COUNTS)) {
+  cli::cli_h2("Strategy 1: doc type × African country (recall-first)")
 
   all_results <- tibble()
 
-  total_combos <- length(WB_DOC_TYPES) * length(countries) * length(WB_TOPICS)
+  total_combos <- length(WB_DOC_TYPES) * length(countries)
   combo_count <- 0
 
   for (docty in WB_DOC_TYPES) {
     for (country in countries) {
-      for (topic in WB_TOPICS) {
-        combo_count <- combo_count + 1
+      combo_count <- combo_count + 1
 
-        if (combo_count %% 20 == 0) {
-          cli::cli_alert_info("Progress: {combo_count}/{total_combos} combinations...")
-        }
+      if (combo_count %% 20 == 0) {
+        cli::cli_alert_info("Progress: {combo_count}/{total_combos} combinations...")
+      }
 
-        offset <- 0
-        page_size <- 50
+      offset <- 0
+      page_size <- 50
 
-        repeat {
-          url <- build_wb_url(docty = docty, country = country, topic = topic,
-                              rows = page_size, offset = offset)
-          json <- safe_get_json(url)
+      repeat {
+        url <- build_wb_url(docty = docty, country = country,
+                            rows = page_size, offset = offset)
+        json <- safe_get_json(url)
 
-          if (is.null(json)) break
+        if (is.null(json)) break
 
-          total <- as.numeric(json$total %||% 0)
-          if (total == 0) break
+        total <- as.numeric(json$total %||% 0)
+        if (total == 0) break
 
-          records <- parse_wb_response(json)
-          if (nrow(records) == 0) break
+        records <- parse_wb_response(json)
+        if (nrow(records) == 0) break
 
-          all_results <- bind_rows(all_results, records)
-          offset <- offset + page_size
+        all_results <- bind_rows(all_results, records)
+        offset <- offset + page_size
 
-          if (offset >= total) break
-        }
+        if (offset >= total) break
       }
     }
   }
@@ -278,29 +294,58 @@ filter_relevant <- function(results) {
     select(-.yr)
   cli::cli_alert_info("Date floor >= {WB_MIN_YEAR}: dropped {n_before - nrow(results)}")
 
-  # Build combined text for filtering
+  # Africa check on the COUNTRY FIELD (abstract mentions of "Africa"
+  # previously admitted Yemen/Lebanon documents). Docs filed under
+  # count='World' pass if the TITLE names an African country.
+  africa_re <- paste(c("africa", tolower(AFRICA_COUNTRIES_EN)), collapse = "|")
+  n_before <- nrow(results)
   results <- results %>%
-    mutate(
-      combined_text = paste(
-        coalesce(title, ""),
-        coalesce(country, ""),
-        coalesce(abstract, ""),
-        coalesce(report_name, ""),
-        sep = " "
-      )
+    filter(
+      grepl(africa_re, tolower(coalesce(country, ""))) |
+      (grepl("world", tolower(coalesce(country, ""))) &
+         grepl(africa_re, tolower(coalesce(title, ""))))
     )
+  cli::cli_alert_info("Non-African country dropped: {n_before - nrow(results)}")
 
-  # Apply relevance filter: Africa + (agriculture OR adaptation)
+  # Three-way scope rule using the WB topic classification as evidence
+  # (topic coverage is incomplete, especially on recent documents):
+  #   in_scope : Agriculture among the WB topics, OR agriculture/adaptation
+  #              keywords in the title/report name
+  #   to_screen: neither of the above, but agriculture/adaptation keywords
+  #              appear in the ABSTRACT — weak evidence, kept for screening
+  #   (dropped): no positive signal in topics, title, or abstract
   results <- results %>%
     rowwise() %>%
-    mutate(relevant = passes_relevance_fast(combined_text,
-                                             require_africa = TRUE,
-                                             require_sector = TRUE)) %>%
-    ungroup() %>%
-    filter(relevant) %>%
-    select(-combined_text, -relevant)
+    mutate(
+      .ag_topic   = grepl("Agriculture", coalesce(topics, ""), fixed = TRUE),
+      .kw = passes_relevance_fast(
+        paste(coalesce(title, ""), coalesce(report_name, ""),
+              coalesce(project_id, ""), sep = " "),
+        require_africa = FALSE,
+        require_sector = TRUE
+      ),
+      .kw_abstract = passes_relevance_fast(
+        coalesce(abstract, ""),
+        require_africa = FALSE,
+        require_sector = TRUE
+      ),
+      screen_status = dplyr::case_when(
+        .ag_topic | .kw ~ "in_scope",
+        .kw_abstract    ~ "to_screen",
+        TRUE            ~ "drop"
+      )
+    ) %>%
+    ungroup()
 
-  cli::cli_alert_success("After relevance filter: {nrow(results)} documents")
+  n_drop <- sum(results$screen_status == "drop")
+  results <- results %>%
+    filter(screen_status != "drop") %>%
+    select(-.ag_topic, -.kw, -.kw_abstract)
+
+  cli::cli_alert_success(paste0(
+    "Scope rule: {sum(results$screen_status == 'in_scope')} in scope, ",
+    "{sum(results$screen_status == 'to_screen')} to screen (abstract evidence only), ",
+    "{n_drop} dropped (no positive signal)"))
 
   # Drop budget-support / policy-lending instruments (nothing implemented)
   n_before <- nrow(results)
