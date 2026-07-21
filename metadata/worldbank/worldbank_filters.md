@@ -1,51 +1,73 @@
-# World Bank — filters applied to this corpus
+# World Bank — how the corpus is built and filtered
 
-Scraper: `Script/AI_grey_litterature/R/worldbank.R` (REST API: search.worldbank.org/api/v3/wds)
-Metadata: `worldbank_metadata.csv` (354 documents). Last corpus update: 2026-07-20.
+Scraper: `Script/AI_grey_litterature/R/worldbank.R` (REST API: search.worldbank.org/api/v3/wds).
+Method finalised 2026-07-21 after a corpus comparison exposed gaps in earlier
+versions (details at the bottom).
 
-## 1. Query-time filters (what is requested from the API)
+## The pipeline in one glance
 
-| Filter | Value |
-|---|---|
-| Document types (exact) | Implementation Completion and Results Report; Implementation Completion Report; Project Performance Assessment Review |
-| Countries | each of the 54 African Union member states (one query per doc type × country) |
-| **Topic (since 2026-07-21)** | `teratopic_exact=Agriculture` on Strategy 1 — the World Bank's own document classification, independent of title wording |
-| Keyword sweep (2nd strategy, recall net) | 7 queries, e.g. "agriculture adaptation climate Africa" — now also restricted to the evaluation doc types |
+```
+1. QUERY (recall-first — nothing filtered away at the API)
+   evaluation doc types only: ICR, Implementation Completion Report, PPAR
+   × each of the 54 African countries
+   × regional values ("Africa", "Eastern Africa", ..., "World" — multi-country
+     projects are NOT filed under their member countries)
+   + 7 agriculture/adaptation keyword queries as a recall net
+   The WB's own topic classification (teratopic) is fetched with every doc.
 
-Evaluation-type documents only by construction — appraisal documents (PADs) and
-proposals were never requested.
+2. FILTER (client-side, in order; every count reported)
+   a. dedup by document id
+   b. date floor: document date >= 2015  (team decision 2026-07-17)
+   c. Africa check on the country FIELD (abstract mentions once admitted
+      Yemen/Lebanon docs); count='World' docs pass via African country in title
+   d. three-way scope rule (screen_status column):
+        in_scope  = WB topics include "Agriculture" OR agriculture/adaptation
+                    keywords in the TITLE
+        to_screen = neither, but keywords in the ABSTRACT — weak evidence,
+                    kept and flagged for manual/LLM screening
+        dropped   = no positive signal in topics, title, or abstract
+   e. budget-support instruments dropped (DPO/DPF/DPL/PRSC/"Development
+      Policy" titles) — policy lending implements nothing on the ground
 
-## 2. Post-query filters (applied in the scraper)
+3. DEDUP to one document per project (P-code): prefer in_scope > doc-type
+   priority (ICR > ICR Report > PPAR) > English > most recent revision.
 
-- Deduplication by API document id.
-- **Date floor `docdt` >= 2015 (since 2026-07-21)** — applied client-side; the
-  API's `strdate` parameter proved unreliable in combination with other filters.
-- Relevance screen on title+abstract text: must contain an **Africa term** AND
-  (an **agriculture** keyword OR an **adaptation** keyword). Keyword lists (EN/FR/PT)
-  in `R/00_config.R`.
-- **Budget-support instrument exclusion (since 2026-07-21)**: titles matching
-  `Development Policy | DPO | DPF | DPL | Poverty Reduction Support | Budget
-  Support | PRSC` are dropped — policy lending implements nothing on the ground.
+4. DOWNLOAD via documents1.worldbank.org with a browser User-Agent
+   (documents.worldbank.org returns 403 to scripts); remaining failures are
+   dead legacy links.
+```
 
-Note: the current corpus (Docs/, catalogued in `worldbank_metadata.csv`, 354 rows)
-predates the 2026-07-21 scraper filters — it was filtered post-hoc by date only,
-so it still contains budget-support and off-topic ICRs pending the screening pass.
-Future scraper runs apply all filters at source.
+## What "to_screen" means
 
-## 3. Corpus organisation (2026-07-20, after download)
+Documents whose only agriculture/adaptation evidence is in the abstract —
+typically true borderline cases (watershed management, land administration,
+nutrition, rural infrastructure) mixed with false positives whose abstracts
+merely mention "resilience" or "drought". They are kept in the catalogue with
+`screen_status = "to_screen"` and must pass a screening step (team review or
+batched LLM) before extraction. Nothing is silently discarded: `dropped` rows
+had no positive signal in any field the World Bank publishes.
 
-- Split by `doc_date` (ICR publication year, also at the end of each filename):
-  - `Docs/2015_2026/` — 204 docs (**in scope**; team decision 2026-07-17: 2015–2025 to align with GCA)
-  - `Docs/pre_2015/` — 115 docs (2002–2014, parked)
-- 14 originally-failed downloads recovered via documents1.worldbank.org + browser
-  user-agent (plain documents.worldbank.org returns 403 to scripts).
-- 124 files renamed to short names (Windows 260-char path limit); map in
-  `renamed_long_paths.csv`.
+## Corpus status
 
-## Known limitations
+- **On disk** (`Docs/2015_2026/`, 204 files): the corpus from the original
+  2026-07 scrape, date-filtered only — it still contains ~43 documents the new
+  rule excludes (17 DPOs, 4 non-African, off-topic) and misses ~163 in-scope
+  projects the new method finds.
+- **New-method catalogue** (2026-07-21, verified): 275 in-scope projects
+  (112 already on disk + 163 to download) + 476 to_screen projects.
+  Gold-standard projects (TerrAfrica P149269, Kenya KACCAL, Uganda ACDP) all
+  confirmed present.
+- `renamed_long_paths.csv` maps 124 files renamed for the Windows 260-char
+  path limit.
 
-- The keyword relevance screen admits some off-topic operations (budget-support
-  DPOs/PRSCs, health/refugee projects). A dedicated relevance screening pass is
-  planned before extraction.
-- 32 pre-2015 documents from the metadata were never successfully downloaded
-  (broken links); all in-scope (2015+) documents are complete: 204/204.
+## Why the method changed (2026-07-21 comparison findings)
+
+- Using the WB topic as a **query** filter lost real projects — topic coverage
+  is incomplete on recent documents (Uganda ACDP, TerrAfrica). It is now
+  fetched as **evidence** instead, and combined with title keywords.
+- Regional projects are filed under `count="Africa"/"Eastern Africa"/...`, and
+  some docs under `count="World"` (e.g. DRC Agriculture Rehabilitation) —
+  country-only queries can never find them.
+- The old abstract-based Africa screen admitted Yemen/Lebanon documents.
+- The API's `strdate` date parameter returns wrong results when combined with
+  other filters — dates are filtered client-side.
