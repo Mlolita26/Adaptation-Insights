@@ -685,21 +685,42 @@ afdb_load_manual_listing <- function() {
 }
 
 # ── Helper: Visit a document page to resolve its PDF URL ─────────────────
+#' www.afdb.org document pages embed the PDF in a pdf.js viewer iframe:
+#'   <iframe class="pdf" src="/sites/all/libraries/pdf.js/web/viewer.html
+#'       ?file={urlencoded pdf}" data-src="https://.../xyz.pdf">
+#' IDEV document pages use plain <a href="...pdf"> links.
 resolve_pdf_url <- function(web_url) {
   if (is.na(web_url) || nchar(web_url) == 0) return(NA_character_)
   base <- if (grepl("^https?://idev\\.", web_url)) IDEV_BASE else AFDB_BASE
   page <- afdb_fetch_html(web_url)
   if (is.null(page)) return(NA_character_)
+
+  absolutize <- function(href) {
+    if (startsWith(href, "http")) href else paste0(base, href)
+  }
+
+  # 1. pdf.js viewer iframe (www.afdb.org)
+  iframes <- rvest::html_elements(page, "iframe.pdf, iframe[data-src], iframe[src*='pdf.js']")
+  for (fr in iframes) {
+    dsrc <- rvest::html_attr(fr, "data-src")
+    if (!is.na(dsrc) && grepl("\\.pdf$", dsrc, ignore.case = TRUE)) return(absolutize(dsrc))
+    src <- rvest::html_attr(fr, "src")
+    if (!is.na(src) && grepl("file=", src)) {
+      f <- utils::URLdecode(sub(".*[?&]file=", "", src))
+      f <- sub("[&#].*$", "", f)
+      if (grepl("\\.pdf$", f, ignore.case = TRUE)) return(absolutize(f))
+    }
+  }
+
+  # 2. plain anchors (IDEV and older www pages)
   pdf_links <- rvest::html_elements(page,
     "a[href$='.pdf'], a[href$='.PDF'], a[href*='fileadmin'], a[href*='/sites/default/files/']")
-  if (length(pdf_links) == 0) return(NA_character_)
-  # prefer links that end in .pdf
   hrefs <- rvest::html_attr(pdf_links, "href")
   hrefs <- hrefs[!is.na(hrefs)]
   if (length(hrefs) == 0) return(NA_character_)
   pdfs <- hrefs[grepl("\\.pdf$", hrefs, ignore.case = TRUE)]
   href <- if (length(pdfs)) pdfs[1] else hrefs[1]
-  if (startsWith(href, "http")) href else paste0(base, href)
+  absolutize(href)
 }
 
 # ── Cross-host dedupe ───────────────────────────────────────────────────────
