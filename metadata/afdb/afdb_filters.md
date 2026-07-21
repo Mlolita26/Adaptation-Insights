@@ -50,9 +50,17 @@ iframes on afdb.org document pages), 173 unique PDFs validated and stored.
   genuine French-titled reports and noise (procurement notices, feasibility
   studies) — needs manual screening
 
+## Zotero / catalogue status
+
+- No RIS / Zotero import yet — `afdb_metadata.csv` (174 docs) is ready to
+  generate one; on the roadmap.
+
 ## Known limitations
 
 - The 46 `to_screen` files carry `doc_type = NA` in the metadata — screen before use.
 - Relevance rule keeps non-agriculture climate/infrastructure evaluations when
   titles contain adaptation keywords (e.g. resilience programmes) — same
   screening pass as other sources applies.
+- Possible recall gain not yet swept: IDEV's search form has a sector facet
+  (`Agriculture & Agro-industry`, id 106 in `idev_taxonomy.csv`) that could be
+  added as a second sweep axis.

@@ -43,3 +43,27 @@ Deliberately rejected: PDF creation metadata (GEF CDN regenerated files → fals
 2025 cluster) and numeric date formats like 06/2026 (fact-sheet tables list
 *planned* closing dates). Template-file dates voided where implausible
 (gef_id >= 4500 with year < 2013). Evidence per file in `gef_evaluation_dates.csv`.
+
+## Zotero / catalogue status
+
+- `gef_2015_2026.ris` (142 records with linked local PDFs) matches the current
+  corpus — import via File → Import → "Link to files in original location".
+
+## Planned scraper changes (agreed 2026-07-21, not yet implemented)
+
+The GEF website has no sector facet, so agriculture cannot be filtered at
+query time by sector. The plan for future runs:
+
+- Sweep by **Funding Source facet**: Least Developed Countries Fund (LDCF,
+  ~395 projects) + Special Climate Change Fund (SCCF, ~103) — the two GEF
+  adaptation-implementation funds — plus optionally the Land Degradation
+  focal area, instead of Climate Change focal area alone (which pulls in
+  mitigation and enabling-activity projects).
+- Drop proposal-stage document types (CEO endorsement, project document, PIF,
+  review sheet) from the target list.
+- Exclude enabling-activity projects by title (National Communication,
+  Biennial Transparency, CBIT, NAP support) — reporting exercises with
+  nothing implemented.
+- Screening of the EXISTING corpus: cross-reference our 142 in-scope docs
+  against the LDCF/SCCF project ID lists (deterministic adaptation flag);
+  agriculture relevance still needs a content check.
