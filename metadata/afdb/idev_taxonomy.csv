@@ -1,0 +1,134 @@
+facet,id,label
+field_category_doc_target_id,All,- Any -
+field_category_doc_target_id,191,APNODE document
+field_category_doc_target_id,361,Comparative Study
+field_category_doc_target_id,76,Corporate evaluation
+field_category_doc_target_id,86,Evaluation Matters Magazine
+field_category_doc_target_id,185,Evaluation report
+field_category_doc_target_id,358,Ongoing knowledge product
+field_category_doc_target_id,192,Other ECD document
+field_category_doc_target_id,2,Sector evaluation
+field_category_doc_target_id,89,Presentation
+field_category_doc_target_id,73,Evaluation synthesis
+field_category_doc_target_id,81,Knowledge products
+field_category_doc_target_id,74,Project performance evaluation
+field_category_doc_target_id,83,Work programme
+field_category_doc_target_id,87,Other knowledge product
+field_category_doc_target_id,75,Project cluster evaluation
+field_category_doc_target_id,91,Evaluation Week materials
+field_category_doc_target_id,92,Annual Report
+field_category_doc_target_id,77,Country strategy and program evaluation
+field_category_doc_target_id,189,Event document
+field_category_doc_target_id,78,Regional integration strategy evaluation
+field_category_doc_target_id,79,Thematic evaluation
+field_category_doc_target_id,90,Miscellaneous
+field_category_doc_target_id,85,Business process review
+field_category_doc_target_id,80,Impact evaluation
+field_category_doc_target_id,88,Webinar
+field_category_doc_target_id,84,Policy review
+field_category_doc_target_id,186,Project Completion Report and Expanded Supervision Report Validation synthesis
+field_category_doc_target_id,190,APNODE document
+field_category_doc_target_id,221,IDEV strategic documents
+field_region_target_id,All,- Any -
+field_region_target_id,40,Algeria
+field_region_target_id,47,Angola
+field_region_target_id,26,Burundi
+field_region_target_id,17,Cameroon
+field_region_target_id,352,Eswatini
+field_region_target_id,65,Guinea-Bissau
+field_region_target_id,59,Benin
+field_region_target_id,48,Botswana
+field_region_target_id,18,Central African Republic
+field_region_target_id,27,Comoros
+field_region_target_id,41,Egypt
+field_region_target_id,60,Burkina Faso
+field_region_target_id,19,Chad
+field_region_target_id,28,Djibouti
+field_region_target_id,49,Lesotho
+field_region_target_id,42,Libya
+field_region_target_id,61,Cabo Verde
+field_region_target_id,20,Congo
+field_region_target_id,29,Eritrea
+field_region_target_id,293,Madagascar
+field_region_target_id,43,Mauritania
+field_region_target_id,21,Democratic Rep. of Congo
+field_region_target_id,30,Ethiopia
+field_region_target_id,63,Gambia
+field_region_target_id,50,Malawi
+field_region_target_id,44,Morocco
+field_region_target_id,1,Côte d'Ivoire
+field_region_target_id,22,Equatorial Guinea
+field_region_target_id,31,Kenya
+field_region_target_id,51,Mauritius
+field_region_target_id,45,Tunisia
+field_region_target_id,23,Gabon
+field_region_target_id,62,Ghana
+field_region_target_id,52,Mozambique
+field_region_target_id,32,Rwanda
+field_region_target_id,64,Guinea
+field_region_target_id,24,Madagascar
+field_region_target_id,53,Namibia
+field_region_target_id,33,Seychelles
+field_region_target_id,54,São Tomé & Príncipe
+field_region_target_id,71,Sierra Leone
+field_region_target_id,34,Somalia
+field_region_target_id,55,South Africa
+field_region_target_id,66,Liberia
+field_region_target_id,35,South Sudan
+field_region_target_id,67,Mali
+field_region_target_id,36,Sudan
+field_region_target_id,56,Swaziland
+field_region_target_id,68,Niger
+field_region_target_id,37,Tanzania
+field_region_target_id,4,Zambia
+field_region_target_id,69,Nigeria
+field_region_target_id,38,Uganda
+field_region_target_id,57,Zimbabwe
+field_region_target_id,70,Senegal
+field_region_target_id,72,Togo
+field_region_target_id,58,West Africa
+field_region_target_id,46,Southern Africa
+field_region_target_id,39,North Africa
+field_region_target_id,16,Central Africa
+field_region_target_id,25,East Africa
+field_topic_target_id,All,- Any -
+field_topic_target_id,97,Capital Increase
+field_topic_target_id,98,Civil Society
+field_topic_target_id,99,Employment
+field_topic_target_id,100,Financial Crisis1
+field_topic_target_id,101,Media & Communication
+field_topic_target_id,102,Quality Assurance & Results
+field_topic_target_id,103,Regional Integration
+field_topic_target_id,313,SDG1
+field_topic_target_id,314,SDG2
+field_topic_target_id,315,SDG3
+field_topic_target_id,316,SDG4
+field_topic_target_id,317,SDG5
+field_topic_target_id,318,SDG6
+field_topic_target_id,319,SDG7
+field_topic_target_id,320,SDG8
+field_topic_target_id,321,SDG9
+field_topic_target_id,322,SDG10
+field_topic_target_id,323,SDG11
+field_topic_target_id,324,SDG12
+field_topic_target_id,325,SDG13
+field_topic_target_id,326,SDG14
+field_topic_target_id,327,SDG15
+field_topic_target_id,328,SDG16
+field_topic_target_id,330,SDG17
+field_topic_target_id,104,Sustainable Development
+field_topic_target_id,105,Youth
+field_sector_target_id,All,- Any -
+field_sector_target_id,106,Agriculture & Agro-industry
+field_sector_target_id,131,Water supply & Sanitation
+field_sector_target_id,201,Communications
+field_sector_target_id,130,Urban Development
+field_sector_target_id,109,Economic & Financial Governance
+field_sector_target_id,112,Energy & Power
+field_sector_target_id,113,Environment
+field_sector_target_id,114,Finance
+field_sector_target_id,118,"Industry, Mining & Quarrying"
+field_sector_target_id,119,Information Technologies
+field_sector_target_id,199,Multi-Sector
+field_sector_target_id,200,Social
+field_sector_target_id,198,Transport
