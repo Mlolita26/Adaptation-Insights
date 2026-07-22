@@ -1,0 +1,453 @@
+# AI-Assisted Data Extraction from Project Evaluation Documents
+
+**Protocol for corpus construction, structured extraction, and validation**
+
+Adaptation Insights | WP2 Evidence Synthesis — Grey Literature
+**Draft v0.1 — July 2026**
+
+> Living document. All numeric targets are proposed working values **(to be
+> agreed)** and must be fixed before scale-up. Open decisions are marked
+> *(indicative — to be confirmed)*. Canonical version: GitHub
+> `Mlolita26/Adaptation-Insights` → `docs/AI_Extraction_Protocol.md`.
+
+---
+
+## 1. Background and rationale
+
+Evidence on what climate adaptation has actually been *implemented* in
+Africa's food and agriculture sector — and with what results — sits scattered
+across the grey literature of development institutions: implementation
+completion reports, terminal evaluations, performance evaluations. Existing
+syntheses rely almost exclusively on peer-reviewed literature, leaving a
+recognised evidence gap (see the review-methods protocol,
+`AIs_WP3_EvidenceSynthesis_GreyLit.docx`, and *Beyond Academia — A Case for
+Reviews of Gray Literature*, in `Resources\`).
+
+The WP2 grey-literature evidence synthesis answers this by building a
+structured database — *a stocktake of what has been implemented, by whom,
+where, and with what effects* — from project **evaluation documents**.
+Manual extraction across hundreds of documents is too slow; an LLM-assisted
+pipeline operationalises the extraction template at scale, under the
+validation and quality regime this protocol defines.
+
+This protocol is the **technical layer** of a three-layer documentation
+stack:
+
+| Layer | Document | Governs |
+|---|---|---|
+| Review methods | `AIs_WP3_EvidenceSynthesis_GreyLit.docx` (+ update list in Annex C) | Research questions, PICOS, inclusion/exclusion, source universe, appraisal |
+| **Extraction operations (this document)** | `docs/AI_Extraction_Protocol.md` | Corpus states, data model, AI pipeline, QA, governance |
+| Per-source evidence | `metadata/{source}/{source}_filters.md` | Exactly how each source's corpus was queried, filtered, and organised |
+
+It is modelled on the Climate Adaptation Activator's *AI-Assisted Tagging of
+CGIAR Documents* protocol (Draft v1.2, June 2026) and reuses its devices:
+a definitions table, field-applicability profiles, evidence-gated AI outputs,
+a metrics/targets QA table, and version-stamping throughout. Tagging
+(taxonomy assignment) was deliberately **deferred** by the team
+(meeting 2026-07-17); this protocol covers structured data extraction only.
+
+## 2. Objectives
+
+1. **Populate the working database.** For every in-scope document, produce
+   validated records in the extraction template: one project-level record
+   plus location-specific records in long format (one row per
+   location × intervention × result).
+2. **Record what could not be extracted.** Fields with no supporting
+   evidence in the document are recorded as explicit no-extraction values
+   with a reason — never guessed. The pattern of gaps (e.g. results reported
+   without baselines, missing locations) is itself a deliverable that feeds
+   the evidence-gap analysis.
+3. **Stress-test the template.** Every extraction run is also a test of the
+   template: values that do not fit any controlled-vocabulary option, fields
+   that are systematically empty, and vocabulary ambiguities are logged as
+   candidate template revisions for the template owner.
+
+## 3. Scope and key definitions
+
+**In scope:** structured extraction from project evaluation documents in the
+corpus (Section 5) into the working database template (Section 7), including
+screening of borderline documents, AI pipeline design, validation, and
+scale-up.
+**Out of scope:** document retrieval design (covered by the per-source
+filters documentation), taxonomy tagging (deferred; separate protocol),
+and the downstream synthesis/analysis.
+
+| Term | Definition in this protocol |
+|---|---|
+| Extraction unit | The unit a record describes. Two levels: the **project** (one general record) and the **location-intervention** (one long-format record per location × intervention × result). The document is the *source*, not the unit — one document can describe several projects and many interventions. |
+| Working database / template | The Excel data model (`Evidence Synthesis_Grey Literature_African Agriculture Adaptation_working database_v02.xlsx`): sheets `project_data_general`, `project_data_location-specific`, controlled vocabularies in `lists`, registries in `actor_codes` / `location_codes`, and the `readme` data dictionary. The template version in force is pinned in every extraction output. |
+| Controlled vocabulary | A closed list of allowed values for a coded field (e.g. 25 intervention types, 8 result levels). The AI may only use listed values; unlisted candidates are flagged, not invented. |
+| Registry | The actor and location code books (`actor_codes`, `location_codes`). Codes (e.g. `CON14`, `P001.12`) are assigned **deterministically in code**, never generated by the model. |
+| screen_status | Corpus eligibility state per document: **in_scope** (positive evidence of scope fit — enters extraction), **to_screen** (weak/ambiguous evidence — must pass screening first), **screened_out** (documented exclusion — parked, never deleted). |
+| evidence_depth | Per the template readme (multiple choice): **0** = document only gives general project information; **1** = additionally gives information on concrete adaptation actions/interventions implemented; **2** = additionally gives evidence on the results/effectiveness of those interventions. |
+| Gold standard | The hand-extracted pilot set (projects P001–P010, 10 projects / 60 location-specific rows in template v02), extracted by human reviewers before and independently of AI output; the benchmark for AI performance. |
+| Provenance | For every coded value: the **verbatim source passage** that supports it plus its **page (or table/annex) reference**. Required by team decision 2026-07-17. An output value without valid provenance is auto-rejected. |
+| Field accuracy (precision analogue) | Of the values the AI extracted for a field, the share judged correct against the gold standard / human review. |
+| Recall | Of the information actually present in a document (per its applicability profile, Section 8), the share the AI captured. Low recall = missed evidence. |
+| Inter-rater agreement | Degree to which two human extractors independently produce the same value for the same field. Low agreement indicates an ambiguous field definition — a template problem, regardless of AI. |
+| Hallucination | An extracted value not supported by the document. Guarded against mechanically: quoted provenance must literally exist at the claimed location (Section 10). |
+
+## 4. Roles and responsibilities *(indicative — to be confirmed)*
+
+| Role | Person | Responsibilities |
+|---|---|---|
+| Extraction pipeline & prompts | Lolita Muller | Machine-readable template schema; prompt and pipeline development; scraper/corpus maintenance; running batches; computing metrics; GitHub/Zotero infrastructure |
+| Template & vocabularies owner | Lucy Njuguna | Template content and revisions; controlled vocabularies; extraction instructions; sign-off on candidate vocabulary additions; screening arbitration |
+| Gold-standard & output review | Lucy Njuguna + Namita Joshi *(second reviewer for inter-rater agreement; consultants/trainees may join per the no-cost-extension staffing discussion)* | Review batches of AI output; blind double-extraction on shared subsets; adjudicate disagreements |
+| Workstream oversight | Andreea Nowak | Alignment with adaptation-effectiveness workstream; arbitration of scope questions (e.g. land/forest boundary) |
+
+## 5. Inputs and corpus
+
+### 5.1 Pilot corpus (status 2026-07-22)
+
+The current corpus is a **pilot**: four sources chosen because their document
+repositories are programmatically retrievable, providing volume quickly while
+the method is validated. Corpus construction is fully documented per source
+in `metadata/{source}/{source}_filters.md` (query filters, post-filters,
+screening rules, known limitations) — this protocol does not duplicate that
+detail.
+
+| Source | in_scope | to_screen | screened_out / parked | Notes |
+|---|---|---|---|---|
+| World Bank | 276 files (≈275 projects) | 48 on disk (+428 catalogued, not downloaded) | 43 excluded; 115 pre-2015 | Evidence-based screen: WB topic classification OR title keywords; DPOs excluded |
+| GEF | 142 | — (36 undated pending) | 15 pre-2015; 615 proposal-stage | Document dates recovered from the files (site publishes none) |
+| GCF | 7 | — | 11 funding proposals | Small; grows as GCF projects reach evaluation |
+| AfDB | 123 | 46 untyped | 4 undated | Filtered at source (category listings + IDEV facets) |
+| **Total** | **~548** | ~94 (+428) | | |
+
+Scope rules (team decision 2026-07-17): **evaluation-type documents only**
+(completion reports, terminal/mid-term evaluations, performance evaluations —
+proposals excluded because they do not describe what was actually
+implemented); **document date 2015–2025** (GCA alignment); African
+agriculture/adaptation relevance.
+
+**Eligibility for extraction:** `in_scope` documents only. `to_screen`
+documents must first pass the screening step (Section 9, Phase 1); verdicts
+are recorded in per-source screening files — nothing is silently discarded.
+
+### 5.2 Source extension roadmap
+
+The pilot does not bound the review. The WP3 protocol's source universe
+(multilateral development banks, UN agencies — IFAD, FAO, UNDP —, the
+Adaptation Fund, African government agencies, INGOs and consortia, knowledge
+portals, IEO/IEG evaluation portals) remains the identification strategy for
+extension. Next candidates per the pipeline roadmap: IFAD, Adaptation Fund,
+FAO, UNDP.
+
+### 5.3 Source onboarding procedure
+
+Every new source joins by the same path (so the extraction stage never needs
+redesign):
+
+1. **Scraper** following the repo pattern (`R/{source}.R`; see the
+   `new-scraper` checklist in the repo) — query-time filters as close to the
+   scope as the source allows.
+2. **Filters documentation** — `{source}_filters.md`: query filters,
+   post-filters, screening rule, known limitations.
+3. **Screening states** — documents land as
+   `in_scope` / `to_screen` / `screened_out` with recorded evidence.
+4. **Catalogue** — metadata CSV in `List\`, mirrored to GitHub
+   (`R/sync_metadata.R`), records pushed to Zotero.
+5. **Field-applicability profile** — a row per document type in the
+   Section 8 table, based on a structure scan of sample documents.
+6. **Capped extraction validation** — a small extraction batch reviewed
+   against Section 10 metrics before the source is scaled.
+
+### 5.4 Other inputs
+
+- **Template**: working database **v02** (pinned; extractions declare the
+  template version they follow). Lucy's refined template (long format,
+  tagging columns removed, provenance added) supersedes v02 on release and
+  triggers a schema regeneration (Section 9, Phase 2).
+- **Keyword taxonomy**: the live keyword file
+  (`Keywords_implementation_updated_032026.xlsx`, SharePoint) informs
+  screening rules and vocabulary synonyms; a local copy of the earlier
+  version sits in `Evidence Extraction\`.
+- **Gold standard**: P001–P010 hand-extracted records in template v02;
+  source documents under `Data\Docs\Selection_mixed stakeholders\`.
+
+## 6. Data management and infrastructure
+
+Three pillars, each with a single job:
+
+| Pillar | Location | Holds | Sync |
+|---|---|---|---|
+| **OneDrive** | `WP2_Evidence Synthesis\Grey Literature\Data\Project_doc\{source}\` | The **documents** (canonical store). Folder semantics: `Docs\2015_2026` (or `evaluation_docs\2015_2026`) = in-scope working set; `to_screen\`, `screened_out\`, `pre_2015\`, `proposal_stage\` = parked states; `List\` = per-source metadata, filters docs, screening evidence | Manual promotion from scraper inbox |
+| **Zotero** | Shared group library *(to be created; API key pending)* | The **catalogue**: one record per corpus document with metadata, source URL, and a link to the OneDrive PDF. Team-browsable; duplicate detection via source-ID tags | RIS import now; automated idempotent push via `R/zotero_upload.R` once the group library exists |
+| **GitHub** | `github.com/Mlolita26/Adaptation-Insights` | Everything **programmatic**: scrapers, screening/extraction code, metadata mirrors (`metadata/{source}/`), filters docs, this protocol. No PDFs, no secrets (`.Renviron` gitignored) | `R/sync_metadata.R` copies `List\` → `metadata/`; commit + push |
+
+**Extraction outputs** are written as versioned files (per batch, stamped
+with template/prompt/model versions — Annex A) to a dedicated output area;
+they **never overwrite** the hand-curated working database. Merging into the
+database is a reviewed step (Section 9, Phase 6).
+
+**Conventions:** file names short (Windows 260-character path limit — keep
+full paths ≤ 240); document filenames carry source, project code, document
+type, and year; every catalogue row keys on the source's document ID.
+
+## 7. Extraction target: the data model
+
+The template (v02 `readme` sheet is the authoritative data dictionary — every
+field has a description, options, examples from P001, and extraction
+instructions) defines two linked tables:
+
+**`project_data_general`** — one record per project: identity
+(`project_code`, `project_title`, `project_lead`), years
+(publication/start/closure — *actual*, not planned), `project_scale`,
+location count/notes, project rationale (≤50 words), target beneficiary,
+up to three headline results (value + metric + unit), budget/disbursed/
+currency, funding mechanism, funder/implementor (actor codes),
+`document_type`, `resource_id`, `evidence_depth`, `project_id`, links.
+
+**`project_data_location-specific`** — long format, one record per
+location × intervention × result: location code, `sector` +
+`subsector_stated`, `intervention_type` + `intervention_stated`, rationale
+(`rationale_level`/`_type`/`_subtype` + `rationale_stated`),
+`target_beneficiary`, result (`result_level`/`result_type`/`result_value`/
+`result_metric`/`result_unit`/`result_qual` + `result_stated`), evidence
+(`evidence_type`/`evidence_subtype` + `evidence_stated`), notes,
+`evidence_depth`, resource link.
+
+Key rules the pipeline enforces:
+
+- **Coded + stated pairs.** Nearly every coded field pairs with a `_stated`
+  field carrying the verbatim source text. Under the provenance requirement,
+  each `_stated` value also carries its **page/table reference**.
+- **Controlled vocabularies** (v02 `lists` sheet, sizes as of v02):
+  document_type 19 · scale 6 · sector 7 · intervention type 25 ·
+  rationale_level 2 · rationale_type 2 · rationale_subtype 5 ·
+  beneficiary_unit 13 · result_level 8 · result_type 8 · evidence_type 3 ·
+  evidence_subtype 28 · location_type 10 · actor_type 21 ·
+  funding_mechanism 5 · result_unit 28 · result_metric 13 ·
+  target_beneficiary 26. Validation happens **in code**, not by trusting the
+  prompt; invalid labels go to a batched repair step, then to the candidate
+  log.
+- **Known template gotcha:** in the v02 `lists` sheet the `result_metric`
+  and `result_unit` columns are labelled opposite to their use in the data
+  sheets (real data holds categorical metrics like "total beneficiaries" in
+  `result*_metric` and counting units like "individual" in `result*_unit`).
+  The schema maps vocabularies to actual usage; a rename is proposed for the
+  next template revision.
+- **Registries.** The model outputs actor/location **names**; R code matches
+  or creates registry entries and assigns codes. The model never invents a
+  code.
+- **No-extraction values.** Absent evidence → explicit empty value with
+  reason category (not present in document / present but not quantifiable /
+  ambiguous — flagged for review). Mirrors the model protocol's no-tag logic.
+
+## 8. Field applicability by document type
+
+Not every document type can supply every field. Mirroring the model
+protocol: **Expected** (absence is a finding and counts against recall),
+**Secondary** (extract if present, absence neutral), **Not expected**
+(structurally absent; excluded from recall scoring). Profiles are validated
+during Phase 4 and grow as sources onboard.
+
+| Document type (source) | Project basics & budget | Interventions | Results with values | Evidence type |
+|---|---|---|---|---|
+| ICR — Implementation Completion & Results Report (WB) | Expected (Data Sheet) | Expected (components; Annex "Key Outputs") | Expected (Results Framework annex: baseline/target/actual) | Expected (M&E section) |
+| PPAR (WB, IEG) | Expected | Expected | Expected | Expected |
+| Terminal Evaluation (GEF) | Expected | Expected | Expected | Expected |
+| Mid-Term Review (GEF/AfDB) | Expected | Expected | Secondary (interim results only) | Expected |
+| PIR — Project Implementation Report (GEF) | Secondary | Expected | Secondary | Secondary |
+| PCR / completion summary (AfDB, GCF) | Expected | Expected | Expected | Secondary |
+| PCR Evaluation Note / validation (AfDB IDEV) | Secondary | Secondary | Secondary (ratings, not values) | Expected |
+| xls/xlsx rating sheets (GEF TE ratings) | Not expected | Not expected | Secondary (ratings only) | Not expected |
+
+Practical notes from the corpus structure scans: WB ICRs follow two
+standardized generations (pre/post ~2018) with fixed section maps — the
+pipeline extracts from the Data Sheet, Project Context, Outcome section,
+Results Framework annex, and cost annex, skipping boilerplate annexes.
+French-language documents (GEF/AfDB) are extracted in-language with English
+coded values. Non-PDF formats (docx) are converted; xls rating sheets are
+handled as structured tables.
+
+## 9. Methodology
+
+Six phases; 1–3 are preparatory, 4 is the iterative core, 5–6 scale and
+deliver.
+
+**Phase 1 — Corpus consolidation & screening resolution.** Resolve
+`to_screen` piles per source: deterministic rules first (e.g. WB topic
+classification, GEF LDCF/SCCF membership), one batched LLM screen for the
+remainder, human adjudication of disagreements; verdicts recorded per source.
+Output: a frozen extraction queue of `in_scope` documents.
+
+**Phase 2 — Machine-readable template.** Generate the extraction schema
+(JSON Schema) from the template workbook: field definitions and instructions
+from the `readme`, vocabularies from `lists` (with the metric/unit mapping
+fix), registries loaded for post-hoc code assignment. The schema is
+version-stamped from the template version; regenerating on template release
+is a one-step script.
+
+**Phase 3 — Extraction rules & prompts.** One structured-output LLM call
+per document *(model and cost per document recorded; deterministic-first:
+metadata fields — title, IDs, dates, document type, links — are prefilled
+from the catalogues at zero LLM cost)*. Inputs: page-tagged text
+(`[page N]` markers) of the mapped relevant sections. Rules: extract **all**
+results exhaustively, rank/pick headline results deterministically in code
+(eliminates run-to-run selection variance); rationale prompts ask explicitly
+for the climate stressor vs perceived benefit; temperature 0; verbatim
+quote + page required per coded value. Vocabulary passed in-prompt but
+enforced in code.
+
+**Phase 4 — Iterative validation.**
+*Round 1 (done):* gold standard P001–P010 hand-extracted in template v02.
+The canonical worked example is **P001 — TerrAfrica (WB P149269, ICR
+ICR00004643)**: every example value in the template readme comes from it.
+*Round 2:* AI extracts the gold-standard documents blind; field-level
+comparison against human records; iterate prompts/rules until Section 10
+thresholds are met. Inter-rater agreement measured on a shared subset to
+separate template ambiguity from AI error (Annex B guide).
+*Round 3:* AI-first on a small fresh batch (~15 WB ICRs); human review of
+every record; confirm thresholds hold beyond the tuning set.
+
+**Phase 5 — Scale-up.** Source by source (WB → GEF → AfDB → GCF), in
+batches. Per-batch sampling review (proposed 10% of records,
+*(to be agreed)*); per-batch metrics tracked; a material drop on a new
+source/document type pauses that source for mini re-validation
+(pause-and-revalidate rule).
+
+**Phase 6 — Outputs & database merge.** Validated records merged into the
+working database by a reviewed R step (never a raw overwrite); no-extraction
+gap report; candidate-vocabulary log to the template owner; methods summary
+with final metrics for the synthesis write-up.
+
+## 10. Quality assurance and performance metrics
+
+All thresholds are proposed working values, to be confirmed after Round 2 and
+**fixed before scale-up**. Metrics are always interpreted against the
+Section 8 applicability profile — a field that is Not expected for a document
+type never counts against recall.
+
+| Metric | Measured how | Proposed working target |
+|---|---|---|
+| Field accuracy — coded fields | Exact match vs gold standard (Round 2) / human review batches (Round 3+), per field and per source type | **≥80% before scale-up (to be agreed)**; fields below threshold get rule/prompt rework |
+| Field accuracy — free-text (`_stated`, rationale) | Human judgement: faithful and complete vs source | Reviewed qualitatively; systematic paraphrase drift triggers prompt fix |
+| Provenance validity | **Automated:** quoted passage must exist verbatim (whitespace-normalised) at the claimed page of the source | **100% mechanical gate** — records failing auto-reject before human review |
+| Recall — location-intervention records | Share of gold-standard long-format rows the AI found (Expected fields only) | **≥80% before scale-up (to be agreed)** |
+| No-extraction accuracy | Random sample of empty fields per batch re-checked by a human | False-empty rate monitored per source type |
+| Result-selection stability | Same document run twice → identical extracted result set | Deterministic by design (exhaustive-then-rank); any diff is a defect |
+| Inter-rater agreement (human) | Two blind extractors, shared subset, per field | Fields below threshold flagged for template definition rework before AI tuning |
+| Stability across batches | Per-batch accuracy during scale-up | No material drop on a new source/type; else pause-and-revalidate |
+
+**Known failure modes** (from the first pilot, 2026 Q2) and their design
+responses: rationale extraction missed climate hazards → explicit
+stressor/benefit distinction in prompt + `rationale_level` field; result
+selection varied between runs → exhaustive-then-rank; vocabulary mismatch on
+metrics/units → mapping fixed in schema (Section 7).
+
+## 11. Responsible AI use
+
+Anchored, like the model protocol, to the IAES Technical Note
+*Considerations and Practical Applications for Using AI in Evaluations*
+(2025):
+
+- **Human oversight.** No AI record enters the working database unreviewed
+  during Phases 4–5 sampling; thresholds and scope decisions are human
+  decisions; the template owner arbitrates contested values.
+- **Anti-hallucination.** Verbatim provenance is mandatory and mechanically
+  verified; outputs without valid provenance are auto-rejected (Section 10).
+  "No extraction" is a correct, valued answer.
+- **Data handling.** Only public institutional documents are processed; no
+  personal data is sent to third-party AI services; API terms of the model
+  provider are checked before use.
+- **Transparency & replicability.** Every output row is stamped with
+  template version, prompt version, model name/version, and run date
+  (Annex A). Exact replicability is not claimed for probabilistic outputs;
+  the deterministic post-processing (ranking, code assignment, validation)
+  is fully replicable.
+
+## 12. Risks and mitigations
+
+| Risk | Mitigation |
+|---|---|
+| Template vocabulary doesn't match documents' language → forced or missed codes | Candidate-value flag in output schema; candidate log reviewed by template owner each batch; synonym notes added to schema |
+| Template revision (Lucy's refined template) invalidates earlier extractions | Template version stamped on every record; changed fields identified by diff; re-extraction of affected fields only |
+| Performance drops on a new source/document type | Per-batch metrics + pause-and-revalidate rule; applicability profile set from a structure scan before extraction |
+| Screening backlog blocks corpus growth (WB 428 catalogued to_screen) | Screening is Phase 1 with its own deliverable; extraction proceeds on `in_scope` while screening runs |
+| French/other-language extraction quality lags English | Language recorded per document; language-stratified metrics in Round 2/3; French gold-standard documents included in review samples |
+| Non-PDF formats (docx, xls rating sheets) break the text pipeline | Format-specific ingestion (docx conversion, table parsing); xls sheets profiled as Not expected for narrative fields |
+| Gold standard itself inconsistent (single-extractor bias) | Inter-rater agreement round on a shared subset; ambiguous fields fixed in template before AI tuning |
+| Cost overrun at scale | Deterministic-first design (metadata prefill, code-side validation, one call/document); per-document cost tracked from Round 2; batch API for scale-up *(model tier decision pending)* |
+
+## 13. Timeline and dependencies *(indicative — to be confirmed)*
+
+| Period | Milestones |
+|---|---|
+| Q3 2026 | Refined template released (Lucy) and schema generated (Ph2); screening of to_screen piles resolved (Ph1); prompts + extraction rules (Ph3); Round 2 AI-vs-gold-standard iterations; thresholds confirmed; Round 3 AI-first batch on WB ICRs |
+| Q4 2026 | Scale-up WB → GEF → AfDB → GCF (Ph5); validated records merged; gap report + candidate-vocabulary log delivered (Ph6); onboarding of next source (IFAD or Adaptation Fund) using Section 5.3 |
+| 2027 | Extension sources per WP3 universe; periodic re-runs for newly published evaluations; handover per no-cost-extension staffing plan |
+
+**Dependencies:** Lucy's refined template (blocks Ph2); team decisions on
+QA thresholds and the land/forest scope boundary; Zotero group library + API
+key (catalogue automation); reviewer time for Rounds 2–3; model/budget
+decision for scale-up.
+
+---
+
+## Annex A — Extraction output schema (per document)
+
+Every extraction run emits, per document:
+
+- `document_ref`: source, source document ID, resource_id, file path/URL
+- `versions`: template version, prompt variant + version, model name/version,
+  run date, pipeline commit hash
+- `project_record`: all `project_data_general` fields, each coded value as
+  `{value, quote, page_or_table, confidence (high/med/low)}`
+- `location_records[]`: all `project_data_location-specific` fields, same
+  value structure
+- `no_extraction[]`: field, reason category (not in document / present but
+  not codable / ambiguous)
+- `candidate_values[]`: field, source wording, proposed vocabulary addition,
+  quote
+- `provenance_check`: pass/fail per quoted value (mechanical)
+- `review_status`: unreviewed / human-validated / human-corrected
+
+## Annex B — Disagreement diagnosis guide
+
+When AI output disagrees with the gold standard or a reviewer:
+
+| Pattern | Diagnosis | Fix / destination |
+|---|---|---|
+| AI picked a clearly wrong vocabulary option | Prompt/rules defect | Refine field instructions in prompt; retest on gold standard |
+| AI's wording is right but the code differs from the human's; humans also split | Ambiguous field definition | Template owner rewords definition/options; log to template revision |
+| Correct concept, but no vocabulary option fits | Missing vocabulary option | Candidate log → template owner |
+| AI extracted a value the document doesn't support | Hallucination / evidence failure | Should be caught by the provenance gate — if it passed, tighten the gate (paraphrase leakage) |
+| AI missed content a human found | Recall failure | Check section map coverage first (was the passage in the model's input?), then prompt |
+| Source text too vague for any extractor | Reporting-quality problem | No-extraction with reason; feeds the gap report, not a defect |
+
+## Annex C — Required updates to the WP3 review protocol
+
+For the template owner to action in `AIs_WP3_EvidenceSynthesis_GreyLit.docx`
+(this protocol does not modify that document):
+
+1. **Timeframe 2000–2025 → 2015–2025** everywhere: Background framing
+   ("quarter-century"), PICOS Sources (S), Table 1 inclusion, Table 2
+   exclusion ("before 2000" → "before 2015"), §IV retrieval step 3, §VII
+   trend analysis, Appendix document-metadata variables (Year, Timeframe).
+2. **Evaluation-type documents only; proposals excluded** (team decision
+   2026-07-17): narrow PICOS Sources (S) and Table 1 source types (currently
+   admit output/budget/monitoring reporting); in the Appendix document-type
+   repository, mark PADs, appraisal documents, and concept notes as out of
+   scope, and progress/status/monitoring reports as out of scope as
+   standalone bases.
+3. **Retrieval implementation update** (§III–IV): for the pilot sources
+   (World Bank, GEF, GCF, AfDB) the manual registry/download/tracking
+   procedure has been implemented as an automated scraper pipeline with
+   evidence-based screening states (`in_scope` / `to_screen` /
+   `screened_out`) documented per source. The wider source universe of §III
+   and Annex I/II **remains valid as the extension roadmap** — it is the
+   identification strategy for onboarding future sources, not outdated
+   content. Zotero remains the reference-management layer.
+4. **Extraction template** (§VI, Annexes III–XIV): superseded by working
+   database v02 (project-level + location-specific long format, controlled
+   vocabularies, actor/location registries) and, on release, by the refined
+   template (tagging columns removed, provenance fields added).
+5. **Editorial:** research questions Q3/Q5 and Q7/Q10 are duplicates —
+   deduplicate the list.
+
+---
+
+*Change log:* v0.1 (2026-07-22) — first draft, produced from the corpus and
+pipeline state of 2026-07-22; open decisions marked throughout.

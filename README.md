@@ -75,7 +75,10 @@ are parked in clearly named folders, never deleted.
 │   ├── gef/                     document list, recovered dates (+ method
 │   │                            per file), RIS file
 │   └── gcf/                     (no metadata CSV yet — see Known issues)
-├── docs/                        protocol notes
+├── docs/
+│   └── AI_Extraction_Protocol.md   THE extraction protocol (canonical;
+│                                   Word export lives next to the WP3
+│                                   protocol on OneDrive)
 ├── data/                        pipeline scratch (gitignored)
 ├── downloads/                   scraper output inbox (gitignored)
 └── .claude/                     Claude Code agents & skills for this repo
