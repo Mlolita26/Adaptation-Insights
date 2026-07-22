@@ -196,15 +196,21 @@ Key rules the pipeline enforces:
 - **Coded + stated pairs.** Nearly every coded field pairs with a `_stated`
   field carrying the verbatim source text. Under the provenance requirement,
   each `_stated` value also carries its **page/table reference**.
-- **Controlled vocabularies** (v02 `lists` sheet, sizes as of v02):
-  document_type 19 · scale 6 · sector 7 · intervention type 25 ·
-  rationale_level 2 · rationale_type 2 · rationale_subtype 5 ·
-  beneficiary_unit 13 · result_level 8 · result_type 8 · evidence_type 3 ·
-  evidence_subtype 28 · location_type 10 · actor_type 21 ·
-  funding_mechanism 5 · result_unit 28 · result_metric 13 ·
-  target_beneficiary 26. Validation happens **in code**, not by trusting the
-  prompt; invalid labels go to a batched repair step, then to the candidate
-  log.
+- **Controlled vocabularies — coded in a separate session.** Coded fields
+  draw on closed lists (v02 `lists` sheet: document_type 19 · scale 6 ·
+  sector 7 · intervention type 25 · rationale_level 2 · rationale_type 2 ·
+  rationale_subtype 5 · beneficiary_unit 13 · result_level 8 · result_type 8
+  · evidence_type 3 · evidence_subtype 28 · location_type 10 · actor_type 21
+  · funding_mechanism 5 · result_unit 28 · result_metric 13 ·
+  target_beneficiary 26). The pipeline separates extraction from coding:
+  **Session 1** extracts the verbatim material from the document (the
+  `_stated` fields — the practice, rationale, result and evidence exactly as
+  the document describes them — with quote and page reference);
+  **Session 2** categorises each verbatim extract into the controlled
+  vocabularies, seeing only the extract and the field's options, never the
+  whole document. Codes are validated **in code**, not by trusting the
+  prompt: values not on the list go to a batched repair step, then to the
+  candidate log.
 - **Known template gotcha:** in the v02 `lists` sheet the `result_metric`
   and `result_unit` columns are labelled opposite to their use in the data
   sheets (real data holds categorical metrics like "total beneficiaries" in
@@ -262,16 +268,23 @@ fix), registries loaded for post-hoc code assignment. The schema is
 version-stamped from the template version; regenerating on template release
 is a one-step script.
 
-**Phase 3 — Extraction rules & prompts.** One structured-output LLM call
-per document *(model and cost per document recorded; deterministic-first:
-metadata fields — title, IDs, dates, document type, links — are prefilled
-from the catalogues at zero LLM cost)*. Inputs: page-tagged text
-(`[page N]` markers) of the mapped relevant sections. Rules: extract **all**
-results exhaustively, rank/pick headline results deterministically in code
-(eliminates run-to-run selection variance); rationale prompts ask explicitly
-for the climate stressor vs perceived benefit; temperature 0; verbatim
-quote + page required per coded value. Vocabulary passed in-prompt but
-enforced in code.
+**Phase 3 — Extraction rules & prompts.** Extraction runs in **two LLM
+sessions**. *Session 1 — verbatim extraction*: one structured-output call
+per document over page-tagged text (`[page N]` markers) of the mapped
+relevant sections; it captures projects, locations, interventions,
+rationales, results and evidence exactly as the document states them —
+verbatim passages with page/table references, no classification. Rules:
+extract **all** results exhaustively (headline results are ranked
+deterministically in code, eliminating run-to-run selection variance); ask
+explicitly for the climate stressor vs perceived benefit; temperature 0.
+*Session 2 — categorisation*: each verbatim extract is assigned to the
+controlled vocabularies in cheap batched calls that see only the extract
+and the field's options. Deterministic-first throughout: metadata fields
+(title, IDs, dates, document type, links) are prefilled from the catalogues
+at zero LLM cost, and registry codes are assigned in code. Separating the
+sessions keeps errors diagnosable (missed content vs wrong code), lets the
+provenance gate apply cleanly to Session 1, and means a template or
+vocabulary revision re-runs only Session 2 — no document is re-read.
 
 **Phase 4 — Iterative validation.**
 *Round 1 (done):* gold standard P001–P010 hand-extracted in template v02.
@@ -301,6 +314,12 @@ All thresholds are proposed working values, to be confirmed after Round 2 and
 **fixed before scale-up**. Metrics are always interpreted against the
 Section 6 applicability profile — a field that is Not expected for a document
 type never counts against recall.
+
+**The two sessions are scored separately.** Session 1 is scored on recall
+and provenance validity (did we capture what the document states,
+faithfully); Session 2 on coded-field accuracy (given a correct verbatim
+extract, was the right category chosen). A coded-field error counts against
+Session 2 only when the underlying verbatim extract was correct.
 
 | Metric | Measured how | Proposed working target |
 |---|---|---|
@@ -344,13 +363,13 @@ Applications for Using AI in Evaluations* (2025):
 | Risk | Mitigation |
 |---|---|
 | Template vocabulary doesn't match documents' language → forced or missed codes | Candidate-value flag in output schema; candidate log reviewed by template owner each batch; synonym notes added to schema |
-| Template revision invalidates earlier extractions | Template version stamped on every record; changed fields identified by diff; re-extraction of affected fields only |
+| Template revision invalidates earlier extractions | Template version stamped on every record; because coding is a separate session over stored verbatim extracts, a vocabulary revision re-runs only the categorisation step — no documents are re-read |
 | Performance drops on a new source/document type | Per-batch metrics + pause-and-revalidate rule; applicability profile set from a structure scan before extraction |
 | Screening of borderline documents delays parts of the corpus | Screening is Phase 1 with its own deliverable; extraction proceeds on `in_scope` while screening runs |
 | French/other-language extraction quality lags English | Language recorded per document; language-stratified metrics in Round 2/3; French gold-standard documents included in review samples |
 | Non-PDF formats (docx, xls rating sheets) break the text pipeline | Format-specific ingestion (docx conversion, table parsing); xls sheets profiled as Not expected for narrative fields |
 | Gold standard itself inconsistent (single-extractor bias) | Inter-rater agreement round on a shared subset; ambiguous fields fixed in template before AI tuning |
-| Cost overrun at scale | Deterministic-first design (metadata prefill, code-side validation, one call/document); per-document cost tracked from Round 2; batch API for scale-up *(model tier decision pending)* |
+| Cost overrun at scale | Deterministic-first design (metadata prefill, code-side validation); one verbatim call per document plus batched categorisation calls; per-document cost tracked from Round 2; batch API for scale-up *(model tier decision pending)* |
 
 ## 11. Timeline and dependencies *(indicative — to be confirmed)*
 
@@ -384,6 +403,11 @@ Every extraction run emits, per document:
   quote
 - `provenance_check`: pass/fail per quoted value (mechanical)
 - `review_status`: unreviewed / human-validated / human-corrected
+
+**Two-session version stamping.** Verbatim extracts carry the Session 1
+(extraction) prompt and model version; codes carry the Session 2
+(categorisation) prompt version and the template/vocabulary version — so a
+template revision invalidates only the codes, never the verbatim layer.
 
 ## Annex B — Disagreement diagnosis guide
 
