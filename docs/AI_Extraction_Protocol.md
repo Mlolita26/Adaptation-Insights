@@ -564,6 +564,19 @@ aligning the code lists to that file is a pending harmonisation task — in
 particular, deciding which broad terms (e.g. *nutrition, resilience, pest,
 flood*) to keep, drop, or demote to abstract-level only.
 
+**What counts as the abstract.** The World Bank's own catalogue summary of
+each document — the `abstracts` field its documents API returns alongside
+title, date and topics (roughly one paragraph, written when a report is
+filed; for ICRs typically outcome ratings and lessons). It is not the
+document's full text and not a generated summary, and it is stored in the
+catalogue, so abstract-level screening runs without downloading any PDF. An
+abstract-only match is weak evidence because summaries mention scope words
+incidentally (a road project "affected by drought", a health project noting
+"community resilience"), whereas a title keyword is definitional of what the
+project is. Only the World Bank provides abstracts — GEF, GCF and AfDB
+metadata carry none, which is why their `to_screen` piles have different
+uncertainty reasons (untyped titles, missing dates).
+
 **Agriculture terms (EN):** agriculture, agricultural, farming, farm,
 crop(s), livestock, pastoral, pastoralist, fisheries, fishery, aquaculture,
 agroforestry, food security, food system, food production, value chain,
