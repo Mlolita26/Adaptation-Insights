@@ -59,104 +59,51 @@ The current corpus is a **pilot**: four sources chosen because their document
 repositories are programmatically retrievable, providing volume quickly while
 the method is validated. Corpus construction is fully documented per source
 in `metadata/{source}/{source}_filters.md` (query filters, post-filters,
-screening rules, known limitations) — this protocol does not duplicate that
-detail.
+screening rules, known limitations).
 
-| Source | in_scope | to_screen | screened_out / parked | Notes |
-|---|---|---|---|---|
-| World Bank | 276 files (≈275 projects) | 48 on disk (+428 catalogued, not downloaded) | 43 excluded; 115 pre-2015 | Evidence-based screen: WB topic classification OR title keywords; DPOs excluded |
-| GEF | 142 | — (36 undated pending) | 15 pre-2015; 615 proposal-stage | Document dates recovered from the files (site publishes none) |
-| GCF | 7 | — | 11 funding proposals | Small; grows as GCF projects reach evaluation |
-| AfDB | 123 | 46 untyped | 4 undated | Filtered at source (category listings + IDEV facets) |
-| **Total** | **~548** | ~94 (+428) | | |
+Scope rules applied to all sources (team decision 2026-07-17):
+**evaluation-type documents only** (completion reports, terminal/mid-term
+evaluations, performance evaluations — proposals excluded because they do
+not describe what was actually implemented); **document date 2015–2025**
+(GCA alignment); African agriculture/adaptation relevance. The strict
+agriculture × adaptation intersection is deliberately **not** enforced by
+the coarse filters — documents with evidence on either angle are kept
+(recall-first: stricter query-time filters were tested and silently lose
+in-scope projects), and the final relevance decision falls to screening and
+to extraction itself.
 
-Scope rules (team decision 2026-07-17): **evaluation-type documents only**
-(completion reports, terminal/mid-term evaluations, performance evaluations —
-proposals excluded because they do not describe what was actually
-implemented); **document date 2015–2025** (GCA alignment); African
-agriculture/adaptation relevance.
+The master table on the following page summarises, per source: what is in
+scope, which filters run on the source's website/API versus in our code,
+what was screened out and why, and why the remaining `to_screen` documents
+cannot be decided automatically.
 
 **Eligibility for extraction:** `in_scope` documents only. `to_screen`
-documents must first pass the screening step (Section 7, Phase 1); verdicts
-are recorded in per-source screening files — nothing is silently discarded.
+documents must first pass the screening step (Section 7, Phase 1):
+deterministic rules first (e.g. WB sector codes from the projects API, GEF
+adaptation-fund membership), one batched LLM screen for the remainder, human
+adjudication of disagreements — verdicts recorded per source; nothing is
+silently discarded. `screened_out` and `pre_2015` documents are parked,
+never deleted.
 
-### 3.2 Thematic scope and where the filters are applied
+```{=openxml}
+<w:p><w:pPr><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/><w:cols w:space="708"/></w:sectPr></w:pPr></w:p>
+```
 
-The thematic target is **climate adaptation in agriculture and food
-systems** — both angles matter. Because sources classify documents
-differently, the filters are applied at two levels, and neither level alone
-is final:
+**Master corpus and filter table (pilot sources, as of now)**
 
-| Source | Applied at query time (on the source's website/API) | Applied after retrieval (in code) |
-|---|---|---|
-| World Bank | Evaluation document types only (ICR, ICR Report, PPAR); each African country + regional groupings | Date ≥ 2015; country field must be African; keep if the **World Bank's own topic classification** includes *Agriculture* OR the title carries agriculture/adaptation keywords; budget-support instruments (DPOs/PRSCs) excluded |
-| GEF | **Climate Change focal area** (i.e. adaptation-side selection, includes mitigation); African countries; projects approved ≥ 2000 | Evaluation-type documents kept, proposal-stage parked; document year recovered from the files, 2015–2025 kept. **No agriculture filter applied yet** — planned via LDCF/SCCF adaptation-fund membership + content screen |
-| GCF | **Adaptation theme** + Africa region + approved/completed status | Evaluation/completion documents kept, funding proposals parked |
-| AfDB | Evaluation-only document categories (completion reports, PPERs, IDEV evaluations) | Date 2015–2025; **agriculture** via keywords in title OR the agriculture sector letter embedded in AfDB project codes (`P-XX-Axx-…`); appraisal/progress documents excluded |
+| Source | In scope | Filters on the website / API (query time) | Filters in code (after retrieval) | Screened out — count and reasons | To screen — count and why uncertain |
+|:-----|:------|:------------------------|:------------------------|:-----------------------|:-----------------------|
+| World Bank | 276 files (≈275 projects) | Evaluation doc types only (ICR, ICR Report, PPAR); each African country + regional groupings ("Africa", "Eastern Africa", "World") | Date ≥ 2015; country field must be African; keep if WB's own topic classification includes *Agriculture* OR title carries agriculture/adaptation keywords; budget-support instruments excluded | 43 excluded: 17 budget-support DPOs/PRSCs (policy lending — nothing implemented), 4 non-African (Yemen/Lebanon, had entered via abstract mentions of "Africa"), ~22 with no agriculture/adaptation signal in topics, title, or abstract (statistics, disease surveillance, education, public-sector ICRs). +115 pre-2015 parked | 48 on disk (+428 catalogued, not downloaded): **abstract-only evidence** — not WB-classified as Agriculture, no title keywords; mixes genuine borderline projects (watershed, land administration, rural infrastructure) with false positives whose abstracts mention "resilience"/"drought" in passing. Content check needed |
+| GEF | 142 | Climate Change focal area (adaptation-side selection, but includes mitigation); African countries; projects approved ≥ 2000 | Evaluation-type docs kept, proposal-stage parked; document year recovered from the files (site publishes no dates), 2015–2025 kept. **No agriculture filter yet** — planned via LDCF/SCCF adaptation-fund membership + content screen | 615 proposal-stage (CEO endorsements, project documents, PIFs, review sheets — describe intentions, not implementation); 15 pre-2015 parked | 36 undated: uncertainty is the **date**, not the theme — no publication year recoverable (legacy Word/Excel formats, scanned annexes), so the 2015–2025 rule cannot be applied yet |
+| GCF | 7 | Adaptation theme + Africa region + approved/completed status | Evaluation/completion documents kept, funding proposals parked | 11 approved funding proposals (proposal-stage) | — |
+| AfDB | 123 | Evaluation-only document categories (completion reports, completion report reviews, PPERs, agriculture evaluation reports) + IDEV evaluation search facets | Cross-host dedupe; date 2015–2025 (listing date → filename → title); **agriculture** via title keywords OR the sector letter embedded in AfDB project codes (P-XX-**A**xx-…); appraisal (PAR), ESIA and progress reports excluded; one best document per project | Appraisal/progress types and administrative noise excluded at scraper level (4,401 raw → 174 kept); 4 undated parked | 46 untyped: titles carry **no document-type marker** — cannot tell from metadata whether they are genuine evaluation reports (several French-titled completion reports) or noise (procurement notices, feasibility studies); sampling confirmed a mixture |
+| **Total** | **~548** | | | | **~94 on disk (+428 catalogued)** |
 
-In short: **adaptation** is filtered at the source where the source supports
-it (GCF theme, GEF focal area) and via keywords elsewhere; **agriculture** is
-filtered via the source's own classification where it exists (WB topics,
-AfDB sector codes) and via keywords elsewhere. The strict
-agriculture × adaptation intersection is deliberately **not** enforced by
-these coarse filters — documents with evidence on either angle are kept, and
-the final relevance decision falls to screening (Section 3.4) and to
-extraction itself, where a document with no extractable adaptation content
-yields an explicit no-extraction record. This recall-first design was chosen
-after testing showed that stricter query-time filters silently lose in-scope
-projects (e.g. agriculture projects the source never topic-tagged).
+```{=openxml}
+<w:p><w:pPr><w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720" w:header="708" w:footer="708" w:gutter="0"/><w:cols w:space="708"/></w:sectPr></w:pPr></w:p>
+```
 
-### 3.3 Why documents are screened out
-
-`screened_out` documents are parked (never deleted) with a recorded reason:
-
-1. **Proposal-stage documents** (GEF CEO endorsements, project documents,
-   PIFs; GCF funding proposals; AfDB appraisal reports): they describe
-   intentions, not what was implemented — excluded by team decision.
-2. **Budget-support / policy lending** (World Bank DPOs, DPFs, PRSCs):
-   policy operations implement nothing on the ground, so there are no
-   adaptation actions to extract (17 in the WB corpus).
-3. **Outside Africa**: documents that entered earlier corpus versions
-   through abstract mentions of "Africa" (e.g. Yemen and Lebanon
-   agriculture projects) — the country field is now checked directly.
-4. **No thematic signal anywhere**: documents whose source classification,
-   title, *and* abstract show no agriculture or adaptation evidence
-   (statistics projects, disease surveillance, higher education,
-   public-sector reform ICRs).
-5. **Outside the time window** (`pre_2015\` folders): kept separately in
-   case the scope changes.
-6. **Administrative noise** (AfDB procurement notices, feasibility studies
-   caught by category listings).
-
-### 3.4 Why the to_screen documents are uncertain
-
-`to_screen` documents have **some evidence for scope fit, but not enough to
-decide automatically** — each pile has a specific, known reason for the
-uncertainty:
-
-- **World Bank (48 on disk + 428 catalogued):** their only
-  agriculture/adaptation signal is in the **abstract** — the World Bank did
-  not classify them under Agriculture, and their titles carry no
-  agriculture/adaptation keywords. Experience shows this pile mixes genuine
-  borderline projects (watershed management, land administration, rural
-  infrastructure with adaptation components) with false positives whose
-  abstracts merely mention "resilience" or "drought" in passing. Only a
-  content check can tell them apart.
-- **AfDB (46):** the documents are **untyped** — their titles carry no
-  document-type marker, so we cannot tell from metadata whether they are
-  genuine evaluation reports (several are French-titled completion reports)
-  or noise (procurement notices, feasibility studies) — confirmed to be a
-  mixture on sampling.
-- **GEF (36 undated):** the uncertainty is the **date**, not the theme —
-  no publication year could be recovered from these files (legacy Word/Excel
-  formats, scanned annexes), so the 2015–2025 rule cannot be applied yet.
-
-Resolution path (Section 7, Phase 1): deterministic rules first (e.g. WB
-sector codes from the projects API, GEF adaptation-fund membership), one
-batched LLM screen on title+abstract/first pages for the remainder, human
-adjudication of disagreements — verdicts recorded per source.
-
-### 3.5 Source extension roadmap
+### 3.2 Source extension roadmap
 
 The pilot does not bound the review. The WP3 protocol's source universe
 (multilateral development banks, UN agencies — IFAD, FAO, UNDP —, the
@@ -166,7 +113,7 @@ extension. Next candidates per the pipeline roadmap: IFAD, Adaptation Fund,
 FAO, UNDP. Sources that cannot be scraped join through **manual download**
 into the same folder structure and the same screening states.
 
-### 3.6 Source onboarding procedure
+### 3.3 Source onboarding procedure
 
 Every new source joins by the same path (so the extraction stage never needs
 redesign):
@@ -185,7 +132,7 @@ redesign):
 6. **Capped extraction validation** — a small extraction batch reviewed
    against Section 8 metrics before the source is scaled.
 
-### 3.7 Other inputs
+### 3.4 Other inputs
 
 - **Template**: working database **v02** (pinned; extractions declare the
   template version they follow). The refined template (long format, tagging
@@ -406,7 +353,7 @@ Applications for Using AI in Evaluations* (2025):
 | Period | Milestones |
 |---|---|
 | Q3 2026 | Refined template released and schema generated (Ph2); screening of to_screen piles resolved (Ph1); prompts + extraction rules (Ph3); Round 2 AI-vs-gold-standard iterations; thresholds confirmed; Round 3 AI-first batch on WB ICRs |
-| Q4 2026 | Scale-up WB → GEF → AfDB → GCF (Ph5); validated records merged; gap report + candidate-vocabulary log delivered (Ph6); onboarding of next source (IFAD or Adaptation Fund) using Section 3.6 |
+| Q4 2026 | Scale-up WB → GEF → AfDB → GCF (Ph5); validated records merged; gap report + candidate-vocabulary log delivered (Ph6); onboarding of next source (IFAD or Adaptation Fund) using Section 3.3 |
 | 2027 | Extension sources per WP3 universe; periodic re-runs for newly published evaluations; handover per no-cost-extension staffing plan |
 
 **Dependencies:** the refined template (blocks Ph2); team decisions on QA
