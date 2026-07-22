@@ -493,6 +493,20 @@ Developed Countries Fund (395)** and **Special Climate Change Fund (103)**
 selection for future runs · CBIT Trust Fund (44) · Global Biodiversity
 Framework Fund (82) · Multi Trust Fund (84) · NPIF (12).
 
+**Recall safeguard — LDCF/SCCF is the primary sweep, not the perimeter.**
+Adaptation-relevant work also exists in the main GEF Trust Fund — notably
+Land Degradation focal-area projects (sustainable land management) and
+multi-focal integrated programs: gold-standard projects P002–P004
+(Resilient Food Systems / GEF IEO Food Systems evaluation) are Trust
+Fund–financed and would be invisible to a fund-only filter. Future GEF runs
+therefore sweep the union of LDCF + SCCF, the Land Degradation focal area,
+and the Climate Change focal area (already harvested — the current corpus
+is kept), and classify results by evidence: fund membership = adaptation by
+construction; otherwise focal area plus title/content keywords — so
+borderline Trust Fund projects land in `to_screen` rather than being
+missed. The GEF IEO terminal-evaluation records provide an independent
+cross-check for anything the sweeps miss.
+
 **Document types** targeted on project pages: kept — terminal evaluation,
 mid-term review, project implementation report (PIR), evaluation, completion
 report; parked as proposal-stage — CEO endorsement, project document,
