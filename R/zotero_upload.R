@@ -1,20 +1,24 @@
 ##############################################################################
 # zotero_upload.R — Sync the corpus catalogue to the shared Zotero library
 #
-# One Zotero "report" item per corpus document, organised in collections:
+# One Zotero "report" item per corpus document, organised in collections
 #   {Institution} / included | to screen | screened out
-# The source document/project ID goes in the Report Number field.
+# Identifier fields:
+#   Report Number = the document's own number (WB repnb, e.g. ICR4348) —
+#                   only where the source provides one
+#   Call Number   = the PROJECT identifier (WB P-code, GEF project ID,
+#                   AfDB project code, GCF code) — Zotero has no dedicated
+#                   project-number field; Call Number is the sortable stand-in
+# File attachments: the actual documents are uploaded from the OneDrive
+# corpus into Zotero storage (group has unlimited storage) via the 3-step
+# file-upload API; idempotent (items that already have an attachment are
+# skipped).
 #
-# Idempotent: every item carries a per-source doc tag
-# (wbdoc:/gefdoc:/afdbdoc:/gcfdoc:); existing items are read from the
-# items listing (NOT the /tags endpoint, whose search index lags behind
-# uploads) and are patched into the right collection / report number if
-# needed instead of being re-created.
+# Idempotency reads doc tags (wbdoc:/gefdoc:/afdbdoc:/gcfdoc:) from the
+# items listing — NOT the /tags endpoint, whose search index lags uploads.
 #
-# Credentials from ~/.Renviron (never committed):
-#   ZOTERO_API_KEY / ZOTERO_LIBRARY_ID / ZOTERO_LIBRARY_TYPE
-#
-# Usage: Rscript R/zotero_upload.R
+# Credentials from ~/.Renviron: ZOTERO_API_KEY / ZOTERO_LIBRARY_ID /
+# ZOTERO_LIBRARY_TYPE. Usage: Rscript R/zotero_upload.R
 ##############################################################################
 
 suppressPackageStartupMessages({
@@ -34,21 +38,33 @@ stopifnot(nzchar(API_KEY), nzchar(LIBRARY_ID))
 
 ZOTERO_BASE <- glue("https://api.zotero.org/{LIBRARY_TYPE}/{LIBRARY_ID}")
 BATCH_SIZE  <- 50
+ATTACH_FILES <- TRUE
 
-DATA <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature/Data/Project_doc"
+GL   <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
+DATA <- file.path(GL, "Data/Project_doc")
 
 SOURCES  <- c("World Bank", "GEF", "GCF", "AfDB")
 STATUSES <- c("included", "to screen", "screened out")
 
 zotero_headers <- function() {
-  add_headers(
-    "Zotero-API-Key"     = API_KEY,
-    "Zotero-API-Version" = "3",
-    "Content-Type"       = "application/json"
-  )
+  add_headers("Zotero-API-Key" = API_KEY, "Zotero-API-Version" = "3",
+              "Content-Type" = "application/json")
+}
+zotero_headers_plain <- function() {
+  add_headers("Zotero-API-Key" = API_KEY, "Zotero-API-Version" = "3")
 }
 
-# ── Collections: ensure {Institution}/{status} exist, return key map ───────
+CONTENT_TYPES <- c(pdf = "application/pdf",
+  docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  doc = "application/msword",
+  xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  xls = "application/vnd.ms-excel", zip = "application/zip")
+guess_ct <- function(f) {
+  ct <- CONTENT_TYPES[tolower(tools::file_ext(f))]
+  ifelse(is.na(ct), "application/octet-stream", ct)
+}
+
+# ── Collections ─────────────────────────────────────────────────────────────
 ensure_collections <- function() {
   cli_h2("Ensuring collection structure")
   cols <- list(); start <- 0
@@ -72,40 +88,38 @@ ensure_collections <- function() {
   if (nrow(existing) == 0) existing <- tibble(key = character(),
                                               name = character(),
                                               parent = character())
-
   create <- function(name, parent = "") {
     payload <- list(list(name = name))
     if (nzchar(parent)) payload[[1]]$parentCollection <- parent
     resp <- POST(glue("{ZOTERO_BASE}/collections"), zotero_headers(),
                  body = toJSON(payload, auto_unbox = TRUE))
     stop_for_status(resp)
-    res <- fromJSON(content(resp, "text", encoding = "UTF-8"),
-                    simplifyVector = FALSE)
-    res$successful[["0"]]$key
+    fromJSON(content(resp, "text", encoding = "UTF-8"),
+             simplifyVector = FALSE)$successful[["0"]]$key
   }
-
   keymap <- list()
   for (src in SOURCES) {
     top <- existing %>% filter(name == src, parent == "")
     top_key <- if (nrow(top) >= 1) top$key[1] else create(src)
     for (st in STATUSES) {
       sub <- existing %>% filter(name == st, parent == top_key)
-      sub_key <- if (nrow(sub) >= 1) sub$key[1] else create(st, top_key)
-      keymap[[paste(src, st, sep = "|")]] <- sub_key
+      keymap[[paste(src, st, sep = "|")]] <-
+        if (nrow(sub) >= 1) sub$key[1] else create(st, top_key)
     }
   }
   keymap
 }
 
 # ── Item constructor ────────────────────────────────────────────────────────
-mk_item <- function(title, institution, date, url, report_type, report_number,
-                    extra, tags, abstract = "", collection = NULL) {
-  it <- list(
+mk_item <- function(title, institution, date, url, report_type,
+                    report_number, call_number, extra, tags, abstract = "") {
+  list(
     itemType     = "report",
     title        = title,
     creators     = list(list(creatorType = "author", name = institution)),
     reportType   = coalesce(report_type, ""),
     reportNumber = coalesce(report_number, ""),
+    callNumber   = coalesce(call_number, ""),
     institution  = institution,
     date         = coalesce(as.character(date), ""),
     url          = coalesce(url, ""),
@@ -113,38 +127,64 @@ mk_item <- function(title, institution, date, url, report_type, report_number,
     extra        = extra,
     tags         = lapply(unique(tags[nzchar(tags)]), function(t) list(tag = t))
   )
-  if (!is.null(collection)) it$collections <- list(collection)
-  it
 }
 
 split_countries <- function(x) trimws(strsplit(coalesce(x, ""), "[;,]")[[1]])
 
-# Builders return a tibble: doctag, source, status, report_number + item payload
-# in a list-column.
+# Each builder returns entries: list(doctag, source, status, item, file)
+# where file = absolute path of the document on disk (NA if none).
 
 # ── World Bank ──────────────────────────────────────────────────────────────
+wb_file_index <- function() {
+  dirs <- file.path(DATA, "Worldbank/Docs", c("2015_2026", "to_screen", "screened_out"))
+  files <- unlist(lapply(dirs, list.files, full.names = TRUE))
+  ix_key <- list(); ix_id <- list()
+  for (f in files) {
+    b <- basename(f)
+    p <- paste(sort(unlist(str_extract_all(b, "P\\d{6}"))), collapse = "+")
+    y <- str_match(b, "_(\\d{4})\\.pdf$")[, 2]
+    if (!is.na(y)) ix_key[[paste0(p, "|", y)]] <- f
+    m <- str_match(b, "_(\\d{8})(_ICR)?_\\d{4}\\.pdf$")[, 2]
+    if (!is.na(m)) ix_id[[m]] <- f
+  }
+  list(key = ix_key, id = ix_id)
+}
+
 build_worldbank <- function() {
   meta <- read_csv(file.path(DATA, "Worldbank/List/worldbank_metadata.csv"),
                    show_col_types = FALSE, col_types = cols(.default = "c"))
   cat_df <- read_csv(file.path(DATA, "Worldbank/List/wb_new_method_catalogue.csv"),
                      show_col_types = FALSE, col_types = cols(.default = "c")) %>%
     left_join(meta %>% select(id, abstract), by = "id")
+  if (!"report_no" %in% names(cat_df)) cat_df$report_no <- NA_character_
+  fix <- wb_file_index()
+
+  find_file <- function(id, project_id, doc_date) {
+    f <- fix$id[[as.character(id)]]
+    if (!is.null(f)) return(f)
+    p <- paste(sort(unlist(str_extract_all(coalesce(project_id, ""), "P\\d{6}"))),
+               collapse = "+")
+    f <- fix$key[[paste0(p, "|", substr(coalesce(doc_date, ""), 1, 4))]]
+    if (!is.null(f)) f else NA_character_
+  }
 
   rows <- bind_rows(
     cat_df %>% filter(screen_status == "in_scope") %>% mutate(.status = "included"),
     cat_df %>% filter(screen_status == "to_screen", already_have == "TRUE") %>%
       mutate(.status = "to screen")
   )
-
-  wb_one <- function(r, status) {
+  wb_one <- function(r, status, file) {
     pcodes <- paste(unlist(str_extract_all(coalesce(r$project_id, ""), "P\\d{6}")),
-                    collapse = "; ")
+                    collapse = " / ")
     list(
       doctag = paste0("wbdoc:", r$id), source = "World Bank", status = status,
+      file = file,
       item = mk_item(
         title = str_squish(r$title), institution = "World Bank",
         date = substr(coalesce(r$doc_date, ""), 1, 10), url = r$web_url,
-        report_type = r$doc_type, report_number = r$id,
+        report_type = r$doc_type,
+        report_number = ifelse(coalesce(r$report_no, "NA") %in% c("NA", ""), "", r$report_no),
+        call_number = pcodes,
         extra = glue("Project(s): {pcodes} | Topics: {coalesce(r$topics,'')} | PDF: {coalesce(r$pdf_url,'')}"),
         abstract = ifelse(coalesce(r$abstract, "NA") == "NA", "",
                           str_squish(coalesce(r$abstract, ""))),
@@ -152,32 +192,36 @@ build_worldbank <- function() {
       )
     )
   }
-  out <- lapply(seq_len(nrow(rows)), function(i) wb_one(rows[i, ], rows$.status[i]))
+  out <- lapply(seq_len(nrow(rows)), function(i)
+    wb_one(rows[i, ], rows$.status[i],
+           find_file(rows$id[i], rows$project_id[i], rows$doc_date[i])))
 
-  # screened_out folder: match files back to the old metadata by P-codes+year
-  so_dir <- file.path(DATA, "Worldbank/Docs/screened_out")
-  so_files <- basename(list.files(so_dir))
+  # screened_out folder → match back to old metadata
+  so_files <- list.files(file.path(DATA, "Worldbank/Docs/screened_out"),
+                         full.names = TRUE)
   meta_ix <- meta %>%
     mutate(pkey = vapply(project_id, function(p)
              paste(sort(unlist(str_extract_all(coalesce(p, ""), "P\\d{6}"))),
                    collapse = "+"), character(1)),
            yr = substr(doc_date, 1, 4))
-  for (f in so_files) {
+  for (fp in so_files) {
+    f <- basename(fp)
     pcodes <- sort(unlist(str_extract_all(f, "P\\d{6}")))
     yr <- str_match(f, "_(\\d{4})\\.pdf$")[, 2]
     m <- meta_ix %>% filter(pkey == paste(pcodes, collapse = "+"), yr == !!yr)
     if (nrow(m) >= 1) {
       r <- m[1, ]
-      out[[length(out) + 1]] <- wb_one(r, "screened out")
+      r$report_no <- NA_character_; r$topics <- ""
+      out[[length(out) + 1]] <- wb_one(r, "screened out", fp)
     } else {
       out[[length(out) + 1]] <- list(
         doctag = paste0("wbdoc:file:", f), source = "World Bank",
-        status = "screened out",
+        status = "screened out", file = fp,
         item = mk_item(
           title = str_squish(str_replace_all(tools::file_path_sans_ext(f), "_", " ")),
           institution = "World Bank", date = yr, url = "",
           report_type = "Implementation Completion and Results Report",
-          report_number = "",
+          report_number = "", call_number = paste(pcodes, collapse = " / "),
           extra = glue("file: {f}"),
           tags = c("worldbank", paste0("wbdoc:file:", f))
         )
@@ -196,13 +240,14 @@ build_gef <- function() {
   proj <- meta %>% group_by(gef_id) %>% slice(1) %>% ungroup()
 
   folders <- list(
-    `included`  = basename(list.files(file.path(DATA, "gef/Docs/evaluation_docs/2015_2026"))),
-    `to screen` = basename(list.files(file.path(DATA, "gef/Docs/evaluation_docs/undated")))
+    `included`  = file.path(DATA, "gef/Docs/evaluation_docs/2015_2026"),
+    `to screen` = file.path(DATA, "gef/Docs/evaluation_docs/undated")
   )
-
   out <- list()
   for (status in names(folders)) {
-    rows <- dates %>% filter(file %in% folders[[status]])
+    fls <- list.files(folders[[status]], full.names = TRUE)
+    rows <- dates %>% filter(file %in% basename(fls))
+    paths <- setNames(fls, basename(fls))
     for (i in seq_len(nrow(rows))) {
       r <- rows[i, ]
       p <- proj %>% filter(gef_id == r$gef_id)
@@ -212,12 +257,14 @@ build_gef <- function() {
       drow <- meta %>% filter(gef_id == r$gef_id, doc_type == dtype) %>% slice(1)
       out[[length(out) + 1]] <- list(
         doctag = paste0("gefdoc:", r$file), source = "GEF", status = status,
+        file = unname(paths[r$file]),
         item = mk_item(
           title = title, institution = "Global Environment Facility",
           date = coalesce(r$final_year, ""),
           url = if (nrow(p) == 1) p$project_url else "",
-          report_type = dtype, report_number = r$gef_id,
-          extra = glue("GEF ID: {r$gef_id} | year from: {r$method} | PDF: {if (nrow(drow) == 1) coalesce(drow$doc_url, '') else ''}"),
+          report_type = dtype, report_number = "",
+          call_number = paste0("GEF ", r$gef_id),
+          extra = glue("GEF project ID: {r$gef_id} | year from: {r$method} | PDF: {if (nrow(drow) == 1) coalesce(drow$doc_url, '') else ''}"),
           tags = c("gef", if (nrow(p) == 1) split_countries(p$country),
                    paste0("gefdoc:", r$file))
         )
@@ -238,18 +285,48 @@ build_afdb <- function() {
              .yr >= 2015 & .yr <= 2025         ~ "included",
              TRUE                              ~ "screened out"
            ))
+  # disk lookup: reconstruct the EXACT filename the scraper generated
+  # (same logic as afdb.R download_results, incl. the shared safe_filename)
+  if (!exists("safe_filename")) {
+    source(file.path(GL, "Script/AI_grey_litterature/R/00_config.R"))
+    source(file.path(GL, "Script/AI_grey_litterature/R/01_utils.R"))
+  }
+  dirs <- file.path(DATA, "afdb/Docs", c("2015_2026", "to_screen", "undated"))
+  files <- unlist(lapply(dirs, list.files, full.names = TRUE))
+  file_by_name <- setNames(files, basename(files))
+  find_file <- function(r) {
+    year_str <- ifelse(is.na(r$year) | !nzchar(coalesce(r$year, "")), "XXXX", r$year)
+    proj_str <- if (!is.na(r$project_id) && nzchar(r$project_id)) r$project_id
+                else safe_filename(substr(coalesce(r$project_name, r$title, "notitle"), 1, 60))
+    fname <- paste0(substr(
+      glue("afdb_{coalesce(r$doc_type, 'DOC')}_{proj_str}_{year_str}"),
+      1, 100), ".pdf")
+    f <- file_by_name[fname]
+    if (!is.na(f)) unname(f) else NA_character_
+  }
+
+  # AfDB project code: use the metadata field, else parse P-XX-YYY-NNN out
+  # of the title / PDF URL (codes are embedded in most PDF filenames)
+  afdb_code <- function(r) {
+    if (!is.na(r$project_id) && nzchar(r$project_id)) return(toupper(r$project_id))
+    m <- str_extract(paste(coalesce(r$title, ""), coalesce(r$pdf_url, "")),
+                     regex("P-[A-Za-z0-9]{2}-[A-Za-z0-9]{3}-\\d{3}",
+                           ignore_case = TRUE))
+    ifelse(is.na(m), "", toupper(m))
+  }
 
   lapply(seq_len(nrow(meta)), function(i) {
     r <- meta[i, ]
     list(
       doctag = paste0("afdbdoc:", r$id), source = "AfDB", status = r$.status,
+      file = find_file(r),
       item = mk_item(
         title = str_squish(r$title), institution = "African Development Bank",
         date = if (grepl("^\\d{4}-", coalesce(r$doc_date, ""))) substr(r$doc_date, 1, 10)
                else coalesce(r$year, ""),
-        url = r$web_url, report_type = r$doc_type,
-        report_number = coalesce(r$project_id, ""),
-        extra = glue("Listing: {coalesce(r$listing,'')} | PDF: {coalesce(r$pdf_url,'')}"),
+        url = r$web_url, report_type = r$doc_type, report_number = "",
+        call_number = afdb_code(r),
+        extra = glue("Project code: {afdb_code(r)} | Listing: {coalesce(r$listing,'')} | PDF: {coalesce(r$pdf_url,'')}"),
         tags = c("afdb", split_countries(r$country), paste0("afdbdoc:", r$id))
       )
     )
@@ -259,21 +336,23 @@ build_afdb <- function() {
 # ── GCF ─────────────────────────────────────────────────────────────────────
 build_gcf <- function() {
   folders <- list(
-    `included`     = basename(list.files(file.path(DATA, "gcf/Docs/evaluation_docs"))),
-    `screened out` = basename(list.files(file.path(DATA, "gcf/Docs/proposal_stage")))
+    `included`     = file.path(DATA, "gcf/Docs/evaluation_docs"),
+    `screened out` = file.path(DATA, "gcf/Docs/proposal_stage")
   )
   out <- list()
   for (status in names(folders)) {
-    for (f in folders[[status]]) {
+    for (fp in list.files(folders[[status]], full.names = TRUE)) {
+      f <- basename(fp)
       base <- tools::file_path_sans_ext(f)
       code <- str_match(base, "^gcf_([A-Z0-9]+)_")[, 2]
       dtype <- str_replace_all(str_remove(sub("^gcf_[A-Z0-9]+_", "", base), "_\\d+$"), "_", " ")
       out[[length(out) + 1]] <- list(
         doctag = paste0("gcfdoc:", f), source = "GCF", status = status,
+        file = fp,
         item = mk_item(
           title = glue("GCF {code} — {dtype}"), institution = "Green Climate Fund",
           date = "", url = glue("https://www.greenclimate.fund/project/{tolower(code)}"),
-          report_type = dtype, report_number = code,
+          report_type = dtype, report_number = "", call_number = code,
           extra = glue("GCF project: {code} | file: {f}"),
           tags = c("gcf", paste0("gcfdoc:", f))
         )
@@ -283,7 +362,7 @@ build_gcf <- function() {
   out
 }
 
-# ── Existing items (key, version, doctag) — items listing, not /tags ───────
+# ── Existing items ──────────────────────────────────────────────────────────
 fetch_existing_items <- function() {
   cli_h2("Reading library items")
   rows <- list(); start <- 0
@@ -297,26 +376,42 @@ fetch_existing_items <- function() {
     for (it in items) {
       tags <- vapply(it$data$tags, function(t) t$tag, character(1))
       doc <- tags[grepl("^(wbdoc|gefdoc|afdbdoc|gcfdoc):", tags)]
-      colls <- unlist(it$data$collections)
       rows[[length(rows) + 1]] <- tibble(
         key = it$key, version = it$version,
         doctag = if (length(doc)) doc[1] else NA_character_,
         report_number = coalesce(it$data$reportNumber, ""),
-        collections = paste(colls, collapse = ",")
+        call_number = coalesce(it$data$callNumber, ""),
+        collections = paste(unlist(it$data$collections), collapse = ",")
       )
     }
     total <- suppressWarnings(as.numeric(headers(resp)[["total-results"]]))
     start <- start + 100
     if (is.na(total) || start >= total) break
   }
-  if (length(rows) == 0) return(tibble(key = character(), version = integer(),
-                                       doctag = character(),
-                                       report_number = character(),
-                                       collections = character()))
+  if (length(rows) == 0) return(tibble())
   bind_rows(rows)
 }
 
-# ── POST helper with 429 handling ───────────────────────────────────────────
+fetch_attachment_parents <- function() {
+  parents <- character(0); start <- 0
+  repeat {
+    resp <- GET(glue("{ZOTERO_BASE}/items?limit=100&start={start}&itemType=attachment"),
+                zotero_headers())
+    stop_for_status(resp)
+    items <- fromJSON(content(resp, "text", encoding = "UTF-8"),
+                      simplifyVector = FALSE)
+    if (length(items) == 0) break
+    for (it in items) {
+      p <- it$data$parentItem
+      if (!is.null(p)) parents <- c(parents, p)
+    }
+    total <- suppressWarnings(as.numeric(headers(resp)[["total-results"]]))
+    start <- start + 100
+    if (is.na(total) || start >= total) break
+  }
+  unique(parents)
+}
+
 post_batch <- function(payload) {
   resp <- POST(glue("{ZOTERO_BASE}/items"), zotero_headers(),
                body = toJSON(payload, auto_unbox = TRUE))
@@ -330,6 +425,48 @@ post_batch <- function(payload) {
   fromJSON(content(resp, "text", encoding = "UTF-8"), simplifyVector = FALSE)
 }
 
+# ── File upload (3-step Zotero storage flow) ────────────────────────────────
+upload_file_to_item <- function(parent_key, filepath) {
+  fname <- basename(filepath)
+  ct <- guess_ct(fname)
+  # 1. create the attachment item
+  att <- list(list(itemType = "attachment", linkMode = "imported_file",
+                   parentItem = parent_key, title = fname,
+                   contentType = ct, filename = fname))
+  res <- post_batch(att)
+  if (length(res$successful) == 0) {
+    if (length(res$failed) > 0)
+      cli_alert_danger("  attachment rejected for {fname}: {res$failed[[1]]$message}")
+    return(FALSE)
+  }
+  akey <- res$successful[["0"]]$key
+  # 2. authorise upload
+  md5 <- unname(tools::md5sum(filepath))
+  auth <- POST(glue("{ZOTERO_BASE}/items/{akey}/file"),
+               zotero_headers_plain(),
+               add_headers("If-None-Match" = "*"),
+               body = list(md5 = md5, filename = fname,
+                           filesize = file.size(filepath),
+                           mtime = round(as.numeric(file.mtime(filepath)) * 1000)),
+               encode = "form")
+  if (status_code(auth) == 413) { cli_alert_danger("quota exceeded"); return("quota") }
+  stop_for_status(auth)
+  aj <- fromJSON(content(auth, "text", encoding = "UTF-8"), simplifyVector = FALSE)
+  if (isTRUE(aj$exists == 1)) return(TRUE)
+  # 3. upload bytes then register
+  body_raw <- c(charToRaw(aj$prefix),
+                readBin(filepath, "raw", n = file.size(filepath)),
+                charToRaw(aj$suffix))
+  up <- POST(aj$url, body = body_raw,
+             add_headers("Content-Type" = aj$contentType))
+  stop_for_status(up)
+  reg <- POST(glue("{ZOTERO_BASE}/items/{akey}/file"),
+              zotero_headers_plain(),
+              add_headers("If-None-Match" = "*"),
+              body = list(upload = aj$uploadKey), encode = "form")
+  status_code(reg) %in% c(200, 204)
+}
+
 # ── Main ────────────────────────────────────────────────────────────────────
 main <- function() {
   cli_h1("Zotero catalogue sync — {LIBRARY_TYPE}/{LIBRARY_ID}")
@@ -341,7 +478,7 @@ main <- function() {
   catalogue <- c(build_worldbank(), build_gef(), build_afdb(), build_gcf())
   cli_alert_info("{length(catalogue)} documents in the catalogue")
 
-  # 1. create new items (with collection + report number)
+  # 1. create missing items
   new_entries <- Filter(function(x) !(x$doctag %in% existing$doctag), catalogue)
   cli_h2("Creating {length(new_entries)} new items")
   if (length(new_entries) > 0) {
@@ -359,9 +496,14 @@ main <- function() {
       Sys.sleep(1)
     }
     cli_alert_success("created {n_ok}")
+    existing <- fetch_existing_items()
   }
 
-  # 2. patch existing items whose collection / report number is missing
+  # 2. patch collection / report number / call number where changed.
+  # Collections are MERGED, not replaced: the sync only manages its own
+  # status collections (keymap values); memberships the team adds manually
+  # are preserved.
+  ours <- unlist(keymap)
   cat_ix <- setNames(catalogue, vapply(catalogue, function(x) x$doctag, character(1)))
   patches <- list()
   for (i in seq_len(nrow(existing))) {
@@ -370,17 +512,20 @@ main <- function() {
     x <- cat_ix[[e$doctag]]
     want_col <- keymap[[paste(x$source, x$status, sep = "|")]]
     want_rn  <- coalesce(x$item$reportNumber, "")
-    need_col <- !grepl(want_col, e$collections, fixed = TRUE)
-    need_rn  <- !identical(e$report_number, want_rn) && nzchar(want_rn)
-    if (need_col || need_rn) {
+    want_cn  <- coalesce(x$item$callNumber, "")
+    curr_cols <- strsplit(e$collections, ",")[[1]]
+    curr_cols <- curr_cols[nzchar(curr_cols)]
+    new_cols <- unique(c(setdiff(curr_cols, ours), want_col))
+    if (!setequal(new_cols, curr_cols) ||
+        !identical(e$report_number, want_rn) ||
+        !identical(e$call_number, want_cn)) {
       patches[[length(patches) + 1]] <- list(
-        key = e$key, version = e$version,
-        collections = list(want_col),
-        reportNumber = want_rn
+        key = e$key, version = e$version, collections = as.list(new_cols),
+        reportNumber = want_rn, callNumber = want_cn
       )
     }
   }
-  cli_h2("Patching {length(patches)} existing items (collection / report number)")
+  cli_h2("Patching {length(patches)} existing items")
   if (length(patches) > 0) {
     n_ok <- 0
     for (b in split(patches, ceiling(seq_along(patches) / BATCH_SIZE))) {
@@ -391,6 +536,32 @@ main <- function() {
       Sys.sleep(1)
     }
     cli_alert_success("patched {n_ok}")
+    existing <- fetch_existing_items()
+  }
+
+  # 3. upload document files for items without an attachment
+  if (ATTACH_FILES) {
+    cli_h2("Uploading document files")
+    have_att <- fetch_attachment_parents()
+    todo <- existing %>%
+      filter(!is.na(doctag), !(key %in% have_att)) %>%
+      left_join(tibble(doctag = names(cat_ix),
+                       file = vapply(cat_ix, function(x)
+                         coalesce(x$file, NA_character_), character(1))),
+                by = "doctag") %>%
+      filter(!is.na(file))
+    cli_alert_info("{nrow(todo)} items need a file attachment")
+    n_ok <- 0; n_fail <- 0; quota <- FALSE
+    for (i in seq_len(nrow(todo))) {
+      r <- todo[i, ]
+      res <- tryCatch(upload_file_to_item(r$key, r$file),
+                      error = function(e) { cli_alert_danger("  {basename(r$file)}: {e$message}"); FALSE })
+      if (identical(res, "quota")) { quota <- TRUE; break }
+      if (isTRUE(res)) n_ok <- n_ok + 1 else n_fail <- n_fail + 1
+      if (i %% 25 == 0) cli_alert_info("attachments: {i}/{nrow(todo)} (ok {n_ok}, fail {n_fail})")
+    }
+    cli_alert_success("attachments uploaded: {n_ok} (failed: {n_fail})")
+    if (quota) cli_alert_danger("stopped: storage quota exceeded")
   }
 
   cli_h2("Done")
