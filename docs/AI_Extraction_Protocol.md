@@ -61,7 +61,7 @@ the method is validated. Corpus construction is fully documented per source
 in `metadata/{source}/{source}_filters.md` (query filters, post-filters,
 screening rules, known limitations).
 
-Scope rules applied to all sources (team decision 2026-07-17):
+Scope rules applied to all sources:
 **evaluation-type documents only** (completion reports, terminal/mid-term
 evaluations, performance evaluations — proposals excluded because they do
 not describe what was actually implemented); **document date 2015–2025**
@@ -93,11 +93,11 @@ never deleted.
 
 | Source | In scope | Filters on the website / API (query time) | Filters in code (after retrieval) | Screened out — count and reasons | To screen — count and why uncertain |
 |:-----|:------|:------------------------|:------------------------|:-----------------------|:-----------------------|
-| World Bank | 276 files (≈275 projects) | Evaluation doc types only (ICR, ICR Report, PPAR); each African country + regional groupings ("Africa", "Eastern Africa", "World") | Date ≥ 2015; country field must be African; keep if WB's own topic classification includes *Agriculture* OR title carries agriculture/adaptation keywords; budget-support instruments excluded | 43 excluded: 17 budget-support DPOs/PRSCs (policy lending — nothing implemented), 4 non-African (Yemen/Lebanon, had entered via abstract mentions of "Africa"), ~22 with no agriculture/adaptation signal in topics, title, or abstract (statistics, disease surveillance, education, public-sector ICRs). +115 pre-2015 parked | 48 on disk (+428 catalogued, not downloaded): **abstract-only evidence** — not WB-classified as Agriculture, no title keywords; mixes genuine borderline projects (watershed, land administration, rural infrastructure) with false positives whose abstracts mention "resilience"/"drought" in passing. Content check needed |
+| World Bank | 276 files (≈275 projects) | Evaluation doc types only (ICR, ICR Report, PPAR); each African country + regional groupings ("Africa", "Eastern Africa", "World") | Date ≥ 2015; country field must be African; keep if WB's own topic classification includes *Agriculture* OR title carries agriculture/adaptation keywords; budget-support instruments excluded | 43 excluded: 17 budget-support DPOs/PRSCs (policy lending — nothing implemented), 4 non-African (Yemen/Lebanon, had entered via abstract mentions of "Africa"), ~22 with no agriculture/adaptation signal in topics, title, or abstract (statistics, disease surveillance, education, public-sector ICRs). +115 pre-2015 parked | 48 on disk: **abstract-only evidence** — not WB-classified as Agriculture, no title keywords; mixes genuine borderline projects (watershed, land administration, rural infrastructure) with false positives whose abstracts mention "resilience"/"drought" in passing. Content check needed |
 | GEF | 142 | Climate Change focal area (adaptation-side selection, but includes mitigation); African countries; projects approved ≥ 2000 | Evaluation-type docs kept, proposal-stage parked; document year recovered from the files (site publishes no dates), 2015–2025 kept. **No agriculture filter yet** — planned via LDCF/SCCF adaptation-fund membership + content screen | 615 proposal-stage (CEO endorsements, project documents, PIFs, review sheets — describe intentions, not implementation); 15 pre-2015 parked | 36 undated: uncertainty is the **date**, not the theme — no publication year recoverable (legacy Word/Excel formats, scanned annexes), so the 2015–2025 rule cannot be applied yet |
 | GCF | 7 | Adaptation theme + Africa region + approved/completed status | Evaluation/completion documents kept, funding proposals parked | 11 approved funding proposals (proposal-stage) | — |
 | AfDB | 123 | Evaluation-only document categories (completion reports, completion report reviews, PPERs, agriculture evaluation reports) + IDEV evaluation search facets | Cross-host dedupe; date 2015–2025 (listing date → filename → title); **agriculture** via title keywords OR the sector letter embedded in AfDB project codes (P-XX-**A**xx-…); appraisal (PAR), ESIA and progress reports excluded; one best document per project | Appraisal/progress types and administrative noise excluded at scraper level (4,401 raw → 174 kept); 4 undated parked | 46 untyped: titles carry **no document-type marker** — cannot tell from metadata whether they are genuine evaluation reports (several French-titled completion reports) or noise (procurement notices, feasibility studies); sampling confirmed a mixture |
-| **Total** | **~548** | | | | **~94 on disk (+428 catalogued)** |
+| **Total** | **~548** | | | | **~94 on disk** |
 
 ```{=openxml}
 <w:p><w:pPr><w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720" w:header="708" w:footer="708" w:gutter="0"/><w:cols w:space="708"/></w:sectPr></w:pPr></w:p>
@@ -111,7 +111,11 @@ Adaptation Fund, African government agencies, INGOs and consortia, knowledge
 portals, IEO/IEG evaluation portals) remains the identification strategy for
 extension. Next candidates per the pipeline roadmap: IFAD, Adaptation Fund,
 FAO, UNDP. Sources that cannot be scraped join through **manual download**
-into the same folder structure and the same screening states.
+into the same folder structure and the same screening states. The
+recall-first sweeps also surfaced a reserve of low-evidence candidate
+documents (recorded in the source catalogues, not downloaded); should the
+team broaden the thematic scope, that reserve is the first pool to revisit —
+it implies no screening work under the current scope.
 
 ### 3.3 Source onboarding procedure
 
@@ -342,7 +346,7 @@ Applications for Using AI in Evaluations* (2025):
 | Template vocabulary doesn't match documents' language → forced or missed codes | Candidate-value flag in output schema; candidate log reviewed by template owner each batch; synonym notes added to schema |
 | Template revision invalidates earlier extractions | Template version stamped on every record; changed fields identified by diff; re-extraction of affected fields only |
 | Performance drops on a new source/document type | Per-batch metrics + pause-and-revalidate rule; applicability profile set from a structure scan before extraction |
-| Screening backlog blocks corpus growth (WB 428 catalogued to_screen) | Screening is Phase 1 with its own deliverable; extraction proceeds on `in_scope` while screening runs |
+| Screening of borderline documents delays parts of the corpus | Screening is Phase 1 with its own deliverable; extraction proceeds on `in_scope` while screening runs |
 | French/other-language extraction quality lags English | Language recorded per document; language-stratified metrics in Round 2/3; French gold-standard documents included in review samples |
 | Non-PDF formats (docx, xls rating sheets) break the text pipeline | Format-specific ingestion (docx conversion, table parsing); xls sheets profiled as Not expected for narrative fields |
 | Gold standard itself inconsistent (single-extractor bias) | Inter-rater agreement round on a shared subset; ambiguous fields fixed in template before AI tuning |
@@ -424,10 +428,155 @@ For the template owner to action in `AIs_WP3_EvidenceSynthesis_GreyLit.docx`
 5. **Editorial:** research questions Q3/Q5 and Q7/Q10 are duplicates —
    deduplicate the list.
 
+## Annex D — Per-source filter details
+
+The full evidence per source lives in `metadata/{source}/{source}_filters.md`
+on GitHub; this annex records the classification systems each source offers,
+which categories were selected, and the keyword lists shared by all sources.
+
+### D.1 World Bank
+
+**Document types.** The WB documents API classifies every document by type
+(`docty`). Of that universe, only three evaluation types are requested:
+*Implementation Completion and Results Report*, *Implementation Completion
+Report*, *Project Performance Assessment Review*. Everything else (appraisal
+documents, implementation status reports, working papers…) is never fetched.
+
+**Sector.** Every returned document carries `teratopic` — the World Bank's
+own multi-valued topical classification (a document typically carries 2–5
+topics). The 29 topics observed on recent ICRs:
+
+> Agriculture · Rural Development · Environment · Water Resources · Water
+> Supply and Sanitation · Macroeconomics and Economic Growth · Public Sector
+> Development · Finance and Financial Sector Development · Urban Development
+> · Transport · Communities and Human Settlements · Education · Governance ·
+> Health · Nutrition and Population · Energy · Poverty Reduction · Law and
+> Development · Industry · Social Development · Private Sector Development ·
+> International Economics and Trade · Informatics · Infrastructure Economics
+> and Finance · Conflict and Development · Information and Communication
+> Technologies · Science and Technology Development · Social Protections and
+> Labor · Gender
+
+**We selected only *Agriculture* as positive topic evidence.** Neighbouring
+topics (*Rural Development*, *Environment*, *Water Resources*) are *not*
+automatic keeps — they proved too broad (urban, macro and infrastructure
+projects carry them); documents under those topics still qualify via title
+keywords, or land in `to_screen` via their abstract. Topics are used as
+**evidence after retrieval**, never as a query filter: WB topic coverage is
+incomplete on recent documents, and query-side topic filtering verifiably
+lost in-scope projects.
+
+**Geography.** One query per doc type × each of the 54 African countries,
+plus the regional/global values multi-country projects are filed under
+(*Africa, Eastern/Western/Southern/Central Africa, Western and Central
+Africa, Eastern and Southern Africa, World*). After retrieval the country
+field must be African; *World*-filed documents pass only if the title names
+an African country.
+
+**Other code filters.** Document date ≥ 2015 (client-side; the API date
+parameter is unreliable in combination with other filters); budget-support
+instruments dropped by title pattern (*Development Policy, DPO, DPF, DPL,
+Poverty Reduction Support, Budget Support, PRSC*).
+
+### D.2 GEF
+
+**Focal areas** (project-level classification on thegef.org; project counts
+as observed 2026-07): Biodiversity (2,514) · Chemicals and Waste (807) ·
+**Climate Change (2,686) ← selected** · International Waters (542) · Land
+Degradation (1,064). Climate Change includes mitigation and enabling
+activities — which is why an agriculture/adaptation content screen is still
+pending for GEF.
+
+**Funding sources** (same database): GEF Trust Fund (6,018) · **Least
+Developed Countries Fund (395)** and **Special Climate Change Fund (103)**
+— the two adaptation-implementation funds, *planned* as the primary
+selection for future runs · CBIT Trust Fund (44) · Global Biodiversity
+Framework Fund (82) · Multi Trust Fund (84) · NPIF (12).
+
+**Document types** targeted on project pages: kept — terminal evaluation,
+mid-term review, project implementation report (PIR), evaluation, completion
+report; parked as proposal-stage — CEO endorsement, project document,
+project identification form (PIF), review sheet.
+
+**Dates.** The GEF site publishes no document dates; the year is recovered
+from the files in this order of trust: month-name dates on the first pages
+(EN/FR/PT/ES, latest year) → year in the filename → file-creation metadata
+(docx/xls only). PDF creation metadata and numeric date formats are
+deliberately rejected (regenerated files and planned-closing dates give
+false years).
+
+### D.3 GCF
+
+**Facets on greenclimate.fund**: project status — **Approved + Completed
+selected** (other statuses exist for projects not yet implementable); theme —
+**Adaptation selected** (of Adaptation / Mitigation / Cross-cutting);
+region — **Africa selected**. Document types: evaluation and completion
+documents kept; approved funding proposals parked. No further sector facet
+exists; with 7 in-scope documents, relevance is checked manually. GCF also
+tags projects with "result areas" (e.g. *Health, food and water security*) —
+usable if the corpus grows.
+
+### D.4 AfDB
+
+**www.afdb.org category listings swept** (evaluation-only): Project/Programme
+Completion Reports · Completion Report Reviews · Projects Performance
+Evaluation Reports · Evaluation Reports — Agriculture & Agro-industries.
+
+**IDEV (idev.afdb.org) document categories**: the evaluation search offers
+~30 categories (corporate evaluations, country strategy evaluations,
+thematic evaluations, knowledge products, annual reports…). **Selected — the
+five project-evaluation categories**: Project performance evaluation ·
+Project cluster evaluation · Impact evaluation · Evaluation report · PCR and
+XSR Validation synthesis. The full taxonomy with facet IDs is cached in
+`metadata/afdb/idev_taxonomy.csv`.
+
+**Document types excluded by name** even when listed in the categories:
+PAR (appraisal = proposal), ESIA, IPR/ISR (progress reports). Priority when
+one document is kept per project: PPER/EER > evaluation/PCR-validation >
+PCR > MTR.
+
+**Sector.** AfDB project codes embed a sector letter (`P-XX-`**`A`**`xx-NNN`
+= agriculture); a document qualifies via that letter OR title keywords.
+Dates: listing publication date → year in PDF filename → IDEV dated folder
+path → year in title.
+
+### D.5 Shared keyword lists (all sources)
+
+Matching: **any single term**, case-insensitive; terms exist in English,
+French and Portuguese (`R/00_config.R`). A **title** match ⇒ `in_scope`;
+an **abstract-only** match ⇒ `to_screen`. The lists serve the same intent
+as the review's keyword taxonomy (`Keywords_implementation_updated_032026.xlsx`);
+aligning the code lists to that file is a pending harmonisation task — in
+particular, deciding which broad terms (e.g. *nutrition, resilience, pest,
+flood*) to keep, drop, or demote to abstract-level only.
+
+**Agriculture terms (EN):** agriculture, agricultural, farming, farm,
+crop(s), livestock, pastoral, pastoralist, fisheries, fishery, aquaculture,
+agroforestry, food security, food system, food production, value chain,
+agribusiness, smallholder, irrigation, seed, fertilizer, soil, land use,
+cereal, maize, rice, wheat, sorghum, millet, cassava, yam, cocoa, coffee,
+tea, cotton, horticulture, vegetable, fruit, dairy, poultry, cattle, goat,
+sheep, camel, rural development, rural livelihood, food aid, nutrition,
+hunger, agro-pastoral, dryland, rangeland, extension service, farmer field
+school.
+
+**Adaptation terms (EN):** adaptation, climate adaptation, climate change
+adaptation, climate resilience, resilience, climate-smart, climate smart
+agriculture, CSA, drought, flood, rainfall variability, water scarcity,
+desertification, land degradation, soil erosion, climate risk, climate
+vulnerability, early warning, weather index, crop insurance, index
+insurance, disaster risk reduction, DRR, climate information, climate
+services, adaptive capacity, vulnerability reduction, water management,
+water harvesting, conservation agriculture, climate-proofing, heat stress,
+sea level rise, salinization, pest, disease outbreak, food crisis, famine,
+El Niño, La Niña, LDCF, SCCF, NAP, NAPA, NDC.
+
 ---
 
 *Change log:*
 v0.1 (2026-07-22) — first draft; revised same day per team edits: corpus
 building added as Objective 1, definitions and roles sections removed,
 corpus section expanded with filter locations, screening-out reasons, and
-to_screen rationale.
+to_screen rationale; Annex D added (per-source classification systems,
+selections, and keyword lists); catalogued low-evidence reserve
+de-emphasised — noted only as a future-scope pool.
