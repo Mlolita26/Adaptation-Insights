@@ -296,13 +296,20 @@ build_afdb <- function() {
   file_by_name <- setNames(files, basename(files))
   find_file <- function(r) {
     year_str <- ifelse(is.na(r$year) | !nzchar(coalesce(r$year, "")), "XXXX", r$year)
-    proj_str <- if (!is.na(r$project_id) && nzchar(r$project_id)) r$project_id
-                else safe_filename(substr(coalesce(r$project_name, r$title, "notitle"), 1, 60))
-    fname <- paste0(substr(
-      glue("afdb_{coalesce(r$doc_type, 'DOC')}_{proj_str}_{year_str}"),
-      1, 100), ".pdf")
-    f <- file_by_name[fname]
-    if (!is.na(f)) unname(f) else NA_character_
+    # try both filename variants: code-based and title-based (project codes
+    # recovered from PDFs after download mean the disk name may use either)
+    cands <- c(
+      if (!is.na(r$project_id) && nzchar(r$project_id)) r$project_id,
+      safe_filename(substr(coalesce(r$project_name, r$title, "notitle"), 1, 60))
+    )
+    for (proj_str in cands) {
+      fname <- paste0(substr(
+        glue("afdb_{coalesce(r$doc_type, 'DOC')}_{proj_str}_{year_str}"),
+        1, 100), ".pdf")
+      f <- file_by_name[fname]
+      if (!is.na(f)) return(unname(f))
+    }
+    NA_character_
   }
 
   # AfDB project code: use the metadata field, else parse P-XX-YYY-NNN out
