@@ -20,9 +20,20 @@ Metadata: none yet — the scraper logged downloads but never wrote a catalogue 
 - `Docs/proposal_stage/` — 11 approved funding proposals — **out of scope**
   (team decision 2026-07-17: proposals excluded)
 
+## CPE/CPR API gap-fill (2026-07-25)
+
+The Climate Project Explorer / CPR API sweep (see `af_filters.md` for the
+channel) was run against the GCF corpus as a completeness check:
+- 106 GCF project families found; 561 documents catalogued
+  (`gcf_cpe_metadata.csv`), of which 186 Annual Performance Reports were
+  reclassified as out-of-scope progress documents.
+- True evaluation documents: 4 — 3 were **md5-identical duplicates** of
+  files already in this corpus (validating both channels), and **1 was new**
+  (FP049 final evaluation), now promoted. Corpus: **8 evaluation documents**.
+
 ## Zotero / catalogue status
 
-- No RIS / Zotero import yet — pending the metadata CSV (below).
+- Items synced via the API pipeline (collections GCF/included etc.).
 
 ## Planned scraper changes (agreed 2026-07-21, not yet implemented)
 

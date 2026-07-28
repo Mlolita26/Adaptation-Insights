@@ -43,7 +43,7 @@ ATTACH_FILES <- TRUE
 GL   <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
 DATA <- file.path(GL, "Data/Project_doc")
 
-SOURCES  <- c("World Bank", "GEF", "GCF", "AfDB")
+SOURCES  <- c("World Bank", "GEF", "GCF", "AfDB", "Adaptation Fund", "CIF")
 STATUSES <- c("included", "to screen", "screened out")
 
 zotero_headers <- function() {
@@ -369,6 +369,73 @@ build_gcf <- function() {
   out
 }
 
+# ── Adaptation Fund ─────────────────────────────────────────────────────────
+build_af <- function() {
+  meta_path <- file.path(DATA, "af/List/af_metadata.csv")
+  if (!file.exists(meta_path)) return(list())
+  meta <- read_csv(meta_path, show_col_types = FALSE,
+                   col_types = cols(.default = "c")) %>%
+    filter(status == "kept")
+  docs_dir <- file.path(DATA, "af/Docs/evaluation_docs")
+  files <- setNames(list.files(docs_dir, full.names = TRUE),
+                    basename(list.files(docs_dir)))
+  lapply(seq_len(nrow(meta)), function(i) {
+    r <- meta[i, ]
+    ext <- tolower(tools::file_ext(sub("\\?.*$", "", r$pdf_url)))
+    if (!nzchar(ext) || nchar(ext) > 4) ext <- "pdf"
+    cand <- c(
+      glue("af_{r$project_id}_{safe_filename(r$doc_type)}_{coalesce(r$family_year,'XXXX')}.{ext}"),
+      glue("af_{r$project_id}_{safe_filename(r$doc_type)}_XXXX.{ext}")
+    )
+    f <- NA_character_
+    for (cn in cand) if (!is.na(files[cn])) { f <- unname(files[cn]); break }
+    list(
+      doctag = paste0("afdoc:", r$id), source = "Adaptation Fund",
+      status = "included", file = f,
+      item = mk_item(
+        title = str_squish(r$title), institution = "Adaptation Fund",
+        date = coalesce(r$family_year, ""), url = r$web_url,
+        report_type = r$doc_type, report_number = "",
+        call_number = coalesce(r$project_id, ""),
+        extra = glue("AF project: {coalesce(r$project_id,'')} | CPR id: {r$id} | PDF: {coalesce(r$pdf_url,'')}"),
+        tags = c("adaptation-fund", paste0("afdoc:", r$id))
+      )
+    )
+  })
+}
+
+# ── CIF ─────────────────────────────────────────────────────────────────────
+build_cif <- function() {
+  meta_path <- file.path(DATA, "cif/List/cif_metadata.csv")
+  if (!file.exists(meta_path)) return(list())
+  meta <- read_csv(meta_path, show_col_types = FALSE,
+                   col_types = cols(.default = "c")) %>%
+    filter(status %in% c("kept", "kept_global"))
+  docs_dir <- file.path(DATA, "cif/Docs/evaluation_docs")
+  files <- setNames(list.files(docs_dir, full.names = TRUE),
+                    basename(list.files(docs_dir)))
+  lapply(seq_len(nrow(meta)), function(i) {
+    r <- meta[i, ]
+    cand <- unique(vapply(c(coalesce(r$doc_date, ""), "", "XXXX"), function(y)
+      paste0(substr(glue("cif_{safe_filename(r$id)}_{y}"), 1, 100), ".pdf"),
+      character(1)))
+    f <- NA_character_
+    for (cn in cand) if (!is.na(files[cn])) { f <- unname(files[cn]); break }
+    list(
+      doctag = paste0("cifdoc:", r$id), source = "CIF",
+      status = "included", file = f,
+      item = mk_item(
+        title = str_squish(r$title), institution = "Climate Investment Funds",
+        date = coalesce(r$doc_date, ""), url = r$web_url,
+        report_type = r$doc_type, report_number = "",
+        call_number = "",
+        extra = glue("Scope: {r$status} | PDF: {coalesce(r$pdf_url,'')}"),
+        tags = c("cif", r$status, paste0("cifdoc:", r$id))
+      )
+    )
+  })
+}
+
 # ── Existing items ──────────────────────────────────────────────────────────
 fetch_existing_items <- function() {
   cli_h2("Reading library items")
@@ -382,13 +449,17 @@ fetch_existing_items <- function() {
     if (length(items) == 0) break
     for (it in items) {
       tags <- vapply(it$data$tags, function(t) t$tag, character(1))
-      doc <- tags[grepl("^(wbdoc|gefdoc|afdbdoc|gcfdoc):", tags)]
+      doc <- tags[grepl("^(wbdoc|gefdoc|afdbdoc|gcfdoc|afdoc|cifdoc):", tags)]
       rows[[length(rows) + 1]] <- tibble(
         key = it$key, version = it$version,
         doctag = if (length(doc)) doc[1] else NA_character_,
         report_number = coalesce(it$data$reportNumber, ""),
         call_number = coalesce(it$data$callNumber, ""),
-        collections = paste(unlist(it$data$collections), collapse = ",")
+        collections = paste(unlist(it$data$collections), collapse = ","),
+        title = coalesce(it$data$title, ""),
+        url = coalesce(it$data$url, ""),
+        extra = coalesce(it$data$extra, ""),
+        all_tags = paste(tags, collapse = "|")
       )
     }
     total <- suppressWarnings(as.numeric(headers(resp)[["total-results"]]))
@@ -399,8 +470,8 @@ fetch_existing_items <- function() {
   bind_rows(rows)
 }
 
-fetch_attachment_parents <- function() {
-  parents <- character(0); start <- 0
+fetch_attachments <- function() {
+  rows <- list(); start <- 0
   repeat {
     resp <- GET(glue("{ZOTERO_BASE}/items?limit=100&start={start}&itemType=attachment"),
                 zotero_headers())
@@ -409,15 +480,19 @@ fetch_attachment_parents <- function() {
                       simplifyVector = FALSE)
     if (length(items) == 0) break
     for (it in items) {
-      p <- it$data$parentItem
-      if (!is.null(p)) parents <- c(parents, p)
+      rows[[length(rows) + 1]] <- tibble(
+        parent = coalesce(it$data$parentItem, ""),
+        md5 = coalesce(it$data$md5, "")
+      )
     }
     total <- suppressWarnings(as.numeric(headers(resp)[["total-results"]]))
     start <- start + 100
     if (is.na(total) || start >= total) break
   }
-  unique(parents)
+  if (length(rows) == 0) return(tibble(parent = character(), md5 = character()))
+  bind_rows(rows)
 }
+fetch_attachment_parents <- function() unique(fetch_attachments()$parent)
 
 post_batch <- function(payload) {
   resp <- POST(glue("{ZOTERO_BASE}/items"), zotero_headers(),
@@ -482,11 +557,86 @@ main <- function() {
   existing <- fetch_existing_items()
   cli_alert_info("{nrow(existing)} items in the library")
 
-  catalogue <- c(build_worldbank(), build_gef(), build_afdb(), build_gcf())
+  catalogue <- c(build_worldbank(), build_gef(), build_afdb(), build_gcf(),
+                 build_af(), build_cif())
   cli_alert_info("{length(catalogue)} documents in the catalogue")
 
-  # 1. create missing items
   new_entries <- Filter(function(x) !(x$doctag %in% existing$doctag), catalogue)
+
+  # 0. duplicate adoption: teammates add items by hand (no doc tags). Before
+  # creating anything, try to prove identity against untagged items via
+  # (a) project/report identifier contained in their text, (b) URL equality,
+  # (c) attachment file MD5. On a confident match the manual item is ADOPTED
+  # (patched with our tag/fields/collection; their tags & collections kept).
+  # Title-only similarity is never auto-adopted — it goes to the log.
+  manual <- existing %>% filter(is.na(doctag))
+  adopt_patches <- list(); adopted_tags <- character(0); recon_log <- list()
+  if (nrow(manual) > 0 && length(new_entries) > 0) {
+    atts_all <- fetch_attachments()
+    norm_url <- function(u) sub("/$", "", sub("\\?.*$", "", tolower(coalesce(u, ""))))
+    manual$blob <- tolower(paste(manual$title, manual$extra, manual$url,
+                                 manual$call_number, manual$report_number))
+    manual$nurl <- vapply(manual$url, norm_url, character(1))
+    still_new <- list()
+    for (x in new_entries) {
+      code <- coalesce(x$item$callNumber, "")
+      urls <- vapply(c(x$item$url, x$item$extra), norm_url, character(1))
+      match_ix <- integer(0); matched_on <- ""
+      if (nchar(code) >= 5) {
+        hit <- which(grepl(tolower(code), manual$blob, fixed = TRUE))
+        if (length(hit)) { match_ix <- hit; matched_on <- paste0("identifier:", code) }
+      }
+      if (!length(match_ix)) {
+        hit <- which(manual$nurl %in% urls[nzchar(urls)])
+        if (length(hit)) { match_ix <- hit; matched_on <- "url" }
+      }
+      if (!length(match_ix) && !is.na(x$file) && file.exists(coalesce(x$file, ""))) {
+        local_md5 <- unname(tools::md5sum(x$file))
+        hit_parents <- atts_all$parent[atts_all$md5 == local_md5]
+        hit <- which(manual$key %in% hit_parents)
+        if (length(hit)) { match_ix <- hit; matched_on <- "md5" }
+      }
+      if (length(match_ix)) {
+        m <- manual[match_ix[1], ]
+        old_tags <- strsplit(m$all_tags, "\\|")[[1]]
+        new_tags <- vapply(x$item$tags, function(t) t$tag, character(1))
+        curr_cols <- strsplit(m$collections, ",")[[1]]
+        curr_cols <- curr_cols[nzchar(curr_cols)]
+        want_col <- keymap[[paste(x$source, x$status, sep = "|")]]
+        adopt_patches[[length(adopt_patches) + 1]] <- list(
+          key = m$key, version = m$version,
+          collections = as.list(unique(c(curr_cols, want_col))),
+          reportNumber = coalesce(x$item$reportNumber, ""),
+          callNumber = coalesce(x$item$callNumber, ""),
+          tags = lapply(unique(c(old_tags[nzchar(old_tags)], new_tags)),
+                        function(t) list(tag = t))
+        )
+        adopted_tags <- c(adopted_tags, x$doctag)
+        recon_log[[length(recon_log) + 1]] <- tibble(
+          when = format(Sys.time(), "%Y-%m-%d %H:%M"), action = "adopted",
+          doctag = x$doctag, zotero_key = m$key, matched_on = matched_on,
+          manual_title = m$title)
+      } else {
+        still_new[[length(still_new) + 1]] <- x
+      }
+    }
+    if (length(adopt_patches) > 0) {
+      cli_h2("Adopting {length(adopt_patches)} manually-added items")
+      for (b in split(adopt_patches, ceiling(seq_along(adopt_patches) / BATCH_SIZE))) {
+        res <- post_batch(unname(b))
+        if (length(res$failed) > 0)
+          for (f in res$failed) cli_alert_danger("  adopt failed: {f$message}")
+        Sys.sleep(1)
+      }
+      log_path <- file.path(GL, "Data/zotero_reconciliation_log.csv")
+      readr::write_csv(bind_rows(recon_log), log_path,
+                       append = file.exists(log_path))
+      cli_alert_success("adoptions logged to {log_path}")
+    }
+    new_entries <- still_new
+  }
+
+  # 1. create missing items
   cli_h2("Creating {length(new_entries)} new items")
   if (length(new_entries) > 0) {
     items <- lapply(new_entries, function(x) {
@@ -549,6 +699,7 @@ main <- function() {
   # 3. upload document files for items without an attachment
   if (ATTACH_FILES) {
     cli_h2("Uploading document files")
+    existing <- fetch_existing_items()   # refresh: adoptions/creations above
     have_att <- fetch_attachment_parents()
     todo <- existing %>%
       filter(!is.na(doctag), !(key %in% have_att)) %>%

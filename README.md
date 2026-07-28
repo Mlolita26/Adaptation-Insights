@@ -38,14 +38,17 @@ extraction turns into a structured database.
                                             page/table provenance)
 ```
 
-## Corpus status (as of 2026-07-20)
+## Corpus status (as of 2026-07-23)
 
 | Source | In scope (evaluation docs, 2015–2025) | Parked | Notes |
 |---|---|---|---|
-| World Bank | **204** ICRs (complete vs. metadata) | 115 pre-2015 | dates from API metadata |
+| World Bank | **276** files ≈ 275 projects (evidence-verified) | 48 to_screen, 43 screened_out, 115 pre-2015 | WB topic classification + title keywords |
 | GEF | **142** TEs / MTRs / PIRs / completion reports | 15 pre-2015, 36 undated, 615 proposal-stage | dates recovered from documents |
-| GCF | **7** evaluation / completion reports | 11 funding proposals | small but complete for Africa+adaptation filter |
-| **Total** | **353** | | |
+| GCF | **8** evaluation / completion reports (incl. 1 from the CPR-API gap-fill; 3 more were md5-duplicates) | 11 funding proposals | small; grows as projects reach evaluation |
+| AfDB | **123** PCRs / PPERs / IDEV evaluations | 46 to_screen, 4 undated | scraped with WAF session handling |
+| Adaptation Fund | **~34** final/mid-term evaluations, completion reports | 4 progress reports, 92 proposal-stage (catalogued), 208 non-African | via Climate Project Explorer / CPR API |
+| CIF | **72** evaluations (19 African + 53 program-level) | 20 non-African, 13 pre-2015 | via cif.org sitemap (CPE corpus empty) |
+| **Total** | **~655** | | |
 
 Scope rules (team decision, 2026-07-17): evaluation-type documents only —
 proposals are excluded because they do not reflect what was actually
