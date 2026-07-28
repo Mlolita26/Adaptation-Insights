@@ -97,7 +97,9 @@ never deleted.
 | GEF | 142 | Climate Change focal area (adaptation-side selection, but includes mitigation); African countries; projects approved ≥ 2000 | Evaluation-type docs kept, proposal-stage parked; document year recovered from the files (site publishes no dates), 2015–2025 kept. **No agriculture filter yet** — planned via LDCF/SCCF adaptation-fund membership + content screen | 615 proposal-stage (CEO endorsements, project documents, PIFs, review sheets — describe intentions, not implementation); 15 pre-2015 parked | 36 undated: uncertainty is the **date**, not the theme — no publication year recoverable (legacy Word/Excel formats, scanned annexes), so the 2015–2025 rule cannot be applied yet |
 | GCF | 7 | Adaptation theme + Africa region + approved/completed status | Evaluation/completion documents kept, funding proposals parked | 11 approved funding proposals (proposal-stage) | — |
 | AfDB | 123 | Evaluation-only document categories (completion reports, completion report reviews, PPERs, agriculture evaluation reports) + IDEV evaluation search facets | Cross-host dedupe; date 2015–2025 (listing date → filename → title); **agriculture** via title keywords OR the sector letter embedded in AfDB project codes (P-XX-**A**xx-…); appraisal (PAR), ESIA and progress reports excluded; one best document per project | Appraisal/progress types and administrative noise excluded at scraper level (4,401 raw → 174 kept); 4 undated parked | 46 untyped: titles carry **no document-type marker** — cannot tell from metadata whether they are genuine evaluation reports (several French-titled completion reports) or noise (procurement notices, feasibility studies); sampling confirmed a mixture |
-| **Total** | **~548** | | | | **~94 on disk** |
+| Adaptation Fund | ~34 | Public CPR API behind Climate Project Explorer (the MCFs' joint platform): country-targeted search + per-project family fetch; Guidance corpus skipped (Annex D.6) | Geography: family countries ∩ Africa; document type from TITLE (final/mid-term/terminal evaluations, completion reports kept; proposals/project documents parked; **(annual) performance reports parked as progress documents**); family-era floor | 92 proposal-stage parked (catalogued only); 4 progress reports; 208 non-African project documents | Document-level dates unknown (only project-approval year) — needs the PDF date-recovery pass before the strict 2015–2025 cut |
+| CIF | 72 | cif.org directly (its corpus on Climate Project Explorer is empty): sitemap enumeration → evaluation-slug document pages; E&L-Initiative admin papers excluded upfront | Document type from page title; geography three-way: African-named kept (19), non-African pilot country → out of scope (20), **no country named → kept_global (57)** — CIF evaluations are typically program/portfolio-level and cover Africa within global scope; known pre-2015 parked | 20 non-African; 13 pre-2015; 1 untyped | kept_global docs need a screening look — Africa content varies from substantial to incidental; mostly multi-project syntheses (same extraction question as AfDB cluster evaluations) |
+| **Total** | **~655** | | | | **~94 on disk** |
 
 ```{=openxml}
 <w:p><w:pPr><w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720" w:header="708" w:footer="708" w:gutter="0"/><w:cols w:space="708"/></w:sectPr></w:pPr></w:p>
@@ -167,6 +169,18 @@ database is a reviewed step (Section 7, Phase 6).
 **Conventions:** file names short (Windows 260-character path limit — keep
 full paths ≤ 240); document filenames carry source, project code, document
 type, and year; every catalogue row keys on the source's document ID.
+
+**Manual additions and duplicate reconciliation.** Team members may add items
+to the Zotero library by hand; the catalogue sync will not duplicate them.
+Before creating an item, the sync checks manually-added (untagged) items for
+proof of identity — shared project/report identifier, identical URL, or
+identical attachment file MD5 — and on a confident match **adopts** the
+manual item (adds the pipeline's tag, fields and status collection; the
+member's own tags, notes and collections are preserved). Title-only
+similarity is never auto-merged. A standing report
+(`R/zotero_dedup_report.R` → `Data/zotero_duplicate_report.csv`) lists all
+remaining potential duplicate pairs for team review; nothing is ever deleted
+automatically.
 
 ## 5. Extraction target: the data model
 
@@ -622,6 +636,38 @@ water harvesting, conservation agriculture, climate-proofing, heat stress,
 sea level rise, salinization, pest, disease outbreak, food crisis, famine,
 El Niño, La Niña, LDCF, SCCF, NAP, NAPA, NDC.
 
+### D.6 Climate Project Explorer / CPR API channel (Adaptation Fund; CIF gap)
+
+**Climate Project Explorer** (climateprojectexplorer.org) is the Multilateral
+Climate Funds' joint document platform (GCF, GEF, Adaptation Fund, CIF),
+built by Climate Policy Radar (CPR). Retrieval uses the **public,
+unauthenticated CPR REST API** (`api.climatepolicyradar.org`):
+`GET /search/documents` (relevance-ranked, top-100 per query, no deeper
+pagination) and `GET /families/{import_id}` (one fund project with all its
+documents, including direct PDF URLs on the CPR CDN plus the fund's own
+source store). Enumeration is by country-targeted query templates over the
+African country list; family IDs come from each hit's `member_of` relation;
+families are checked against the project corpus (`MCF.corpus.AF.n0000`) so
+Guidance/policy corpora are skipped. Document types are identified from the
+document TITLE (the API's type field is empty).
+
+**Rejected routes** (tested 2026-07-23): the platform's token-gated search
+(`POST /api/v1/searches` — origin-bound JWT, not obtainable and not needed)
+and CPR's public HuggingFace dataset (contains laws/policies/UNFCCC only —
+no MCF documents).
+
+**CIF gap:** the CIF corpus on the platform is effectively empty (one
+proposal), so CIF evaluations are scraped from **cif.org** directly —
+sitemap enumeration to document pages, PDF links from the page; the
+Evaluation & Learning Initiative's own administrative papers are excluded
+upfront. CIF evaluation material is mostly program/portfolio-level;
+country-attributable content must be located within the documents.
+
+The aggregator caveat applies to this whole channel: the funds' own sites
+remain authoritative; a completeness pass against adaptation-fund.org
+project pages (which also carry DOCX evaluations and performance progress
+reports) is a known follow-up.
+
 ---
 
 *Change log:*
@@ -631,3 +677,8 @@ corpus section expanded with filter locations, screening-out reasons, and
 to_screen rationale; Annex D added (per-source classification systems,
 selections, and keyword lists); catalogued low-evidence reserve
 de-emphasised — noted only as a future-scope pool.
+2026-07-23 — GEF recall safeguard and abstract definition added (Annex D);
+two-session extraction design (verbatim extraction, then coding) applied
+across §5/§7/§8/Annex A; Adaptation Fund + CIF onboarded via the Climate
+Project Explorer / CPR API channel (master table rows, Annex D.6); manual
+additions & duplicate reconciliation convention added to §4.

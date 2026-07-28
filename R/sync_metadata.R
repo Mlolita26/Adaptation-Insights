@@ -22,7 +22,8 @@ REPO <- if (length(file_arg) > 0) {
   getwd()
 }
 
-SOURCES <- c(worldbank = "Worldbank", gef = "gef", gcf = "gcf", afdb = "afdb")
+SOURCES <- c(worldbank = "Worldbank", gef = "gef", gcf = "gcf", afdb = "afdb",
+             af = "af", cif = "cif")
 
 for (i in seq_along(SOURCES)) {
   src  <- names(SOURCES)[i]
