@@ -49,7 +49,10 @@ ID_RE <- paste(
 reports <- get_all("report")
 atts <- get_all("attachment")
 att_df <- bind_rows(lapply(atts, function(a) tibble(
-  parent = coalesce(a$data$parentItem, ""), md5 = coalesce(a$data$md5, ""))))
+  key = a$key,
+  parent = coalesce(a$data$parentItem, ""),
+  md5 = coalesce(a$data$md5, ""),
+  fname = coalesce(a$data$filename, coalesce(a$data$title, "")))))
 
 rows <- bind_rows(lapply(reports, function(it) {
   tags <- vapply(it$data$tags, function(t) t$tag, character(1))
@@ -96,6 +99,35 @@ for (i in seq_len(n - 1)) for (j in (i + 1):n) {
   }
 }
 
+# --- standalone attachments (no parent item, e.g. PDFs dropped straight into
+# a collection by teammates): compare by md5 against report-item attachments
+# and against each other. These are invisible to the item-level checks above.
+standalone <- att_df %>% filter(!nzchar(parent), nzchar(md5))
+parented   <- att_df %>% filter(nzchar(parent), nzchar(md5))
+if (nrow(standalone)) {
+  rep_title <- setNames(rows$title, rows$key)
+  hit <- standalone %>% inner_join(parented, by = "md5", suffix = c("_s", "_p"))
+  for (k in seq_len(nrow(hit))) {
+    h <- hit[k, ]
+    pmanaged <- isTRUE(rows$managed[rows$key == h$parent_p])
+    ptitle <- rep_title[h$parent_p]
+    add_pair(
+      list(key = h$key_s, title = paste0("[standalone] ", h$fname_s), managed = FALSE),
+      list(key = h$parent_p,
+           title = if (!is.na(ptitle)) unname(ptitle) else h$fname_p,
+           managed = pmanaged),
+      "md5(standalone-att)", "high")
+  }
+  dupmd5 <- standalone %>% count(md5) %>% filter(n > 1)
+  for (m in dupmd5$md5) {
+    g <- standalone %>% filter(md5 == m)
+    for (i in seq_len(nrow(g) - 1)) add_pair(
+      list(key = g$key[i], title = paste0("[standalone] ", g$fname[i]), managed = FALSE),
+      list(key = g$key[i + 1], title = paste0("[standalone] ", g$fname[i + 1]), managed = FALSE),
+      "md5(standalone-standalone)", "high")
+  }
+}
+
 report <- if (length(pairs)) bind_rows(pairs) else
   tibble(key_a = character(), title_a = character(), managed_a = logical(),
          key_b = character(), title_b = character(), managed_b = logical(),
@@ -103,6 +135,7 @@ report <- if (length(pairs)) bind_rows(pairs) else
 out1 <- file.path(GL, "Data/zotero_duplicate_report.csv")
 out2 <- file.path(GL, "Script/AI_grey_litterature/metadata/zotero_duplicate_report.csv")
 write_csv(report, out1); write_csv(report, out2)
-cat("report items:", n, "| potential duplicate pairs:", nrow(report), "\n")
+cat("report items:", n, "| standalone attachments:", nrow(standalone),
+    "| potential duplicate pairs:", nrow(report), "\n")
 cat("written:", out1, "\n")
 if (nrow(report)) print(head(report %>% select(matched_on, confidence, title_a, title_b), 10))
