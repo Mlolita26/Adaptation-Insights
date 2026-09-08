@@ -137,7 +137,7 @@ actors <- suppressMessages(read_excel(TEMPLATE, sheet = "actor_codes"))
 names(actors) <- tolower(trimws(names(actors)))
 codecol <- grep("code", names(actors), value = TRUE)[1]
 namecol <- grep("name", names(actors), value = TRUE)[1]
-acrocol <- grep("acronym|abbrev", names(actors), value = TRUE)[1]
+acrocol <- grep("acronym|accronym|abbrev", names(actors), value = TRUE)[1]  # sheet spells it 'actor_accronym'
 areg <- data.frame(
   code = trimws(as.character(actors[[codecol]])),
   name = trimws(as.character(actors[[namecol]])),
