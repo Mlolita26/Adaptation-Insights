@@ -244,9 +244,24 @@ Key rules the pipeline enforces:
   counting like "hectares"), and the location-level `result_metric` was
   dropped entirely. Care is still needed if vocabularies are read from the
   older SharePoint working-database `lists` tab.
-- **Registries.** The model outputs actor/location **names**; R code matches
-  or creates registry entries and assigns codes. The model never invents a
-  code.
+- **Registries.** The model outputs actor/location **names**; codes are
+  assigned in R against the template registries (`actor_codes`,
+  `location_codes`), never by the model. Matching is tiered: deterministic
+  first (normalised name and acronym equality, then unique-substring
+  containment — an ambiguous name is refused, not guessed), then a fuzzy
+  candidate shortlist, and only then one batched LLM call that may pick a
+  code **from the shortlist only** (renames and acronyms count) or answer
+  NEW. Every extracted name is also string-checked against the source
+  document, so only organisations the document actually mentions reach the
+  matcher.
+- **New registry entries.** An unmatched actor surfaces as `NEW: <name>` in
+  the output and as a ready-to-review row in `proposed_new_actors.csv`:
+  name, acronym, scale, actor type (from the template's list) and a
+  **suggested code** following the registry's own numbering (scale prefix
+  plus the next free number in that section). The code becomes real only
+  when a team member adds the row to the `actor_codes` sheet; the next
+  harmonisation run then resolves the placeholders automatically — no
+  document is re-read. The pipeline proposes, the team decides.
 - **No-extraction values.** Absent evidence → explicit empty value with
   reason category (not present in document / present but not quantifiable /
   ambiguous — flagged for review).
@@ -704,3 +719,8 @@ added (`GESI_project`, `funding_mechanism_portion`, `evidence_methodology`,
 `evidence_source`); project rationale instruction now ~100 words covering
 all drivers and interactions; v02 metric/unit label swap resolved
 in-template.
+2026-09-08 (later) — registry procedure operationalised (§5): tiered actor
+matching (deterministic → shortlist → candidate-bound LLM), source
+verification of extracted names, and the new-entry intake convention
+(`proposed_new_actors.csv` with suggested codes; team adds rows, pipeline
+never invents codes).
