@@ -191,12 +191,19 @@ resolve_actors <- function(all_names) {
       "You match organisation names from evaluation documents to a registry.",
       "Pick the candidate code ONLY if it is clearly the same organisation",
       "(renames/acronyms count, e.g. a former name of the same body).",
-      "Otherwise answer 'NEW'. Never guess."))
+      "Otherwise answer 'NEW' and describe the organisation so a registry",
+      "entry can be prepared. Never guess codes."))
     spec <- type_object(mapping = type_array(items = type_object(
-      i = type_integer(), code = type_string("Registry code or 'NEW'."))))
+      i = type_integer(), code = type_string("Registry code or 'NEW'."),
+      scale = type_enum(values = c("global", "continental", "national", "unknown"),
+        description = "For NEW actors: the organisation's scale per the registry convention (global; continental = Africa-wide; national)."),
+      country = type_string("For NEW national actors: the country, e.g. 'Rwanda'. Empty otherwise."),
+      acronym = type_string("The organisation's acronym if commonly used, else empty."),
+      actor_type = type_string("For NEW actors, one of: academic institution; advocacy organization/group; banks and microfinance institutions; bilateral development agency; civil society organization; development organization; farmer/pastoralist organization/cooperative; foundation/ philanthropic organization; government agency; intergovernmental organization; international finance institution; media; non-governmental organization; other; private company; producer/farmer group; project/programme; research institution; think tank; trade organization; training/capacity building centre."))))
     res <- tryCatch(chat$chat_structured(
       paste0("ORGANISATIONS AND CANDIDATES:\n", paste(lines, collapse = "\n")),
       type = spec), error = function(e) NULL)
+    newinfo <- list()
     if (!is.null(res)) {
       m <- res$mapping
       if (is.data.frame(m)) m <- lapply(seq_len(nrow(m)), function(i) as.list(m[i, ]))
@@ -207,17 +214,62 @@ resolve_actors <- function(all_names) {
         # accept ONLY a code from this item's own candidate shortlist — a
         # valid-but-unshown registry code would be an unverifiable guess
         if (cd %in% cand_codes[[j]]) map[pending[j]] <- cd
+        else newinfo[[pending[j]]] <- mm     # NEW: keep scale/acronym/type
       }
     }
-  }
+  } else newinfo <- list()
   new <- names(map)[is.na(map)]
   if (length(new)) {
+    # Intake form for the team: suggested code = registry-convention prefix
+    # (GLO / CON / country prefix) + next free number in that section.
+    # These are PROPOSALS — the code becomes real only once a human adds the
+    # row to the actor_codes sheet; the next harmonize run then matches it
+    # automatically (no re-extraction needed).
+    prefix_of <- function(code) gsub("[0-9]+$", "", code)
+    next_code <- local({
+      taken <- table(prefix_of(areg$code))
+      maxn  <- vapply(names(taken), function(p) {
+        suppressWarnings(max(as.integer(gsub("^[A-Za-z]+", "",
+          areg$code[prefix_of(areg$code) == p])), na.rm = TRUE))
+      }, numeric(1))
+      counter <- as.list(maxn)
+      function(prefix) {
+        n <- if (!is.null(counter[[prefix]])) counter[[prefix]] + 1 else 1
+        counter[[prefix]] <<- n
+        paste0(prefix, n)
+      }
+    })
+    country_prefix <- function(country) {
+      # reuse whatever prefix the registry already uses for that country if
+      # any national actor exists; else first 3 letters uppercased
+      k <- nrm(country)
+      if (!nzchar(k)) return("")
+      toupper(substr(gsub(" ", "", k), 1, 3))
+    }
+    rows <- lapply(new, function(nm) {
+      inf <- newinfo[[nm]]
+      scale <- if (!is.null(inf)) as.character(inf$scale) else "unknown"
+      pre <- switch(scale, global = "GLO", continental = "CON",
+                    national = country_prefix(as.character(inf$country)), "")
+      data.frame(date = format(Sys.Date()), actor_name = nm,
+        actor_accronym = if (!is.null(inf)) as.character(inf$acronym) else "",
+        suggested_scale = scale,
+        suggested_country = if (!is.null(inf)) as.character(inf$country) else "",
+        suggested_code = if (nzchar(pre)) next_code(pre) else "",
+        suggested_actor_type = if (!is.null(inf)) as.character(inf$actor_type) else "",
+        status = "REVIEW: confirm/edit, add row to actor_codes, then re-run harmonize",
+        stringsAsFactors = FALSE)
+    })
+    nn <- do.call(rbind, rows)
     path <- file.path(OUT_DIR, "proposed_new_actors.csv")
-    nn <- data.frame(date = format(Sys.Date()), name = new,
-                     note = "not in actor_codes; create per readme procedure (scale prefix + next number, actor type, website)",
-                     stringsAsFactors = FALSE)
-    write.table(nn, path, sep = ",", row.names = FALSE, append = file.exists(path),
-                col.names = !file.exists(path))
+    if (file.exists(path)) {                       # don't re-propose known names
+      seen <- tryCatch(read.csv(path, stringsAsFactors = FALSE)$actor_name,
+                       error = function(e) character(0))
+      nn <- nn[!nn$actor_name %in% seen, , drop = FALSE]
+    }
+    if (nrow(nn))
+      write.table(nn, path, sep = ",", row.names = FALSE,
+                  append = file.exists(path), col.names = !file.exists(path))
   }
   map[is.na(map)] <- paste0("NEW: ", names(map)[is.na(map)])
   map
