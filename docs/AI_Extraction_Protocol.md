@@ -140,10 +140,14 @@ redesign):
 
 ### 3.4 Other inputs
 
-- **Template**: working database **v02** (pinned; extractions declare the
-  template version they follow). The refined template (long format, tagging
-  columns removed, provenance added) supersedes v02 on release and triggers
-  a schema regeneration (Section 7, Phase 2).
+- **Template**: the refined extraction template
+  `EvidenceSynthesis_GreyLiterature_AfricanAgricultureAdaptation_UpdatedTemplate_27Aug2026.xlsx`
+  (`Evidence Extraction\`, released 27 Aug 2026) — the pinned version;
+  extractions declare the template version they follow. It supersedes the
+  earlier working-database structure (v02/v03; fields reduced and
+  clarified) and triggers the schema regeneration of Section 7, Phase 2.
+  The editable value lists for validated fields live in the SharePoint
+  working database's `lists` tab (linked from the template readme).
 - **Keyword taxonomy**: the live keyword file
   (`Keywords_implementation_updated_032026.xlsx`, SharePoint) informs
   screening rules and vocabulary synonyms; a local copy of the earlier
@@ -184,26 +188,35 @@ automatically.
 
 ## 5. Extraction target: the data model
 
-The template (v02 `readme` sheet is the authoritative data dictionary — every
-field has a description, options, examples from P001, and extraction
-instructions) defines two linked tables:
+The template (27 Aug 2026; its `readme` sheet is the authoritative data
+dictionary — every field has a description, options, examples from P001,
+and extraction instructions) defines two linked tables:
 
 **`project_data_general`** — one record per project: identity
-(`project_code`, `project_title`, `project_lead`), years
+(`project_code`, `project_title`, `project_id`, `project_lead`), years
 (publication/start/closure — *actual*, not planned), `project_scale`,
-location count/notes, project rationale (≤50 words), target beneficiary,
-up to three headline results (value + metric + unit), budget/disbursed/
-currency, funding mechanism, funder/implementor (actor codes),
-`document_type`, `resource_id`, `evidence_depth`, `project_id`, links.
+location count/notes, project rationale (one sentence of ~100 words
+capturing **all** climatic and non-climatic drivers and their
+interactions), target beneficiary, `GESI_project` (gender and social
+inclusion, free text), up to three headline results (value + metric +
+unit), budget/disbursed/currency, `funding_mechanism` +
+`funding_mechanism_portion` (instrument mix with percentages, e.g.
+"grant (40%) + loan (40%) + other (20%)"), funder/implementor (actor
+codes), `document_type`, `resource_id`, `evidence_depth`,
+`reference_link_1–3`.
 
 **`project_data_location-specific`** — long format, one record per
-location × intervention × result: location code, `sector` +
-`subsector_stated`, `intervention_type` + `intervention_stated`, rationale
-(`rationale_level`/`_type`/`_subtype` + `rationale_stated`),
-`target_beneficiary`, result (`result_level`/`result_type`/`result_value`/
-`result_metric`/`result_unit`/`result_qual` + `result_stated`), evidence
-(`evidence_type`/`evidence_subtype` + `evidence_stated`), notes,
-`evidence_depth`, resource link.
+location × intervention × result: location code, `subsector_stated` +
+`subsector type` (coded), `intervention_stated`, `rationale_stated`,
+`target_beneficiary`, result (`result_stated` + `result_value` +
+`result_unit` (free text) + `result_level` (coded)), evidence
+(`evidence_methodology` — how the result was assessed — and
+`evidence_source` — what the evidence is based on; both free text),
+`resource_id`, `evidence_depth`, `resource_link`, notes. The 27 Aug 2026
+revision removed the coded evidence fields (`evidence_type`,
+`evidence_subtype`) and the location-level `result_metric` and
+`document_type`; at this level only `subsector type`, `result_level` and
+`target_beneficiary` remain coded — everything else is verbatim.
 
 Key rules the pipeline enforces:
 
@@ -211,12 +224,11 @@ Key rules the pipeline enforces:
   field carrying the verbatim source text. Under the provenance requirement,
   each `_stated` value also carries its **page/table reference**.
 - **Controlled vocabularies — coded in a separate session.** Coded fields
-  draw on closed lists (v02 `lists` sheet: document_type 19 · scale 6 ·
-  sector 7 · intervention type 25 · rationale_level 2 · rationale_type 2 ·
-  rationale_subtype 5 · beneficiary_unit 13 · result_level 8 · result_type 8
-  · evidence_type 3 · evidence_subtype 28 · location_type 10 · actor_type 21
-  · funding_mechanism 5 · result_unit 28 · result_metric 13 ·
-  target_beneficiary 26). The pipeline separates extraction from coding:
+  draw on closed lists (27 Aug 2026 template readme options:
+  document_type 19 · project_scale 6 · subsector type 7 · result_level 5 ·
+  funding_mechanism 5 · result*_metric 27 · result*_unit 12 ·
+  target_beneficiary 24 · location_type 9 · actor_type 21 ·
+  evidence_depth 3). The pipeline separates extraction from coding:
   **Session 1** extracts the verbatim material from the document (the
   `_stated` fields — the practice, rationale, result and evidence exactly as
   the document describes them — with quote and page reference);
@@ -225,12 +237,13 @@ Key rules the pipeline enforces:
   whole document. Codes are validated **in code**, not by trusting the
   prompt: values not on the list go to a batched repair step, then to the
   candidate log.
-- **Known template gotcha:** in the v02 `lists` sheet the `result_metric`
-  and `result_unit` columns are labelled opposite to their use in the data
-  sheets (real data holds categorical metrics like "total beneficiaries" in
-  `result*_metric` and counting units like "individual" in `result*_unit`).
-  The schema maps vocabularies to actual usage; a rename is proposed for the
-  next template revision.
+- **Template gotcha (resolved 27 Aug 2026):** in the v02 `lists` sheet the
+  `result_metric` and `result_unit` columns were labelled opposite to their
+  use in the data sheets. The 27 Aug 2026 template's readme options are
+  consistent (metrics categorical like "total beneficiaries"; units
+  counting like "hectares"), and the location-level `result_metric` was
+  dropped entirely. Care is still needed if vocabularies are read from the
+  older SharePoint working-database `lists` tab.
 - **Registries.** The model outputs actor/location **names**; R code matches
   or creates registry entries and assigns codes. The model never invents a
   code.
@@ -276,11 +289,12 @@ remainder, human adjudication of disagreements; verdicts recorded per source.
 Output: a frozen extraction queue of `in_scope` documents.
 
 **Phase 2 — Machine-readable template.** Generate the extraction schema
-(JSON Schema) from the template workbook: field definitions and instructions
-from the `readme`, vocabularies from `lists` (with the metric/unit mapping
-fix), registries loaded for post-hoc code assignment. The schema is
-version-stamped from the template version; regenerating on template release
-is a one-step script.
+(JSON Schema) from the template workbook: field definitions, instructions
+and vocabulary options from the `readme` sheet (the 27 Aug 2026 template
+carries no `lists` sheet — the editable lists live in the SharePoint
+working database), registries loaded for post-hoc code assignment. The
+schema is version-stamped from the template version; regenerating on
+template release is a one-step script.
 
 **Phase 3 — Extraction rules & prompts.** Extraction runs in **two LLM
 sessions**. *Session 1 — verbatim extraction*: one structured-output call
@@ -682,3 +696,11 @@ two-session extraction design (verbatim extraction, then coding) applied
 across §5/§7/§8/Annex A; Adaptation Fund + CIF onboarded via the Climate
 Project Explorer / CPR API channel (master table rows, Annex D.6); manual
 additions & duplicate reconciliation convention added to §4.
+2026-09-08 — data model synced to the updated extraction template of
+27 Aug 2026 (§3.4, §5, §7 Phase 2): fields reduced (`author_primary`,
+`evidence_type`/`evidence_subtype`, location-level `result_metric` and
+`document_type` dropped; `useful_link_1–4` → `reference_link_1–3`) and
+added (`GESI_project`, `funding_mechanism_portion`, `evidence_methodology`,
+`evidence_source`); project rationale instruction now ~100 words covering
+all drivers and interactions; v02 metric/unit label swap resolved
+in-template.
