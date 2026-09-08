@@ -178,6 +178,7 @@ resolve_actors <- function(all_names) {
   map <- setNames(vapply(uniq, match_actor_det, character(1)), uniq)
   pending <- names(map)[is.na(map)]
   if (length(pending)) {                     # one batched LLM disambiguation
+    cand_codes <- lapply(pending, function(p) areg$code[fuzzy_candidates(p)])
     lines <- vapply(seq_along(pending), function(i) {
       cand <- fuzzy_candidates(pending[i])
       paste0(i, ") '", pending[i], "' -> candidates: ",
@@ -203,7 +204,9 @@ resolve_actors <- function(all_names) {
         j <- suppressWarnings(as.integer(mm$i))
         if (is.na(j) || j < 1 || j > length(pending)) next
         cd <- as.character(mm$code)
-        if (cd %in% areg$code) map[pending[j]] <- cd
+        # accept ONLY a code from this item's own candidate shortlist — a
+        # valid-but-unshown registry code would be an unverifiable guess
+        if (cd %in% cand_codes[[j]]) map[pending[j]] <- cd
       }
     }
   }

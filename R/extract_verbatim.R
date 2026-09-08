@@ -269,11 +269,27 @@ check_value <- function(value, pages_cited, pages_txt) {
   "NOT FOUND"
 }
 
+check_name <- function(name, pages_txt) {   # actor names: anywhere in the doc
+  n <- norm_txt(name)
+  if (!nzchar(n) || nchar(n) < 3) return("skipped")
+  hay <- norm_txt(paste(pages_txt, collapse = " "))
+  if (grepl(n, hay, fixed = TRUE)) return("verified")
+  acr <- regmatches(name, regexpr("\\(([^)]+)\\)", name))   # '(TLF)' style
+  if (length(acr) && grepl(norm_txt(gsub("[()]", "", acr)), hay, fixed = TRUE))
+    return("verified")
+  "NOT FOUND"
+}
+
 verify_doc <- function(row, raw, pages_txt, doc) {
   as_pages <- function(x) { p <- suppressWarnings(as.integer(unlist(x))); p[!is.na(p)] }
   v <- list()
   add <- function(item, status) v[[length(v) + 1]] <<- data.frame(
     document = doc, item = item, status = status, stringsAsFactors = FALSE)
+  add("project_lead_name", check_name(raw$identity$project_lead_name, pages_txt))
+  for (nm in unlist(raw$finance$funder_names))
+    add(paste0("funder: ", substr(nm, 1, 40)), check_name(nm, pages_txt))
+  for (nm in unlist(raw$finance$implementor_names))
+    add(paste0("implementor: ", substr(nm, 1, 40)), check_name(nm, pages_txt))
   idp <- as_pages(raw$identity$source_pages)
   add("project_id",  check_value(raw$identity$project_id, idp, pages_txt))
   add("resource_id", check_quote(raw$identity$resource_id, idp, pages_txt))
