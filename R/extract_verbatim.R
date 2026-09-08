@@ -41,8 +41,19 @@ GL <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
 GOLD_P001 <- file.path(GL, "Data/Docs/Selection_mixed stakeholders/P001",
   "P001_World Bank_Implementation Completion and Results Report_2019_worldbank_3A-AFCC2_RI_-Support_to_NPCA_TerrAfrica_Secretariat_--_P149269_Implementation_Completion_and_Results_Report_2019.pdf")
 
+# Input: PDF path(s), or a MANIFEST csv (columns: project_code, pdf, focus).
+# `focus` handles multi-project documents: it is injected into every prompt
+# so the model extracts only for the named program (e.g. the shared GEF
+# Food Systems evaluation covering RFS + GGP + CFI).
 args <- commandArgs(trailingOnly = TRUE)
-PDFS <- if (length(args)) args else GOLD_P001
+if (length(args) == 1 && grepl("\\.csv$", args[1])) {
+  mf <- read.csv(args[1], stringsAsFactors = FALSE)
+  mf[is.na(mf)] <- ""
+  PDFS <- mf$pdf; FOCUS <- mf$focus; PCODE <- mf$project_code
+} else {
+  PDFS <- if (length(args)) args else GOLD_P001
+  FOCUS <- rep("", length(PDFS)); PCODE <- rep("", length(PDFS))
+}
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..")) else getwd()
@@ -289,19 +300,25 @@ verify_doc <- function(row, raw, pages_txt, doc) {
 }
 
 # -------------------------------------------------------------- extraction --
-extract_doc <- function(pdf_path, groups = GROUPS) {
+extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
   doc_name <- tools::file_path_sans_ext(basename(pdf_path))
-  cat("\n==", doc_name, "==\n")
+  cat("\n==", if (nzchar(pcode)) paste0(pcode, " · "), doc_name, "==\n")
   doc <- read_doc(pdf_path)
-  cat("  pages:", doc$n_pages, "| chars:", nchar(doc$text), "\n")
+  cat("  pages:", doc$n_pages, "| chars:", nchar(doc$text),
+      if (nzchar(focus)) paste0("| focus: ", focus), "\n")
 
-  row <- list(document = basename(pdf_path), model = MODEL,
-              prompt_version = PROMPT_VERSION, run_date = format(Sys.Date()))
+  row <- list(project_code_hint = pcode, document = basename(pdf_path),
+              model = MODEL, prompt_version = PROMPT_VERSION,
+              run_date = format(Sys.Date()))
+  focus_line <- if (nzchar(focus)) paste0(
+    "IMPORTANT — this document covers SEVERAL programs/projects. Extract ",
+    "ONLY for ", focus, ". Ignore every other program's rows, results and ",
+    "financing. ") else ""
   raw <- list()
   for (gname in names(groups)) {
     g <- groups[[gname]]
     prompt <- paste0("DOCUMENT (page-tagged):\n\n", doc$text,
-                     "\n\n---\nTASK: ", g$task)
+                     "\n\n---\nTASK: ", focus_line, g$task)
     t0 <- Sys.time()
     res <- tryCatch({
       chat <- chat_openai(model = MODEL, system_prompt = SYSTEM)
@@ -340,7 +357,7 @@ extract_doc <- function(pdf_path, groups = GROUPS) {
 
 if (MODE == "probe") GROUPS <- GROUPS["identity"]
 
-out <- lapply(PDFS, extract_doc)
+out <- Map(extract_doc, PDFS, FOCUS, PCODE)
 rows <- dplyr::bind_rows(lapply(out, `[[`, "row"))
 vers <- do.call(rbind, Filter(Negate(is.null), lapply(out, `[[`, "verify")))
 
