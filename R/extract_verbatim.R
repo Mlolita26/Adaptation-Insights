@@ -34,7 +34,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "s1-v0.4"   # v0.4: location precision rule (villages beat countries)
+PROMPT_VERSION <- "s1-v0.5"   # v0.5: section maps, survey-annex exclusion, org-not-unit lead
 stopifnot("OPENAI_API_KEY not set" = nzchar(Sys.getenv("OPENAI_API_KEY")))
 
 GL <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
@@ -74,12 +74,68 @@ read_doc <- function(path) {
     path <- short
   }
   pages <- pdf_text(path)
-  txt <- paste0("[page ", seq_along(pages), "]\n", pages, collapse = "\n\n")
-  if (nchar(txt) > MAX_CHARS) {
+  list(pages = pages, n_pages = length(pages))
+}
+
+# ------------------------------------------------- section maps (big docs) --
+# For known document families the template fields live in fixed sections, so
+# long documents are cut to those pages BEFORE prompting — this replaces the
+# blind head+tail clip that lost mid-document facts (e.g. program start years
+# on p.191 of the 294-page GEF IEO evaluation). Selected pages keep their
+# ORIGINAL [page N] numbers, so citations and the fact-check stay valid.
+# Unknown families and documents under 100 pages keep every page.
+detect_doc_family <- function(pages) {
+  head_txt <- tolower(paste(pages[seq_len(min(6, length(pages)))], collapse = " "))
+  if (grepl("implementation completion and results report", head_txt)) return("wb_icr")
+  if (grepl("independent evaluation office of the gef|evaluation of gef", head_txt)) return("gef_ieo")
+  "generic"
+}
+
+select_pages <- function(pages, family, focus = "") {
+  n <- length(pages)
+  if (family == "generic" || n <= 100) return(rep(TRUE, n))
+  low <- tolower(pages)
+  keep <- rep(FALSE, n)
+  keep[seq_len(min(12, n))] <- TRUE            # cover, data sheet, TOC
+  mark <- function(re, span = 0) {
+    for (h in grep(re, low)) keep[h:min(n, h + span)] <<- TRUE
+  }
+  if (family == "wb_icr") {
+    mark("data sheet")
+    mark("context and development objectives|project context", 8)
+    mark("\\boutcome\\b", 2)
+    mark("results framework and key outputs", 28)
+    mark("project cost by component", 2)
+    mark("recipient, co-financier", 4)
+  } else if (family == "gef_ieo") {
+    keep[seq_len(min(30, n))] <- TRUE          # exec summary + program tables
+    mark("annex 15|global environmental benefits", 8)
+    if (nzchar(focus)) {                       # the focus program's own pages
+      acro <- regmatches(focus, regexpr("\\(([A-Z]{2,6})\\)", focus))
+      acro <- tolower(gsub("[()]", "", acro))
+      gid  <- regmatches(focus, regexpr("[0-9]{4}", focus))
+      phrase <- tolower(trimws(sub("^the\\s+", "",
+                sub("[(,].*$", "", tolower(focus)))))
+      pats <- Filter(nzchar, c(
+        if (length(acro)) paste0("\\b", acro, "\\b"),
+        if (length(gid)) gid,
+        if (nchar(phrase) > 8) phrase))
+      if (length(pats)) {
+        hit <- Reduce(`|`, lapply(pats, function(p) grepl(p, low)))
+        keep[hit] <- TRUE
+      }
+    }
+  }
+  keep
+}
+
+build_doc_text <- function(pages, sel) {
+  txt <- paste0("[page ", which(sel), "]\n", pages[sel], collapse = "\n\n")
+  if (nchar(txt) > MAX_CHARS) {                # backstop clip, BTR-style
     txt <- paste0(substr(txt, 1, round(MAX_CHARS * 0.7)), "\n...[clipped]...\n",
                   substr(txt, nchar(txt) - round(MAX_CHARS * 0.3) + 1, nchar(txt)))
   }
-  list(text = txt, pages = pages, n_pages = length(pages))
+  txt
 }
 
 SYSTEM <- paste(
@@ -108,7 +164,7 @@ identity = list(
   type = type_object(
     project_title  = type_string("Title of the adaptation project, word by word as stated (title page, 'project title'/'project name')."),
     project_id     = type_string("The publisher's project identifier exactly as printed IN THIS DOCUMENT, e.g. 'P149269'. Empty if none printed."),
-    project_lead_name = type_string("NAME of the organisation leading the project, as the document names it (often the implementing agency or publisher)."),
+    project_lead_name = type_string("NAME of the ORGANISATION leading the project, as the document names it (often the implementing agency or publisher, e.g. 'World Bank'). Never an internal department, global practice, division or regional unit of an organisation — name the organisation itself."),
     publication_year = type_string("Year the source document was published (front page)."),
     start_year     = type_string("Year the project ACTUALLY started per the document (approval, signature, effectiveness or official launch). Never design/concept/endorsement years. Empty if not stated."),
     start_year_evidence = type_string("Short exact quote stating the start (e.g. 'Approval 29-Apr-2014' or 'officially launched in mid-2017'), with its wording unchanged."),
@@ -145,7 +201,9 @@ results = list(
     "whose target was NOT achieved and failed yes/no indicators (a failure",
     "is a finding). Report metric and unit AS THE DOCUMENT WORDS THEM — do",
     "not translate into any external category. Do NOT include: targets",
-    "without actuals, the evaluation's own methodology numbers, other",
+    "without actuals, the evaluation's own methodology numbers, rows from",
+    "survey questionnaires, interview forms or annexed data-collection",
+    "instruments (questions, rating scales, respondent tallies), other",
     "projects' results, or FINANCING figures (budgets/disbursements are",
     "inputs, not results)."),
   type = type_object(
@@ -320,7 +378,11 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
   doc_name <- tools::file_path_sans_ext(basename(pdf_path))
   cat("\n==", if (nzchar(pcode)) paste0(pcode, " · "), doc_name, "==\n")
   doc <- read_doc(pdf_path)
-  cat("  pages:", doc$n_pages, "| chars:", nchar(doc$text),
+  fam <- detect_doc_family(doc$pages)
+  sel <- select_pages(doc$pages, fam, focus)
+  doc$text <- build_doc_text(doc$pages, sel)
+  cat("  pages:", doc$n_pages, "| family:", fam, "| pages used:", sum(sel),
+      "| chars:", nchar(doc$text),
       if (nzchar(focus)) paste0("| focus: ", focus), "\n")
 
   row <- list(project_code_hint = pcode, document = basename(pdf_path),

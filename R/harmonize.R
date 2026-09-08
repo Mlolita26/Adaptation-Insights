@@ -189,10 +189,14 @@ resolve_actors <- function(all_names) {
     }, character(1))
     chat <- chat_openai(model = MODEL, system_prompt = paste(
       "You match organisation names from evaluation documents to a registry.",
-      "Pick the candidate code ONLY if it is clearly the same organisation",
+      "Pick the candidate code ONLY if it is CLEARLY the same organisation",
       "(renames/acronyms count, e.g. a former name of the same body).",
-      "Otherwise answer 'NEW' and describe the organisation so a registry",
-      "entry can be prepared. Never guess codes."))
+      "An acronym matches only the candidate's actual acronym or name",
+      "initials — letters merely CONTAINED in a candidate's name (e.g. 'TAF'",
+      "inside 'Taflalet') are NOT a match. A department, global practice,",
+      "division or regional unit is not an organisation — answer 'NEW' for",
+      "those. When in ANY doubt, answer 'NEW' and describe the organisation",
+      "so a registry entry can be prepared. Never guess codes."))
     spec <- type_object(mapping = type_array(items = type_object(
       i = type_integer(), code = type_string("Registry code or 'NEW'."),
       scale = type_enum(values = c("global", "continental", "national", "unknown"),
@@ -302,10 +306,14 @@ map_doctype_det <- function(d) {
   k <- tolower(d)
   if (grepl("implementation completion", k)) return("implementation completion report")
   if (grepl("performance evaluation report|icr review", k)) return("terminal evaluation")
-  if (grepl("terminal evaluation", k)) return("terminal evaluation")
+  if (grepl("terminal evaluation|final evaluation", k)) return("terminal evaluation")
   if (grepl("mid.?term", k)) return("mid-term evaluation")
   if (grepl("implementation status", k)) return("implementation status report")
   if (grepl("impact (assessment|evaluation)", k)) return("impact evaluation report")
+  # independent-evaluation-office multi-program evaluations
+  if (grepl("independent evaluation office|evaluation of .*programs", k))
+    return("portfolio performance review")
+  if (grepl("^\\s*evaluation of ", k)) return("terminal evaluation")
   d
 }
 map_funding_det <- function(instr) {
@@ -357,6 +365,10 @@ for (i in 1:3) {
 # goes to the LLM with the template definitions instead of defaulting to
 # 'other' blindly
 fm <- vapply(gc_chr("instrument_stated"), map_funding_det, character(1))
+# no instrument wording, but the funder itself settles it (grant-only funds)
+grantfunder <- grepl("gef|global environment facility|trust fund|adaptation fund",
+                     tolower(gc_chr("funder_names")))
+fm[!nzchar(fm) & grantfunder] <- "grant"
 pendfm <- !nzchar(fm) & nzchar(gc_chr("instrument_stated"))
 if (any(pendfm)) {
   fm2 <- llm_map("funding_mechanism (financing instrument type)",
