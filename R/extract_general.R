@@ -1,4 +1,9 @@
 ##############################################################################
+# DEPRECATED (2026-09-08): superseded by the two-session design —
+#   R/extract_verbatim.R (Session 1: verbatim + fact-check pass) and
+#   R/harmonize.R (Session 2: controlled-value harmonisation).
+# Kept for reference; do not extend.
+##############################################################################
 # extract_general.R — PILOT: extract project_data_general fields from one or
 # more evaluation PDFs, using the method piloted in BTR_Analysis
 # (Documents/BTR_Analysis, 0_Processing_updated.Rmd / 3_Urban_tagging.Rmd):
