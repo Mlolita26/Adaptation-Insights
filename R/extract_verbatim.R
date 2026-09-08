@@ -34,7 +34,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "s1-v0.3"   # session 1, two-session redesign 2026-09-08
+PROMPT_VERSION <- "s1-v0.4"   # v0.4: location precision rule (villages beat countries)
 stopifnot("OPENAI_API_KEY not set" = nzchar(Sys.getenv("OPENAI_API_KEY")))
 
 GL <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
@@ -124,8 +124,8 @@ geography = list(
     "aggregate location lists that appear in different sections."),
   type = type_object(
     scope_stated   = type_string("Exact quote of the document's own statement of geographic scope/coverage (e.g. 'The study's geographical scope was nationwide' or the countries list)."),
-    location_count = type_string("Number of DISTINCT African locations (countries for multi-country projects, districts/sites for single-country ones) named anywhere as receiving interventions. Aggregate across the whole document; count each once. Prefix ~ for estimates; 'N/A' if unspecified."),
-    location_count_basis = type_string("One sentence saying exactly what was counted and where the lists are (pages), so the count can be checked."),
+    location_count = type_string("Number of DISTINCT African locations named anywhere as receiving interventions, counted at the MOST PRECISE level the document supports: if specific villages, sites or districts are enumerated, count those (e.g. '20 pilot villages' beats '4 countries'); fall back to counting countries only when nothing finer is enumerated. Aggregate across the whole document; count each location once. Prefix ~ for estimates; 'N/A' if unspecified."),
+    location_count_basis = type_string("One sentence saying exactly what was counted, at which level (villages/districts/countries) and where the lists are (pages), so the count can be checked."),
     location_notes = type_string("Scope beyond Africa as 'total of X international locations, of which Y African'. Empty if Africa-only."),
     source_pages   = pg())),
 

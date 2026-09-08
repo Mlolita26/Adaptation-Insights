@@ -310,6 +310,10 @@ map_doctype_det <- function(d) {
 }
 map_funding_det <- function(instr) {
   k <- tolower(instr)
+  # known funds whose instrument is always a grant, even when the wording is
+  # only 'funded by ...' (GEF Trust Fund, Adaptation Fund, LDCF/SCCF windows)
+  if (grepl("gef trust fund|\\bget\\b|adaptation fund|ldcf|sccf", k) &&
+      !grepl("credit|loan", k)) return("grant")
   has <- c(loan = grepl("credit|loan", k), grant = grepl("grant", k),
            investment = grepl("equity|bond|investment", k))
   found <- names(has)[has]
@@ -348,9 +352,21 @@ for (i in 1:3) {
   h[[paste0("result", i, "_unit")]] <- llm_map("result_unit", us, OPT$unit)
 }
 
-# funding mechanism (deterministic from instrument wording; 'other' fallback)
+# funding mechanism: deterministic from instrument wording first ('funded
+# by <known grant fund>' rules included); anything a keyword can't settle
+# goes to the LLM with the template definitions instead of defaulting to
+# 'other' blindly
 fm <- vapply(gc_chr("instrument_stated"), map_funding_det, character(1))
-fm[!nzchar(fm) & nzchar(gc_chr("instrument_stated"))] <- "other"
+pendfm <- !nzchar(fm) & nzchar(gc_chr("instrument_stated"))
+if (any(pendfm)) {
+  fm2 <- llm_map("funding_mechanism (financing instrument type)",
+    ifelse(pendfm, paste0("instrument wording: ", gc_chr("instrument_stated"),
+                          " | portion: ", gc_chr("funding_mechanism_portion")), ""),
+    c("grant", "loan", "investment", "blended", "other", "loan+grant"),
+    "blended: intentional mix of concessional/public and private capital; grant: non-repayable funds; investment: capital expecting financial return; loan: borrowed money requiring repayment; other: alternative mechanisms (carbon credits, in-kind, insurance, domestic budget); loan+grant: mixed credits and grants. If genuinely unclassifiable, choose other.")
+  fm[pendfm] <- fm2[pendfm]
+}
+fm[startsWith(fm, "CANDIDATE:")] <- "other"   # readme: unclassifiable -> other
 h$funding_mechanism <- fm
 
 # candidate logging
