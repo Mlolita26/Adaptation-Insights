@@ -34,7 +34,8 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "s1-v0.5"   # v0.5: section maps, survey-annex exclusion, org-not-unit lead
+PROMPT_VERSION <- "s1-v0.6"   # v0.6: implementation-period years, full-unit amounts, no table-row funders
+MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))   # for output file names
 stopifnot("OPENAI_API_KEY not set" = nzchar(Sys.getenv("OPENAI_API_KEY")))
 
 GL <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
@@ -166,9 +167,9 @@ identity = list(
     project_id     = type_string("The publisher's project identifier exactly as printed IN THIS DOCUMENT, e.g. 'P149269'. Empty if none printed."),
     project_lead_name = type_string("NAME of the ORGANISATION leading the project, as the document names it (often the implementing agency or publisher, e.g. 'World Bank'). Never an internal department, global practice, division or regional unit of an organisation — name the organisation itself."),
     publication_year = type_string("Year the source document was published (front page)."),
-    start_year     = type_string("Year the project ACTUALLY started per the document (approval, signature, effectiveness or official launch). Never design/concept/endorsement years. Empty if not stated."),
-    start_year_evidence = type_string("Short exact quote stating the start (e.g. 'Approval 29-Apr-2014' or 'officially launched in mid-2017'), with its wording unchanged."),
-    closure_year   = type_string("Year the project ACTUALLY closed ('actual closing', 'completed in'). Empty if still running ('to date') or not stated."),
+    start_year     = type_string("Year the project ACTUALLY started per the document (approval, signature, effectiveness or official launch). Never design/concept/endorsement years. If no formal date is stated but the document gives an explicit implementation period ('implemented between 2017 and 2022', 'implementation phase 2004-2007'), use its first year. Empty only if neither is stated."),
+    start_year_evidence = type_string("Short exact quote stating the start (e.g. 'Approval 29-Apr-2014', 'implemented between 2017 and 2022'), with its wording unchanged."),
+    closure_year   = type_string("Year the project ACTUALLY closed ('actual closing', 'completed in'; the last year of an explicit implementation period counts if the project is described as finished). Empty if still running ('to date') or not stated."),
     closure_year_evidence = type_string("Short exact quote stating the closing."),
     document_type_stated = type_string("The document's OWN designation of itself, verbatim (e.g. 'Implementation Completion and Results Report', 'Project Performance Evaluation Report', 'Mid-term evaluation of the project ...')."),
     resource_id    = type_string("The DOCUMENT's own number as printed, e.g. 'ICR00004643', 'GEF/E/C.70/02'. Empty if none."),
@@ -227,13 +228,13 @@ finance = list(
     "Extract the project financing verbatim. Read the TITLE PAGE wording and",
     "the financing/data-sheet table first."),
   type = type_object(
-    budget_total = type_string("Total budget: sum of ALL financing sources (lead funder + co-financing + counterpart + in-kind). Digits only."),
-    budget_lead_share = type_string("The lead funder's / main envelope alone (e.g. the GEF or IDA amount), digits only. Empty if same as budget_total."),
-    disbursed    = type_string("Total actually disbursed ('actual disbursed'/'actual at closing'). Data sheet wins on contradictions (flag them in finance_notes). Digits only."),
+    budget_total = type_string("Total budget: sum of ALL financing sources (lead funder + co-financing + counterpart + in-kind). Digits only, EXPANDED to full units: 'UA 1.71 million' -> 1710000, 'USD 3.75 million' -> 3750000."),
+    budget_lead_share = type_string("The lead funder's / main envelope alone (e.g. the GEF or IDA amount), digits only, expanded to full units. Empty if same as budget_total."),
+    disbursed    = type_string("Total actually disbursed ('actual disbursed'/'actual at closing'). Data sheet wins on contradictions (flag them in finance_notes). Digits only, expanded to full units (1.39 million -> 1390000)."),
     currency     = type_string("ISO currency code, e.g. 'USD', 'EUR', 'UA'."),
     instrument_stated = type_string("EXACT wording of the financing instrument(s) from the title page or financing table, verbatim (e.g. 'ON A CREDIT ... AND A GRANT', 'SMALL GRANT', 'GEF Trust Fund grants')."),
     funding_mechanism_portion = type_string("INSTRUMENT-TYPE mix (grant/loan/investment/other — never fund or account names) WITH PERCENTAGES in parentheses joined by ' + ', per the template format: 'grant (40%) + loan (40%) + other-in-kind contribution (20%)'. Compute percentages from stated amounts when the document gives amounts but no percentages. Empty if the split cannot be established."),
-    funder_names      = type_array(items = type_string(), description = "NAMES of all funding ORGANISATIONS incl. named trust funds and co-financiers, as the document names them. Never account/grant numbers like 'TF-17015' or 'IDA-52030'."),
+    funder_names      = type_array(items = type_string(), description = "NAMES of all funding ORGANISATIONS incl. named trust funds and co-financiers, as the document names them. Never account/grant numbers like 'TF-17015' or 'IDA-52030', and never financing-table row labels or generic categories ('Borrower/Recipient', 'Local Beneficiaries', 'Bilateral Agencies') - only actual named organisations."),
     implementor_names = type_array(items = type_string(), description = "NAMES of the implementing agencies as designated by the data sheet/document (not private partners, borrowers or buyers)."),
     finance_notes = type_string("Contradictions between financing tables, counterpart funding that never materialized, or similar. Empty if none."),
     source_pages = pg()))
@@ -439,7 +440,7 @@ out <- Map(extract_doc, PDFS, FOCUS, PCODE)
 rows <- dplyr::bind_rows(lapply(out, `[[`, "row"))
 vers <- do.call(rbind, Filter(Negate(is.null), lapply(out, `[[`, "verify")))
 
-stamp <- format(Sys.time(), "%Y%m%d_%H%M")
+stamp <- paste0(MODEL_TAG, "_", format(Sys.time(), "%Y%m%d_%H%M"))
 row_csv <- file.path(OUT_DIR, paste0("session1_", stamp, ".csv"))
 write_csv(rows, row_csv)
 cat("\nwritten:", row_csv, "\n")

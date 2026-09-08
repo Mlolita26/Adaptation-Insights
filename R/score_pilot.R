@@ -110,7 +110,7 @@ for (i in seq_len(nrow(g))) {
 }
 sc <- bind_rows(rows)
 
-stamp <- format(Sys.time(), "%Y%m%d_%H%M")
+stamp <- sub("^harmonized_diagnostics_", "", sub("\\.csv$", "", basename(hfile)))
 out <- file.path(OUT_DIR, paste0("score_", stamp, ".csv"))
 write_csv(sc, out)
 

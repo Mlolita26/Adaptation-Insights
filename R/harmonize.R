@@ -408,7 +408,9 @@ TEMPLATE_COLS <- c("project_code", "project_title", "project_id", "project_lead"
 for (cc in TEMPLATE_COLS) if (!cc %in% names(h)) h[[cc]] <- ""
 tmpl <- h[, TEMPLATE_COLS]
 
-stamp <- format(Sys.time(), "%Y%m%d_%H%M")
+s1_model <- if ("model" %in% names(s1) && nzchar(s1$model[1]))
+  gsub("[^a-z0-9]+", "-", tolower(s1$model[1])) else "unknown"
+stamp <- paste0(s1_model, "_", format(Sys.time(), "%Y%m%d_%H%M"))
 out1 <- file.path(OUT_DIR, paste0("harmonized_", stamp, ".csv"))
 out2 <- file.path(OUT_DIR, paste0("harmonized_diagnostics_", stamp, ".csv"))
 write_csv(tmpl, out1)
