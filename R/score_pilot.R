@@ -31,8 +31,20 @@ g <- read.csv(file.path(REPO, "metadata", "gold_v1_general.csv"),
               check.names = FALSE, stringsAsFactors = FALSE); g[is.na(g)] <- ""
 
 nrm <- function(x) trimws(gsub("\\s+", " ", gsub("[^a-z0-9 .>%/+-]", " ", tolower(x))))
-num <- function(x) gsub("[^0-9.]", "", x)
-alts <- function(cell) trimws(strsplit(cell, "\\|\\|")[[1]])
+num_one <- function(x) {
+  x <- tolower(gsub(",", "", as.character(x)))
+  v <- suppressWarnings(as.numeric(x))            # handles 9.1e+07 round-trips
+  if (!is.na(v)) return(format(v, scientific = FALSE, trim = TRUE))
+  x <- gsub("\\([^)]*\\)", "", x)                 # drop '(111 percent of target)'
+  m <- regmatches(x, regexpr("[0-9]+(\\.[0-9]+)?\\s*(billion|million|thousand)?", x))
+  if (!length(m) || !nzchar(m)) return("")
+  scale <- if (grepl("billion", m)) 1e9 else if (grepl("million", m)) 1e6 else
+           if (grepl("thousand", m)) 1e3 else 1
+  val <- suppressWarnings(as.numeric(gsub("[^0-9.]", "", m))) * scale
+  if (is.na(val)) "" else format(val, scientific = FALSE, trim = TRUE)
+}
+num <- function(x) vapply(as.character(x), num_one, character(1), USE.NAMES = FALSE)
+alts <- function(cell) trimws(strsplit(as.character(cell), "\\|\\|")[[1]])
 
 NUMERIC <- c("publication_year", "start_year", "closure_year", "budget_total",
              "disbursed", "location_count", "evidence_depth")
@@ -40,7 +52,14 @@ CONTAINS <- c("project_lead", "funder", "implementor")
 
 match_field <- function(field, gold_cell, extracted) {
   a <- alts(gold_cell); e <- as.character(extracted)
+  if (field == "resource_id") e <- sub("^\\s*report\\s+no[.:]?\\s*", "", e, ignore.case = TRUE)
   if (all(!nzchar(a)) && !nzchar(e)) return("both_empty")
+  # titles: tolerate appended identifiers/acronyms — containment either way
+  if (field == "project_title") {
+    for (av in a) if (nchar(nrm(av)) >= 15 && nzchar(e) &&
+        (grepl(nrm(av), nrm(e), fixed = TRUE) || grepl(nrm(e), nrm(av), fixed = TRUE)))
+      return("match")
+  }
   for (av in a) {
     if (!nzchar(av) && !nzchar(e)) return("match")
     if (!nzchar(av)) next
@@ -73,8 +92,8 @@ for (i in seq_len(nrow(g))) {
   for (f in FIELDS) {
     ev <- if (f %in% names(hr)) as.character(hr[[f]]) else ""
     rows[[length(rows) + 1]] <- data.frame(project = pc, field = f,
-      gold = g[[f]][i], extracted = substr(ev, 1, 120),
-      verdict = match_field(f, g[[f]][i], ev), stringsAsFactors = FALSE)
+      gold = as.character(g[[f]][i]), extracted = substr(ev, 1, 120),
+      verdict = match_field(f, as.character(g[[f]][i]), ev), stringsAsFactors = FALSE)
   }
   # results as a set
   gold_vals <- num(alts(g$results_set[i])); gold_vals <- gold_vals[nzchar(gold_vals)]
