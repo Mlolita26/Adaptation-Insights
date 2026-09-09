@@ -181,6 +181,16 @@ locations = list(
         country = type_string("Country this location is in."),
         page = type_integer("Page where this location is (first) named as an intervention site."))),
     enumeration_notes = type_string("One sentence: what kinds of lists were found where (e.g. '14 pilot villages listed in Annex 3 p.61; 4 districts named in component descriptions'). Empty if trivial."),
+    project_beneficiary_stated = type_string(paste(
+      "The document's OWN statement of who the project benefits, quoted",
+      "exactly. Documents usually say this outright - look for a",
+      "'direct project beneficiaries' indicator in the results framework, a",
+      "beneficiary table or count (often disaggregated by sex or youth), a",
+      "'the project targets/serves/reaches X' sentence, or the target-group",
+      "description in the objectives. Quote the clearest such passage,",
+      "naming the group, not the institution delivering the work.",
+      "Empty only if the document never states who benefits.")),
+    project_beneficiary_page = type_integer("Page of that beneficiary statement. 0 if none."),
     source_pages = pg())),
 
 location_rows = list(
@@ -256,7 +266,13 @@ location_rows = list(
           "indicator, or the target group - and give that group here, naming",
           "the institution afterwards in brackets.",
           "Only when the document never names an end group should this field",
-          "hold the institution alone. Empty if unstated.")),
+          "hold the institution alone.",
+          "EVIDENCE, NOT INFERENCE: quote a passage that actually SHOWS this",
+          "group benefiting - reached, trained, supported, served, targeted,",
+          "received, or counted as beneficiaries. A group merely mentioned",
+          "somewhere in the document is not enough. If no passage shows who",
+          "benefited here, leave this EMPTY rather than assume.")),
+        target_beneficiary_page = type_integer("Page of the passage that shows this group benefiting. 0 if none."),
         result_stated = type_string("The concrete result reported for this location, quoted or closely paraphrased, max 50 words. Empty if no result is reported."),
         result_value = type_string("EXACTLY ONE number in WHOLE DIGITS: 2829, not '2,829'; 4700000, not '4.7 million'; 43, not '43 percent'. No qualifiers, no units, no ranges, no lists, never several numbers separated by semicolons. If this location has several reported results, emit SEVERAL ROWS for it, one per result, repeating the location and intervention. Empty if the result is qualitative or there is none."),
         result_unit_stated = type_string("Counting unit/what-is-counted for that value, in the document's words: 'farmers trained', 'hectares', 'training workshops held'. For a percentage use the symbol %, not the word. Empty if no value."),
@@ -365,6 +381,12 @@ fold_locations <- function(res, meta) {
   df <- df[!duplicated(tolower(paste(df$location_name, df$country))), , drop = FALSE]
   for (m in names(meta)) df[[m]] <- meta[[m]]
   df$enumeration_notes <- if (is.null(res$enumeration_notes)) "" else as.character(res$enumeration_notes)
+  # the document's own beneficiary statement travels with the enumeration so
+  # Session 2 can fill a row from real evidence instead of from sibling rows
+  df$project_beneficiary_stated <- if (is.null(res$project_beneficiary_stated)) "" else
+    as.character(res$project_beneficiary_stated)
+  df$project_beneficiary_page <- if (is.null(res$project_beneficiary_page)) "" else
+    as.character(res$project_beneficiary_page)
   df
 }
 

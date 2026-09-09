@@ -430,21 +430,47 @@ rows <- apply_vocab(rows, "target_beneficiary",
     cat(sprintf("  %-18s %d row(s) named only an institution; ultimate group used instead\n",
                 "beneficiary", sum(inst)))
   }
+  # Inheriting must be evidenced too: take the group only from a sibling row of
+  # the same project whose OWN stated passage shows people benefiting, and
+  # carry that passage across as the proof. No statement, no beneficiary.
   need <- (nzchar(rows$result_stated) | nzchar(rows$result_value)) &
           !nzchar(rows$target_beneficiary)
-  n_inherit <- 0
+  BENEFIT_RX <- paste0("\\b(reach|reached|reaching|train|trained|training|",
+    "support|supported|serve|served|target|targeted|receiv|benefit|",
+    "beneficiar|particip|adopt|attend|member|enrol)")
+  n_inherit <- 0; n_left <- 0
+  # first choice: the document's own beneficiary statement, captured by the
+  # enumeration pass; second choice: a sibling row whose passage shows people
+  # benefiting; otherwise leave it empty
+  doc_ben <- function(pc) {
+    if (is.null(locs) || !"project_beneficiary_stated" %in% names(locs)) return("")
+    v <- locs$project_beneficiary_stated[locs$project_code_hint == pc]
+    v <- v[nzchar(v)]
+    if (length(v)) v[1] else ""
+  }
   for (pc in unique(rows$project_code_hint[need])) {
-    have <- rows$target_beneficiary[rows$project_code_hint == pc & nzchar(rows$target_beneficiary)]
-    if (!length(have)) next
-    fallback <- names(sort(table(have), decreasing = TRUE))[1]
     idx <- which(need & rows$project_code_hint == pc)
-    rows$target_beneficiary[idx] <- fallback
+    ev <- doc_ben(pc); from <- "the document's own beneficiary statement"
+    tb <- if (nzchar(ev)) det_target(ev) else ""
+    if (!nzchar(tb)) {
+      src <- rows$project_code_hint == pc & nzchar(rows$target_beneficiary) &
+             nzchar(rows$target_beneficiary_stated) &
+             grepl(BENEFIT_RX, tolower(rows$target_beneficiary_stated)) &
+             !vapply(rows$target_beneficiary_stated, is_institution_only, logical(1),
+                     USE.NAMES = FALSE)
+      if (!any(src)) { n_left <- n_left + length(idx); next }
+      tb <- names(sort(table(rows$target_beneficiary[src]), decreasing = TRUE))[1]
+      ev <- rows$target_beneficiary_stated[src & rows$target_beneficiary == tb][1]
+      from <- "another row of this project that shows people benefiting"
+    }
+    rows$target_beneficiary[idx] <- tb
     rows$notes_extra[idx] <- paste0(rows$notes_extra[idx],
-      "; beneficiary inherited from project (", fallback, ")")
+      "; beneficiary not stated for this row, taken from ", from, " (", tb,
+      "): \"", substr(ev, 1, 90), "\"")
     n_inherit <- n_inherit + length(idx)
   }
-  cat(sprintf("  %-18s inherited for %d result rows with no stated group\n",
-              "beneficiary", n_inherit))
+  cat(sprintf("  %-18s %d result row(s) took the project's evidenced group; %d left empty for want of evidence\n",
+              "beneficiary", n_inherit, n_left))
 }
 has_result <- nzchar(rows$result_stated) | nzchar(rows$result_value)
 rows <- apply_vocab(rows, "result_level",
