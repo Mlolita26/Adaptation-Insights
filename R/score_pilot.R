@@ -34,14 +34,19 @@ nrm <- function(x) trimws(gsub("\\s+", " ", gsub("[^a-z0-9 .>%/+-]", " ", tolowe
 num_one <- function(x) {
   x <- tolower(gsub(",", "", as.character(x)))
   v <- suppressWarnings(as.numeric(x))            # handles 9.1e+07 round-trips
-  if (!is.na(v)) return(format(v, scientific = FALSE, trim = TRUE))
+  if (!is.na(v)) {
+    if (v >= 1000) v <- round(v)                  # decimals never decide a match
+    return(format(v, scientific = FALSE, trim = TRUE))
+  }
   x <- gsub("\\([^)]*\\)", "", x)                 # drop '(111 percent of target)'
   m <- regmatches(x, regexpr("[0-9]+(\\.[0-9]+)?\\s*(billion|million|thousand)?", x))
   if (!length(m) || !nzchar(m)) return("")
   scale <- if (grepl("billion", m)) 1e9 else if (grepl("million", m)) 1e6 else
            if (grepl("thousand", m)) 1e3 else 1
   val <- suppressWarnings(as.numeric(gsub("[^0-9.]", "", m))) * scale
-  if (is.na(val)) "" else format(val, scientific = FALSE, trim = TRUE)
+  if (is.na(val)) return("")
+  if (val >= 1000) val <- round(val)     # cents/decimals never decide a match
+  format(val, scientific = FALSE, trim = TRUE)
 }
 num <- function(x) vapply(as.character(x), num_one, character(1), USE.NAMES = FALSE)
 alts <- function(cell) trimws(strsplit(as.character(cell), "\\|\\|")[[1]])
