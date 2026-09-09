@@ -224,7 +224,25 @@ geography = list(
 rationale = list(
   task = "Extract why the project was implemented and who it targets, verbatim.",
   type = type_object(
-    rationale_project = type_string("The context-specific rationale: climatic and non-climatic hazards, stressors, pain points and perceived benefits that justified the project — quoting or closely summarising the document, ONE sentence up to 100 words, capturing ALL stated drivers and their interactions."),
+    rationale_project = type_string(paste(
+      "WHY the project was needed, not what it did. Give the context-specific",
+      "hazards, stressors and pain points it responds to, plus the perceived",
+      "benefits it expects, quoting or closely summarising the document in ONE",
+      "sentence of up to 100 words, and capture ALL the stated drivers and how",
+      "they interact.",
+      "CLIMATIC drivers: drought, rainfall variability, flooding, temperature,",
+      "cyclones, sea-level rise, pests and disease pressure linked to climate.",
+      "NON-CLIMATIC drivers: land degradation, soil fertility loss,",
+      "overexploitation, food and nutrition insecurity, poverty, weak market",
+      "access, insecure tenure, weak institutions or extension, gender gaps.",
+      "PERCEIVED BENEFIT: the positive outcome the project expects (resilient",
+      "water management, improved food security, restored land).",
+      "DO NOT write here: the project's objectives or components, the",
+      "activities it carried out, who funded or implemented it, or its results.",
+      "A sentence that begins 'To improve...' or 'The project supported...' is",
+      "the wrong content: state the problem that made it necessary.",
+      "Example of the right shape: 'Drought and land degradation compromise",
+      "smallholder farming systems' resilience.'")),
     target_beneficiary_stated = type_string("EXACT quote (verbatim, machine-checkable) of the passage naming who the project targets/benefits."),
     target_beneficiary_page = type_integer("Page of that quote."),
     GESI_project = type_string("Summary of gender-equality and social-inclusion content as presented (management, design, results, disaggregation, indigenous communities, local knowledge). If the document says nothing about gender or social inclusion, write exactly: The document does not address gender equality or social inclusion. Never leave this empty."),
@@ -605,6 +623,15 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
     row$location_count_raw <- lc_raw
   row$location_notes <- clean_location_notes(gv(row$location_notes), gv(row$scope_stated))
   row$GESI_project <- clean_gesi(gv(row$GESI_project))
+  for (tf in c("rationale_project", "GESI_project", "location_notes",
+               "target_beneficiary_stated", "scope_stated", "result_notes",
+               "finance_notes", "project_title")) {
+    if (!is.null(row[[tf]])) {
+      ct <- clean_text(gv(row[[tf]]))
+      row[[tf]] <- ct$value
+      if (nzchar(ct$note)) row$text_artifact_flag <- ct$note
+    }
+  }
   for (i in 1:3) {
     vf <- paste0("result", i); uf <- paste0(vf, "_unit_stated")
     cn <- clean_number(gv(row[[vf]]))

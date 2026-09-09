@@ -142,6 +142,22 @@ clean_unit <- function(unit, value = "") {
 `%||%` <- function(a, b) if (is.null(a) || !length(a) || is.na(a[1])) b else a
 
 ## ---- text fields -----------------------------------------------------------
+# Control characters occasionally arrive in prose fields where a dash was in
+# the PDF ("natural resource base <TAB>6 particularly soil"). Repair the dash
+# case, strip the rest, and flag it so a human can look rather than have a
+# stray digit read as data.
+clean_text <- function(x) {
+  out <- list(value = "", note = "")
+  if (is.null(x) || !length(x) || is.na(x[1])) return(out)
+  s <- as.character(x[1])
+  had <- grepl("[--\t]", s)
+  s <- gsub("[\t]\\s*[0-9]{1,4}(?=\\s)", " -", s, perl = TRUE)
+  s <- gsub("[--\t]", " ", s)
+  s <- trimws(gsub("\\s+", " ", s))
+  out$value <- s
+  if (had) out$note <- "CHARACTER ARTIFACT REPAIRED - check punctuation"
+  out
+}
 GESI_NONE <- "The document does not address gender equality or social inclusion."
 clean_gesi <- function(x) {
   if (is.null(x) || !length(x) || is.na(x[1]) || !nzchar(trimws(as.character(x[1]))))
