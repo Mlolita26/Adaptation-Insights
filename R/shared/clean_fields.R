@@ -173,3 +173,17 @@ clean_location_notes <- function(notes, scope_stated = "") {
   if (nzchar(s)) return(s)
   ""
 }
+# the count and the note must tell one story: a note whose leading number
+# disagrees with location_count, without saying why, is flagged for review
+check_count_vs_notes <- function(count, notes) {
+  cnt <- suppressWarnings(as.integer(gsub("[^0-9]", "", as.character(count %||% ""))))
+  n <- as.character(notes %||% "")
+  if (is.na(cnt) || !nzchar(n)) return("")
+  nums <- suppressWarnings(as.integer(regmatches(n, gregexpr("\\b[0-9]{1,4}\\b", n))[[1]]))
+  nums <- nums[!is.na(nums)]
+  if (!length(nums) || cnt %in% nums) return("")
+  # an explicit reconciliation ("15 of the 26", "of which") is acceptable
+  if (grepl("\\bof (the )?[0-9]|of which|out of\\b", tolower(n))) return("")
+  paste0("COUNT AND NOTES DISAGREE: count ", cnt,
+         ", notes mention ", paste(unique(nums), collapse = "/"))
+}

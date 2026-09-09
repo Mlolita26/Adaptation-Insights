@@ -218,7 +218,17 @@ geography = list(
     scope_stated   = type_string("Exact quote of the document's own statement of geographic scope/coverage (e.g. 'The study's geographical scope was nationwide' or the countries list)."),
     location_count = type_string("A BARE NUMBER and nothing else - digits only, no words, no '~', no 'N/A', no unit. It is the count of DISTINCT African locations named anywhere as receiving interventions, at the MOST PRECISE level the document supports: if specific villages, sites or districts are enumerated, count those (20 pilot villages beats 4 countries); fall back to counting countries only when nothing finer is enumerated. Aggregate across the whole document; count each location once. Leave empty only when the document truly never says."),
     location_count_basis = type_string("One sentence saying exactly what was counted, at which level (villages/districts/countries) and where the lists are (pages), so the count can be checked."),
-    location_notes = type_string("ALWAYS fill this. A VERBATIM sentence or phrase from the document that says more about where the project worked - the list of countries or sites, the phrase describing the coverage, or the statement of geographic scope. Quote it exactly, do not paraphrase. If the project also worked outside Africa, add the count in the form 'total of X international locations, of which Y African' after the quote."),
+    location_notes = type_string(paste(
+      "ALWAYS fill this, and it MUST account for the number in location_count.",
+      "Give a VERBATIM sentence, phrase or list from the document naming where",
+      "the project worked - quote it exactly, do not paraphrase.",
+      "The two fields must tell one story. If the passage you quote covers only",
+      "PART of what you counted, say so first and then quote, for example:",
+      "'26 countries are named as receiving support; 15 of them received CSIF",
+      "support: \"Uganda, Madagascar, Ghana...\"'. Never leave a number here",
+      "that contradicts location_count without explaining the difference.",
+      "If the project also worked outside Africa, add",
+      "'total of X international locations, of which Y African' after the quote.")),
     source_pages   = pg())),
 
 rationale = list(
@@ -642,6 +652,8 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
   if (nzchar(lc_raw) && !identical(lc_raw, row$location_count))
     row$location_count_raw <- lc_raw
   row$location_notes <- clean_location_notes(gv(row$location_notes), gv(row$scope_stated))
+  cflag <- check_count_vs_notes(row$location_count, row$location_notes)
+  if (nzchar(cflag)) row$location_count_flag <- cflag
   row$GESI_project <- clean_gesi(gv(row$GESI_project))
   for (tf in c("rationale_project", "GESI_project", "location_notes",
                "target_beneficiary_stated", "scope_stated", "result_notes",
