@@ -1,6 +1,6 @@
 ##############################################################################
 # score_pilot.R — field-level agreement between the two-session pipeline
-# output and the CORRECTED gold standard (metadata/gold_v1_general.csv,
+# output and the CORRECTED gold standard (catalogues/gold_v1_general.csv,
 # derived from the 2026-09-08 gold-standard audit).
 #
 # Gold cells may hold several acceptable alternates separated by ' || '
@@ -17,7 +17,7 @@ suppressPackageStartupMessages({ library(readr); library(dplyr) })
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..")) else getwd()
-OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "data", "extraction"))
+OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "outputs", "extraction"))
 
 args <- commandArgs(trailingOnly = TRUE)
 hfile <- if (length(args)) args[1] else {
@@ -27,7 +27,7 @@ hfile <- if (length(args)) args[1] else {
 }
 cat("scoring:", hfile, "\n")
 h <- read.csv(hfile, check.names = FALSE, stringsAsFactors = FALSE); h[is.na(h)] <- ""
-gfile <- if (length(args) >= 2) args[2] else file.path(REPO, "metadata", "gold_v1_general.csv")
+gfile <- if (length(args) >= 2) args[2] else file.path(REPO, "catalogues", "gold_v1_general.csv")
 cat("reference:", gfile, "\n")
 g <- read.csv(gfile, check.names = FALSE, stringsAsFactors = FALSE,
               colClasses = "character"); g[is.na(g)] <- ""

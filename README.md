@@ -30,7 +30,7 @@ extraction turns into a structured database.
                                             website publishes none (GEF)
 4. CATALOGUE   R/zotero_upload.R            push metadata to the shared Zotero
                                             group library via the web API
-                                            (RIS files under metadata/ for
+                                            (RIS files under catalogues/ for
                                             manual import as fallback)
 5. EXTRACT     (separate workflow,          AI-assisted extraction of adaptation
                 not in this repo)           actions & results into the WP2
@@ -69,10 +69,10 @@ are parked in clearly named folders, never deleted.
 │   ├── worldbank_project_info.R project-level metadata from WB project pages
 │   ├── gef_doc_dates.R          document date recovery (see below)
 │   ├── zotero_upload.R          push catalogue to Zotero group library (API)
-│   ├── sync_metadata.R          refresh metadata/ from the OneDrive corpus
+│   ├── sync_metadata.R          refresh catalogues/ from the OneDrive corpus
 │   ├── run_all.R                master runner
 │   └── install_packages.R      dependency installer
-├── metadata/                    per-source catalogues — the git-tracked mirror
+├── catalogues/                    per-source catalogues — the git-tracked mirror
 │   ├── worldbank/               metadata CSV (354 docs), download log,
 │   │                            RIS file, filename-rename map, project info
 │   ├── gef/                     document list, recovered dates (+ method
@@ -82,7 +82,7 @@ are parked in clearly named folders, never deleted.
 │   └── AI_Extraction_Protocol.md   THE extraction protocol (canonical;
 │                                   Word export lives next to the WP3
 │                                   protocol on OneDrive)
-├── data/                        pipeline scratch (gitignored)
+├── outputs/                     pipeline scratch (gitignored)
 ├── downloads/                   scraper output inbox (gitignored)
 └── .claude/                     Claude Code agents & skills for this repo
 ```
@@ -109,7 +109,7 @@ Rscript R/worldbank.R        # scrape one source
 Rscript R/run_all.R          # scrape all working sources
 Rscript R/gef_doc_dates.R    # recover GEF document dates
 Rscript R/zotero_upload.R    # push new items to the Zotero group library
-Rscript R/sync_metadata.R    # refresh metadata/ from OneDrive, then commit
+Rscript R/sync_metadata.R    # refresh catalogues/ from OneDrive, then commit
 ```
 
 Scrapers download into `downloads/{source}/` and write catalogues to `data/`.
@@ -125,7 +125,7 @@ Two routes:
   Zotero group library. Each item is tagged `wbdoc:{id}` (or source
   equivalent), and the script checks existing tags first — it is idempotent
   and safe to re-run; only new documents upload.
-- **Manual fallback:** import `metadata/{source}/{source}_2015_2026.ris` in
+- **Manual fallback:** import `catalogues/{source}/{source}_2015_2026.ris` in
   Zotero via File → Import → *"Link to files in original location"*. The RIS
   links attachments to the OneDrive paths, so this works only on a machine
   with the same OneDrive layout.
@@ -139,7 +139,7 @@ Two routes:
 - **Windows 260-char path limit:** long WB report titles + deep OneDrive paths
   broke downloads *and* Zotero imports. 124 files were renamed to compact
   names (`worldbank_{Pcodes}_{docid}_ICR_{year}.pdf`); the old→new map is
-  `metadata/worldbank/renamed_long_paths.csv`. New code should keep filenames
+  `catalogues/worldbank/renamed_long_paths.csv`. New code should keep filenames
   short.
 - **GEF publishes no document dates** — not in page HTML, no API. Dates are
   recovered from the files: month-name dates (EN/FR/PT/ES) on the first pages,
@@ -147,7 +147,7 @@ Two routes:
   trust. Numeric dates (06/2026) are deliberately ignored — evaluation
   fact-sheets list *planned* closing dates that would win otherwise. PDF
   creation metadata is untrustworthy (the GEF CDN regenerated files in 2025).
-  See `metadata/gef/gef_evaluation_dates.csv` for per-file method + year.
+  See `catalogues/gef/gef_evaluation_dates.csv` for per-file method + year.
 - **GEF xls/xlsx "Terminal Evaluations"** are often rating-sheet templates;
   their file-creation dates can predate the project itself and were voided
   where implausible.

@@ -63,10 +63,10 @@ PATHS <- list(
   root       = PROJECT_ROOT,
   r_dir      = file.path(PROJECT_ROOT, "R"),
   scrapers   = file.path(PROJECT_ROOT, "R", "scrapers"),
-  data       = file.path(PROJECT_ROOT, "data"),
+  data       = file.path(PROJECT_ROOT, "outputs"),
   downloads  = file.path(PROJECT_ROOT, "downloads"),
   reports    = file.path(PROJECT_ROOT, "reports"),
-  log_file   = file.path(PROJECT_ROOT, "data", "download_log.csv")
+  log_file   = file.path(PROJECT_ROOT, "outputs", "download_log.csv")
 )
 
 # Create directories if they don't exist

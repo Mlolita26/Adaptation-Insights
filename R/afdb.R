@@ -930,7 +930,7 @@ run_afdb_scraper <- function(max_pages = AFDB_MAX_PAGES,
       cli::cli_alert_danger(paste0(
         "AfDB is blocking all listing access (WAF). Options: install {.pkg chromote} ",
         "for the browser backend, or export listing rows from a real browser to ",
-        "data/afdb_manual_listing.csv"))
+        "outputs/afdb_manual_listing.csv"))
       log_download(SOURCE_NAME, NA, NA, "AfDB access probe", AFDB_BASE,
                    NA, "blocked", "WAF blocked www + IDEV listing probes")
       return(invisible(NULL))

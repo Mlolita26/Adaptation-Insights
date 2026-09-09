@@ -7,7 +7,7 @@
 # by invoking R/extract_verbatim.R per chunk — so an interrupted run loses at
 # most one chunk and simply resumes on the next invocation.
 #
-# Outputs land in data/extraction/corpus/ (isolated from pilot/holdout).
+# Outputs land in outputs/extraction/corpus/ (isolated from pilot/holdout).
 #
 # Usage:
 #   Rscript R/run_corpus.R                    # everything not yet extracted
@@ -29,7 +29,7 @@ GL   <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literatur
 DATA <- file.path(GL, "03_Documents")
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..")) else getwd()
-OUT  <- file.path(REPO, "data", "extraction", "corpus")
+OUT  <- file.path(REPO, "outputs", "extraction", "corpus")
 dir.create(OUT, recursive = TRUE, showWarnings = FALSE)
 RSCRIPT <- file.path(R.home("bin"), "Rscript.exe")
 EXTRACT <- file.path(REPO, "R", "extract_verbatim.R")

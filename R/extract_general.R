@@ -62,7 +62,7 @@ PDFS <- if (length(args)) args else GOLD_P001
 # repo root (same logic as sync_metadata.R)
 full  <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO  <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..")) else getwd()
-OUT_DIR <- file.path(REPO, "data", "extraction")
+OUT_DIR <- file.path(REPO, "outputs", "extraction")
 RAW_DIR <- file.path(OUT_DIR, "raw")
 dir.create(RAW_DIR, recursive = TRUE, showWarnings = FALSE)
 

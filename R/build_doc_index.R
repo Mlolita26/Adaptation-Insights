@@ -2,7 +2,7 @@
 # build_doc_index.R — one unified index: corpus FILENAME -> catalogue metadata
 #
 # Walks the in-scope corpus folders and matches every document file to its
-# row in the per-source catalogues (metadata/{source}/...). The index feeds
+# row in the per-source catalogues (catalogues/{source}/...). The index feeds
 # deterministic PREFILL in extraction (title, year, project id, report no,
 # link come from the catalogue, never from cover images or running headers).
 #
@@ -16,7 +16,7 @@
 #   af         project code = 2nd token vs project_id, then doc-type tokens
 #   cif        slug (filename minus 'cif_' prefix) inside id or web_url
 #
-# Output: metadata/doc_index.csv with match_method ('unmatched' rows kept so
+# Output: catalogues/doc_index.csv with match_method ('unmatched' rows kept so
 # coverage is measurable). Run after any corpus or catalogue change:
 #   Rscript R/build_doc_index.R
 ##############################################################################
@@ -27,7 +27,7 @@ GL   <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literatur
 DATA <- file.path(GL, "03_Documents")
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..")) else getwd()
-META <- file.path(REPO, "metadata")
+META <- file.path(REPO, "catalogues")
 
 CORPUS_DIRS <- c(
   worldbank = "Worldbank/Docs/2015_2026",

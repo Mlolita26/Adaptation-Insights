@@ -6,10 +6,10 @@
 .Renviron
 
 # Pipeline scratch outputs (canonical data lives on OneDrive, not in git)
-data/**
-!data/.gitkeep
+outputs/**
+!outputs/.gitkeep
 
-# Downloaded documents (large binaries; corpus lives in OneDrive Data/Project_doc)
+# Downloaded documents (large binaries; corpus lives in OneDrive 03_Documents)
 downloads/**
 !downloads/.gitkeep
 

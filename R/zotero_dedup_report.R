@@ -10,7 +10,7 @@
 #   4. identical normalized title (report-only confidence)
 #
 # NEVER deletes or merges — writes Data/zotero_duplicate_report.csv (and a
-# copy into the repo metadata/) for team review. Zotero's own "Duplicate
+# copy into the repo catalogues/) for team review. Zotero's own "Duplicate
 # Items" pane remains the built-in fallback for eyeballing.
 #
 # Usage: Rscript R/zotero_dedup_report.R   (after a sync)
@@ -133,7 +133,7 @@ report <- if (length(pairs)) bind_rows(pairs) else
          key_b = character(), title_b = character(), managed_b = logical(),
          matched_on = character(), confidence = character())
 out1 <- file.path(GL, "04_Extraction_Results/review/zotero_duplicate_report.csv")
-out2 <- file.path(GL, "Script/AI_grey_litterature/metadata/zotero_duplicate_report.csv")
+out2 <- file.path(GL, "05_Pipeline/catalogues/zotero_duplicate_report.csv")
 write_csv(report, out1); write_csv(report, out2)
 cat("report items:", n, "| standalone attachments:", nrow(standalone),
     "| potential duplicate pairs:", nrow(report), "\n")

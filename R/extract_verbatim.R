@@ -58,7 +58,7 @@ if (length(args) == 1 && grepl("\\.csv$", args[1])) {
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..")) else getwd()
-OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "data", "extraction"))
+OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "outputs", "extraction"))
 RAW_DIR <- file.path(OUT_DIR, "raw")
 dir.create(RAW_DIR, recursive = TRUE, showWarnings = FALSE)
 
@@ -79,12 +79,12 @@ read_doc <- function(path) {
 }
 
 # -------------------------------------------- catalogue prefill (tier 1) ----
-# metadata/doc_index.csv maps every corpus FILENAME to its catalogue row
+# catalogues/doc_index.csv maps every corpus FILENAME to its catalogue row
 # (built by R/build_doc_index.R; 100% coverage over the 656 in-scope files).
 # Precedence: catalogue > cover-vision > text extraction. Displaced extracted
 # values are kept in *_extracted columns for QC.
 DOC_INDEX <- local({
-  p <- file.path(REPO, "metadata", "doc_index.csv")
+  p <- file.path(REPO, "catalogues", "doc_index.csv")
   if (file.exists(p)) {
     di <- read.csv(p, stringsAsFactors = FALSE, colClasses = "character")
     di[is.na(di)] <- ""

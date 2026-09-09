@@ -14,7 +14,7 @@
 # covers) fall back to a one-page vision call. Model: gpt-5-nano
 # (SCREEN_MODEL to override). Cost for 656 files: well under $1.
 #
-# Usage: Rscript R/screen_corpus.R          (writes data/extraction/corpus_screen.csv)
+# Usage: Rscript R/screen_corpus.R          (writes outputs/extraction/corpus_screen.csv)
 ##############################################################################
 
 suppressPackageStartupMessages({
@@ -27,7 +27,7 @@ GL   <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literatur
 DATA <- file.path(GL, "03_Documents")
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..")) else getwd()
-OUT  <- file.path(REPO, "data", "extraction", "corpus_screen.csv")
+OUT  <- file.path(REPO, "outputs", "extraction", "corpus_screen.csv")
 
 CORPUS_DIRS <- c(
   worldbank = "Worldbank/Docs/2015_2026",
