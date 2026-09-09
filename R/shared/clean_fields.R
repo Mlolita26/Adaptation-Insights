@@ -141,6 +141,31 @@ clean_unit <- function(unit, value = "") {
 }
 `%||%` <- function(a, b) if (is.null(a) || !length(a) || is.na(a[1])) b else a
 
+## ---- beneficiaries ----------------------------------------------------------
+# A ministry, an agency or a programme team is the CHANNEL, not the group the
+# project is ultimately for. Documents usually say who that is - "to improve
+# the livelihoods of the rural population", "direct project beneficiaries" -
+# so an institution-only answer means the ultimate group was not looked for.
+INSTITUTIONAL_RX <- paste0(
+  "\\b(ministr|ministry|government|governments|agency|agencies|authority|",
+  "secretariat|directorate|department|programme teams?|program teams?|",
+  "project teams?|national teams?|country teams?|national stakeholders?|stakeholders?|",
+  "member countries|institution|institutions|institutional|council|board|",
+  "committee|commission|bureau|unit|staff|officers?|inspectors?|rangers?|",
+  "researchers?|scientists?|extension (agents?|officers?|workers?|staff)|",
+  "partners?|platform|consultants?|technicians?)\\b")
+# TRUE when the stated beneficiary names only intermediaries, with no end group
+is_institution_only <- function(stated) {
+  s <- tolower(trimws(as.character(stated %||% "")))
+  if (!nzchar(s)) return(FALSE)
+  end_group <- paste0("\\b(farmer|farmers|smallholder|producer|producers|",
+    "household|households|communit|women|youth|men\\b|villager|pastoralist|",
+    "herder|fisher|fishers|fisherfolk|fishing communit|beneficiar|population|",
+    "people|families|cooperative|association members|group members|",
+    "vulnerable|poor|children|elderly|migrant|indigenous)\\b")
+  grepl(INSTITUTIONAL_RX, s) && !grepl(end_group, s)
+}
+
 ## ---- text fields -----------------------------------------------------------
 # Control characters occasionally arrive in prose fields where a dash was in
 # the PDF ("natural resource base <TAB>6 particularly soil"). Repair the dash

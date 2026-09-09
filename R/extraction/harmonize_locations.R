@@ -417,6 +417,19 @@ rows <- apply_vocab(rows, "target_beneficiary",
 # is silent, inherit the project's own beneficiary (the most frequent value
 # among that project's other rows), and say so in the notes.
 {
+  # An institution is the channel, not the beneficiary: where the row names
+  # only a ministry, a programme team or staff, fall through to the group the
+  # project is ultimately for, and keep the institution in the notes.
+  inst <- vapply(rows$target_beneficiary_stated, is_institution_only, logical(1),
+                 USE.NAMES = FALSE)
+  if (any(inst)) {
+    rows$notes_extra[inst] <- paste0(rows$notes_extra[inst],
+      "; recipient is an institution (", substr(rows$target_beneficiary_stated[inst], 1, 60),
+      "), beneficiary is the group the project is ultimately for")
+    rows$target_beneficiary[inst] <- ""
+    cat(sprintf("  %-18s %d row(s) named only an institution; ultimate group used instead\n",
+                "beneficiary", sum(inst)))
+  }
   need <- (nzchar(rows$result_stated) | nzchar(rows$result_value)) &
           !nzchar(rows$target_beneficiary)
   n_inherit <- 0
