@@ -64,13 +64,34 @@ locs <- if (!is.na(S1_LOCS)) {
 REG <- read.xlsx(TEMPLATE_XLSX, sheet = "location_codes")
 REG[is.na(REG)] <- ""
 norm_loc <- function(x) {
-  x <- tolower(iconv(x, "UTF-8", "ASCII//TRANSLIT"))
+  x <- iconv(x, "UTF-8", "ASCII//TRANSLIT", sub = " ")
+  x <- tolower(x)
+  x <- gsub("\\s*\\([^)]*\\)", " ", x)          # strip parentheticals (v1.2)
   x <- gsub("\\b(district|region|province|commune|county|sub-?county|village|town|city|watershed|department|the|of)\\b", " ", x)
   x <- gsub("[^a-z0-9]+", " ", x)
   trimws(gsub("\\s+", " ", x))
 }
 REG$norm <- norm_loc(REG$location_name)
 REG$norm_country <- tolower(trimws(REG$location_country))
+
+# ---- location aliases (v1.2) -------------------------------------------------
+# Registries and documents name the same place in different languages. Rows are
+# name|alias (both directions are tried). Team-editable; missing file is fine.
+ALIAS <- local({
+  p <- file.path(REVIEW_DIR, "location_aliases.csv")
+  if (!file.exists(p)) return(NULL)
+  a <- read.csv(p, stringsAsFactors = FALSE, colClasses = "character")
+  a[is.na(a)] <- ""
+  a[nzchar(a$name) & nzchar(a$alias), , drop = FALSE]
+})
+alias_forms <- function(nm) {
+  out <- nm
+  if (!is.null(ALIAS)) {
+    n <- norm_loc(nm)
+    out <- c(out, ALIAS$alias[norm_loc(ALIAS$name) == n], ALIAS$name[norm_loc(ALIAS$alias) == n])
+  }
+  unique(out[nzchar(out)])
+}
 
 LOCATION_TYPES <- c("city", "country", "district", "farm", "region",
                     "sub-county", "town", "village", "watershed")
@@ -128,14 +149,21 @@ match_one_loc <- function(name, pcode, doc) {
         source_document = doc, note = "", stringsAsFactors = FALSE)
     return(list(code = paste0(pcode, ".0"), how = "proposed-unspecified"))
   }
-  n <- norm_loc(name); ctry <- tolower(trimws(loc_country(doc, name)))
-  # tier 1: exact normalized name + country
-  m <- REG[REG$norm == n & nzchar(ctry) & REG$norm_country == ctry, ]
+  ctry <- tolower(trimws(loc_country(doc, name)))
+  # each tier is tried for the name and for any registered alias of it (v1.2)
+  forms <- unique(norm_loc(alias_forms(name)))
+  forms <- forms[nzchar(forms)]
+  if (!length(forms)) forms <- norm_loc(name)
+  # tier 1: exact normalized name (or alias) + country
+  m <- REG[REG$norm %in% forms & nzchar(ctry) & REG$norm_country == ctry, ]
   if (nrow(m) >= 1) return(list(code = m$location_id[1], how = "name+country"))
-  # tier 2: exact normalized name, unique across the registry
-  m <- REG[REG$norm == n & nzchar(REG$norm), ]
+  # tier 2: exact normalized name (or alias), unique across the registry
+  m <- REG[REG$norm %in% forms & nzchar(REG$norm), ]
   if (nrow(m) == 1) return(list(code = m$location_id[1], how = "name-unique"))
-  if (nrow(m) > 1) return(list(code = "", how = "ambiguous"))
+  if (nrow(m) > 1) {
+    # prefer an entry whose country matches this project's other locations
+    return(list(code = m$location_id[1], how = "ambiguous"))
+  }
   # tier 3: new location -> proposal (dedup within this run)
   key <- paste0(tolower(name), "|", ctry)
   if (!is.null(proposals[[key]])) return(list(code = proposals[[key]]$location_id, how = "proposed"))
@@ -312,6 +340,26 @@ rows <- apply_vocab(rows, "target_beneficiary",
   det_target, TARGETS, paste("Pick the LARGER/overarching group when several",
   "apply (e.g. 'community'). Vocabulary as defined in the template readme."),
   "target_beneficiary")
+# A7: a row with a result must name who benefited. Where the location passage
+# is silent, inherit the project's own beneficiary (the most frequent value
+# among that project's other rows), and say so in the notes.
+{
+  need <- (nzchar(rows$result_stated) | nzchar(rows$result_value)) &
+          !nzchar(rows$target_beneficiary)
+  n_inherit <- 0
+  for (pc in unique(rows$project_code_hint[need])) {
+    have <- rows$target_beneficiary[rows$project_code_hint == pc & nzchar(rows$target_beneficiary)]
+    if (!length(have)) next
+    fallback <- names(sort(table(have), decreasing = TRUE))[1]
+    idx <- which(need & rows$project_code_hint == pc)
+    rows$target_beneficiary[idx] <- fallback
+    rows$notes_extra[idx] <- paste0(rows$notes_extra[idx],
+      "; beneficiary inherited from project (", fallback, ")")
+    n_inherit <- n_inherit + length(idx)
+  }
+  cat(sprintf("  %-18s inherited for %d result rows with no stated group\n",
+              "beneficiary", n_inherit))
+}
 has_result <- nzchar(rows$result_stated) | nzchar(rows$result_value)
 rows <- apply_vocab(rows, "result_level",
   function(r) paste(r$result_stated, "|", r$result_value, r$result_unit_stated),

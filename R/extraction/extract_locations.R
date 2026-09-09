@@ -29,7 +29,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "loc-v1.1"   # v1.1: Africa-only rows, per-country rows for multi-country programs, focus repeated in rows task
+PROMPT_VERSION <- "loc-v1.2"   # v1.2: enumerated locations injected into the rows call (coverage), clean location-name format, predecessor/third-party/compensation anti-rules, beneficiary required
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))
 # .Renviron lives in the OneDrive-redirected Documents folder; a shell that
 # overrides HOME (e.g. Git Bash) makes R miss it — load it explicitly
@@ -176,7 +176,7 @@ locations = list(
   type = type_object(
     locations = type_array(description = "One entry per distinct named intervention location.",
       items = type_object(
-        name = type_string("The location's name exactly as printed, without the administrative word — 'Kiboga', not 'Kiboga district'. For a country entry, the country name."),
+        name = type_string("The PLACE NAME ONLY, exactly as printed in the document: 'Kiboga', not 'Kiboga district', not 'Kiboga (Uganda)', not 'Kiboga and 4 other villages'. No administrative word, no country in brackets, no parentheses, no counts, no description. For a country entry, the country name alone. If a set of places is only ever named as a group ('20 pilot villages'), do NOT put that phrase here — enumerate the individual named places, and if none are named, skip it."),
         level_stated = type_string("The administrative level in the document's own words: village, town, city, commune, district, province, region, county, sub-county, watershed, country... Empty if the document never says."),
         country = type_string("Country this location is in."),
         page = type_integer("Page where this location is (first) named as an intervention site."))),
@@ -208,13 +208,28 @@ location_rows = list(
     "Africa are never extracted, even when the program also works there.",
     "(f) All *_stated fields quote or closely paraphrase the document in",
     "max 50 words, in the document's language.",
+    "(g) LOCATION NAMES: place name only. No country in brackets, no",
+    "parentheses, no administrative word, no descriptions or counts.",
+    "'Sofala Bank', not 'Sofala bank (Mozambique)'. Several places are",
+    "separated by '; ', each one a clean name.",
+    "(h) WHO BENEFITS: fill target_beneficiary_stated whenever the row has a",
+    "result. If the passage does not name the group, use the group the",
+    "document names for that component or for the project as a whole.",
     "RESULTS: a result is a quantity the project changed or delivered at",
     "that location — people reached/trained, hectares restored/irrigated,",
     "tons produced, km built, animals, groups formed, tCO2e avoided,",
-    "adoption percentages. NEVER results: durations, calendar dates,",
-    "counts of reports/meetings/missions, staffing or administrative",
-    "numbers, disbursements or budget amounts, targets without actuals,",
-    "the evaluation's own sample sizes, predecessor-program figures."),
+    "adoption percentages, yield or income increases.",
+    "NEVER results, do not extract these as a result value:",
+    "durations, calendar dates; counts of reports, meetings, missions,",
+    "workshops, studies, plans, policies, laws or other documents produced;",
+    "staffing or administrative numbers; disbursements or budget amounts;",
+    "targets without actuals; the evaluation's own sample sizes;",
+    "figures from a PREDECESSOR or earlier-phase programme (check the years:",
+    "a figure from before this project started belongs to another project);",
+    "figures an interviewee reports about their OWN organisation's business",
+    "(sector evidence, not this project's result);",
+    "people compensated or resettled under safeguards (that is a cost of",
+    "the project, not an adaptation result)."),
   type = type_object(
     rows = type_array(description = "One entry per location x intervention (x result).",
       items = type_object(
@@ -236,39 +251,76 @@ location_rows = list(
 # ------------------------------------------------------- junk gates (code) --
 word_count <- function(x) lengths(gregexpr("\\S+", x)) * nzchar(trimws(x))
 
+# ---- location-name hygiene (v1.2) -------------------------------------------
+# "Sofala bank (Mozambique)" -> "Sofala bank"; "20 pilot villages (5 each)" is
+# a description, not a place, and is dropped. Composite strings defeated both
+# the registry matcher and the fact-check in v1.1.
+clean_one_loc <- function(x) {
+  x <- trimws(gsub("\\s+", " ", x))
+  x <- sub("\\s*\\([^)]*\\)\\s*$", "", x)            # trailing parenthetical
+  x <- gsub("\\s*\\([^)]*\\)", " ", x)               # any other parenthetical
+  x <- sub("^(the)\\s+", "", x, ignore.case = TRUE)
+  x <- trimws(gsub("\\s+", " ", x))
+  # a leading count means this is a description of a group, not a place name
+  if (grepl("^[0-9]+\\s", x) && grepl("village|site|district|communit|school|group",
+                                      x, ignore.case = TRUE)) return("")
+  x
+}
+clean_loc_names <- function(s) {
+  if (!nzchar(s)) return(s)
+  parts <- vapply(trimws(strsplit(s, ";")[[1]]), clean_one_loc, character(1), USE.NAMES = FALSE)
+  parts <- parts[nzchar(parts)]
+  if (!length(parts)) return("")
+  paste(unique(parts), collapse = "; ")
+}
+
 fold_rows <- function(res, meta) {
   rl <- res$rows
   if (is.null(rl)) rl <- list()
   if (is.data.frame(rl)) rl <- lapply(seq_len(nrow(rl)), function(i) as.list(rl[i, ]))
   g <- function(r, f) { v <- r[[f]]; if (is.null(v) || !length(v) || is.na(v[1])) "" else as.character(v[1]) }
-  keep <- vapply(rl, function(r) {
-    loc <- g(r, "locations"); iv <- g(r, "intervention_stated")
-    v <- tolower(g(r, "result_value")); m <- tolower(paste(g(r, "result_unit_stated"), g(r, "result_stated")))
-    if (!nzchar(loc) || !nzchar(iv)) return(FALSE)                 # no anchor
-    money    <- grepl("us\\$|usd|eur|cfaf|\\bua\\b|disburs|budget|grant amount", m)
-    duration <- grepl("[0-9]\\s*-?\\s*(month|week|year)s?\\b", v) ||
-                grepl("duration|extension|closing date", m)
-    admin    <- grepl("reports?|meetings?|missions?|recommendations?|audits?|supervision", m) &&
-                !grepl("beneficiar|farmer|train|hectare|household|workshop", m)
-    !(money || duration || admin)
-  }, logical(1))
+  # A row survives on its location + intervention alone. A result that breaks
+  # the typology rules is scrubbed and flagged, NOT used to drop the row —
+  # dropping cost us location coverage in v1.1.
+  bad_result <- function(r) {
+    v <- tolower(g(r, "result_value"))
+    m <- tolower(paste(g(r, "result_unit_stated"), g(r, "result_stated")))
+    if (!nzchar(v) && !nzchar(trimws(m))) return("")
+    if (grepl("us\\$|usd|eur|cfaf|mzn|\\bua\\b|disburs|budget|grant amount", m))
+      return("MONEY NOT A RESULT")
+    if (grepl("[0-9]\\s*-?\\s*(month|week|year)s?\\b", v) ||
+        grepl("duration|extension|closing date", m)) return("DURATION NOT A RESULT")
+    if (grepl("compensat|resettl|expropriat|displaced person", m))
+      return("COMPENSATION NOT A RESULT")
+    if (grepl("reports?|meetings?|missions?|recommendations?|audits?|supervision", m) &&
+        !grepl("beneficiar|farmer|train|hectare|household|workshop", m))
+      return("ADMIN COUNT NOT A RESULT")
+    ""
+  }
+  keep <- vapply(rl, function(r)
+    nzchar(g(r, "locations")) && nzchar(g(r, "intervention_stated")), logical(1))
   rl <- rl[keep]
   if (!length(rl)) return(NULL)
   df <- do.call(rbind, lapply(rl, function(r) {
     rs <- g(r, "result_stated"); rv <- g(r, "result_value")
-    flags <- c(
+    bad <- bad_result(r); ru <- g(r, "result_unit_stated")
+    if (nzchar(bad)) { rs <- ""; rv <- ""; ru <- "" }
+    flags <- c(bad,
       if (any(word_count(c(g(r, "subsector_stated"), g(r, "intervention_stated"),
                            g(r, "rationale_stated"), rs)) > 60)) "OVER 50 WORDS",
-      if (nzchar(rv) && !grepl("[0-9]", rv)) "VALUE NOT NUMERIC")
+      if (nzchar(rv) && !grepl("[0-9]", rv)) "VALUE NOT NUMERIC",
+      if ((nzchar(rs) || nzchar(rv)) && !nzchar(g(r, "target_beneficiary_stated")))
+        "BENEFICIARY MISSING")
+    flags <- flags[nzchar(flags)]
     data.frame(
-      locations_stated  = g(r, "locations"),
+      locations_stated  = clean_loc_names(g(r, "locations")),
       subsector_stated  = g(r, "subsector_stated"),
       intervention_stated = g(r, "intervention_stated"),
       rationale_stated  = g(r, "rationale_stated"),
       target_beneficiary_stated = g(r, "target_beneficiary_stated"),
       result_stated     = rs,
       result_value      = rv,
-      result_unit_stated = g(r, "result_unit_stated"),
+      result_unit_stated = ru,
       evidence_methodology_stated = g(r, "evidence_methodology_stated"),
       evidence_source_stated = g(r, "evidence_source_stated"),
       page = g(r, "page"),
@@ -288,7 +340,7 @@ fold_locations <- function(res, meta) {
   if (!length(ll)) return(NULL)
   g <- function(r, f) { v <- r[[f]]; if (is.null(v) || !length(v) || is.na(v[1])) "" else as.character(v[1]) }
   df <- do.call(rbind, lapply(ll, function(r) data.frame(
-    location_name = g(r, "name"), level_stated = g(r, "level_stated"),
+    location_name = clean_one_loc(g(r, "name")), level_stated = g(r, "level_stated"),
     country = g(r, "country"), page = g(r, "page"), stringsAsFactors = FALSE)))
   df <- df[nzchar(df$location_name), , drop = FALSE]
   df <- df[!duplicated(tolower(paste(df$location_name, df$country))), , drop = FALSE]
@@ -299,9 +351,11 @@ fold_locations <- function(res, meta) {
 
 # ------------------------------------------------ verbatim fact-check (code) --
 norm_txt <- function(x) {
-  x <- tolower(x)
   x <- gsub("[‘’“”]", "'", x)
   x <- gsub("[–—]", "-", x)
+  # fold accents before lowering: "Côte d'Ivoire" must match "Cote d'Ivoire"
+  x <- iconv(x, "UTF-8", "ASCII//TRANSLIT", sub = " ")
+  x <- tolower(x)
   x <- gsub("[^a-z0-9]+", " ", x)
   trimws(x)
 }
@@ -319,10 +373,20 @@ check_value <- function(value, page_cited, pages_txt) {
   "NOT FOUND"
 }
 check_name <- function(name, pages_txt) {
+  hay <- norm_txt(paste(pages_txt, collapse = " "))
   n <- norm_txt(name)
   if (!nzchar(n) || nchar(n) < 3) return("skipped")
-  if (grepl(n, norm_txt(paste(pages_txt, collapse = " ")), fixed = TRUE)) "verified"
-  else "NOT FOUND"
+  if (grepl(n, hay, fixed = TRUE)) return("verified")
+  # a composite string ("Sofala Bank (Mozambique)", "A and B") is verified when
+  # each of its named parts is in the document; v1.1 reported these as misses
+  parts <- unlist(strsplit(name, "\\(|\\)|;|,| and | et "))
+  parts <- trimws(parts); parts <- parts[nchar(parts) >= 4]
+  parts <- vapply(parts, norm_txt, character(1), USE.NAMES = FALSE)
+  parts <- parts[nchar(parts) >= 4]
+  if (length(parts) >= 1 &&
+      all(vapply(parts, function(p) grepl(p, hay, fixed = TRUE), logical(1))))
+    return("verified (composite)")
+  "NOT FOUND"
 }
 # *_stated fields are quote-or-paraphrase: check token coverage on cited page
 check_paraphrase <- function(txt, page_cited, pages_txt) {
@@ -389,6 +453,33 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
     g <- groups[[gname]]
     prompt <- paste0("DOCUMENT (page-tagged):\n\n", doc$text,
                      "\n\n---\nTASK: ", focus_line, g$task)
+    # ---- coverage injection (v1.2): the enumeration pass already found the
+    # places; without this the row pass silently covered only a third of them.
+    if (gname == "location_rows" && !is.null(raw$locations)) {
+      enum <- raw$locations$locations
+      if (is.data.frame(enum)) enum <- lapply(seq_len(nrow(enum)), function(i) as.list(enum[i, ]))
+      nm <- vapply(enum, function(e) {
+        v <- e$name; if (is.null(v) || !length(v) || is.na(v[1])) "" else trimws(as.character(v[1]))
+      }, character(1))
+      ct <- vapply(enum, function(e) {
+        v <- e$country; if (is.null(v) || !length(v) || is.na(v[1])) "" else trimws(as.character(v[1]))
+      }, character(1))
+      keepn <- nzchar(nm) & !duplicated(tolower(paste(nm, ct)))
+      if (any(keepn)) {
+        lst <- paste0("- ", nm[keepn], ifelse(nzchar(ct[keepn]), paste0("  [", ct[keepn], "]"), ""))
+        cat("  coverage   ", sum(keepn), "enumerated location(s) injected\n")
+        prompt <- paste0(prompt,
+          "\n\nLOCATIONS ALREADY IDENTIFIED IN THIS DOCUMENT (", sum(keepn), "):\n",
+          paste(lst, collapse = "\n"),
+          "\n\nCOVERAGE REQUIREMENT: work through this list and produce at least",
+          " one row for EVERY location on it for which the document says",
+          " anything about what was done or achieved there. Use exactly these",
+          " place names. Only skip a location if the document names it but says",
+          " nothing about activities or results there; a location you skip must",
+          " be listed in row_notes with the reason. You may add rows for",
+          " locations missing from the list.")
+      }
+    }
     t0 <- Sys.time()
     res <- tryCatch({
       chat <- chat_openai(model = MODEL, system_prompt = SYSTEM)

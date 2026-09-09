@@ -45,11 +45,35 @@ if (file.exists(prop_csv)) {
 } else REG <- REG[, c("location_name", "location_id", "location_country")]
 code2name <- setNames(REG$location_name, REG$location_id)
 
+ALIAS <- local({
+  p <- file.path(REVIEW_DIR, "location_aliases.csv")
+  if (!file.exists(p)) return(NULL)
+  a <- read.csv(p, stringsAsFactors = FALSE, colClasses = "character")
+  a[is.na(a)] <- ""; a[nzchar(a$name) & nzchar(a$alias), , drop = FALSE]
+})
 norm_loc <- function(x) {
-  x <- tolower(iconv(x, "UTF-8", "ASCII//TRANSLIT"))
+  x <- iconv(x, "UTF-8", "ASCII//TRANSLIT", sub = " ")
+  x <- tolower(x)
+  x <- gsub("\\s*\\([^)]*\\)", " ", x)
   x <- gsub("\\b(district|region|province|commune|county|sub-?county|village|town|city|watershed|department|the|of)\\b", " ", x)
   x <- gsub("[^a-z0-9]+", " ", x)
-  trimws(gsub("\\s+", " ", x))
+  x <- trimws(gsub("\\s+", " ", x))
+  # canonicalise through the alias table so the same place scores as the same
+  if (!is.null(ALIAS)) {
+    key <- tolower(gsub("[^a-z0-9]+", " ",
+             tolower(iconv(ALIAS$alias, "UTF-8", "ASCII//TRANSLIT", sub = " "))))
+    key <- trimws(gsub("\\s+", " ", key))
+    canon <- tolower(gsub("[^a-z0-9]+", " ",
+               tolower(iconv(ALIAS$name, "UTF-8", "ASCII//TRANSLIT", sub = " "))))
+    canon <- trimws(gsub("\\s+", " ", canon))
+    canon <- gsub("\\b(district|region|province|commune|county|sub-?county|village|town|city|watershed|department|the|of)\\b", " ", canon)
+    canon <- trimws(gsub("\\s+", " ", canon))
+    key <- gsub("\\b(district|region|province|commune|county|sub-?county|village|town|city|watershed|department|the|of)\\b", " ", key)
+    key <- trimws(gsub("\\s+", " ", key))
+    m <- match(x, key)
+    x <- ifelse(is.na(m), x, canon[m])
+  }
+  x
 }
 codes_to_names <- function(codes) {
   cds <- trimws(strsplit(codes, ";")[[1]])
@@ -88,9 +112,14 @@ for (pc in sort(unique(g$project_code))) {
     g == h || grepl(paste0("\\b", g, "\\b"), h) || grepl(paste0("\\b", h, "\\b"), g),
     logical(1)))
   loc_hit <- sum(vapply(g_locs, covers, logical(1)))
-  g_vals <- unique(norm_num(gp$result_value)); g_vals <- g_vals[nzchar(g_vals)]
+  # a gold cell may carry " || " alternates; the row counts as covered when ANY
+  # alternate is found (same convention as the general-fields scorer)
+  g_alt <- lapply(gp$result_value, function(x) {
+    a <- norm_num(trimws(strsplit(x, "\\|\\|")[[1]])); a[nzchar(a)] })
+  g_alt <- Filter(length, g_alt)
   h_vals <- unique(norm_num(hp$result_value)); h_vals <- h_vals[nzchar(h_vals)]
-  val_hit <- sum(g_vals %in% h_vals)
+  val_hit <- sum(vapply(g_alt, function(a) any(a %in% h_vals), logical(1)))
+  g_vals <- g_alt
 
   # align each gold row to its best pipeline row
   lvl_ok <- sub_ok <- ben_ok <- n_aligned <- 0
@@ -98,8 +127,9 @@ for (pc in sort(unique(g$project_code))) {
     if (!nrow(hp)) break
     sc <- vapply(seq_len(nrow(hp)), function(j) {
       s <- 0
-      gv <- norm_num(gp$result_value[i])
-      if (nzchar(gv) && gv == norm_num(hp$result_value[j])) s <- s + 3
+      gv <- norm_num(trimws(strsplit(gp$result_value[i], "\\|\\|")[[1]]))
+      gv <- gv[nzchar(gv)]
+      if (length(gv) && norm_num(hp$result_value[j]) %in% gv) s <- s + 3
       s <- s + 2 * jac(gp$loc_names[[i]], hp$loc_names[[j]])
       s <- s + jac(toks(gp$result_stated[i]), toks(hp$result_stated[j]))
       s <- s + jac(toks(gp$intervention_stated[i]), toks(hp$intervention_stated[j]))
