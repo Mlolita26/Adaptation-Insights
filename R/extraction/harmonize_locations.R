@@ -260,9 +260,14 @@ log_candidate <- function(field, value, context) {
   row <- data.frame(date = format(Sys.Date()), field = field, candidate = value,
                     context = substr(context, 1, 160), stringsAsFactors = FALSE)
   if (file.exists(CAND_LOG)) {
-    old <- read.csv(CAND_LOG, stringsAsFactors = FALSE)
-    if (any(old$field == field & old$candidate == value)) return(invisible())
-    row <- rbind(old, row)
+    old <- read.csv(CAND_LOG, stringsAsFactors = FALSE, colClasses = "character")
+    old[is.na(old)] <- ""
+    if ("field" %in% names(old) && "candidate" %in% names(old) &&
+        any(old$field == field & old$candidate == value)) return(invisible())
+    # the general harmonizer writes this file with its own columns — align
+    for (cn in setdiff(names(old), names(row))) row[[cn]] <- ""
+    for (cn in setdiff(names(row), names(old))) old[[cn]] <- ""
+    row <- rbind(old, row[names(old)])
   }
   write.csv(row, CAND_LOG, row.names = FALSE)
 }

@@ -59,7 +59,9 @@ codes_to_names <- function(codes) {
 norm_num <- function(x) {
   x <- gsub("[^0-9.]", "", x)
   v <- suppressWarnings(as.numeric(x))
-  ifelse(is.na(v), "", format(v, scientific = FALSE, trim = TRUE))
+  # per element: vectorized format() pads a whole vector to common decimals
+  vapply(v, function(z) if (is.na(z)) "" else
+    format(z, scientific = FALSE, trim = TRUE, digits = 15), character(1))
 }
 toks <- function(x) {
   t <- strsplit(norm_loc(x), " ")[[1]]
