@@ -34,7 +34,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "s1-v0.8"   # v0.8: results typology (what counts as a result, with template metric examples), code-side junk gates, holdout one-liners
+PROMPT_VERSION <- "s1-v0.9"   # v0.9: finance typology (plan vs spent, table rows), identity anti-examples (report title, extension dates)
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))   # for output file names
 stopifnot("OPENAI_API_KEY not set" = nzchar(Sys.getenv("OPENAI_API_KEY")))
 
@@ -177,11 +177,11 @@ GROUPS <- list(
 identity = list(
   task = "Extract the project identity and timeline, verbatim from the document.",
   type = type_object(
-    project_title  = type_string("Title of the adaptation project, word by word as stated (title page, 'project title'/'project name')."),
+    project_title  = type_string("The PROJECT's name, word by word as stated - from the cover ('...Project (P123456)'), the data sheet's 'Project Name' row, or the 'evaluation of the project X' phrasing (extract X). Never the REPORT's own name (e.g. 'PPCR Evaluation Report' is a report title, not a project title)."),
     project_id     = type_string("The publisher's project identifier exactly as printed IN THIS DOCUMENT, e.g. 'P149269'. Empty if none printed."),
     project_lead_name = type_string("NAME of the ORGANISATION leading the project, as the document names it (often the implementing agency or publisher, e.g. 'World Bank'). Never an internal department, global practice, division or regional unit of an organisation — name the organisation itself."),
     publication_year = type_string("Year the source document was published (front page)."),
-    start_year     = type_string("Year the project ACTUALLY started per the document (approval, signature, effectiveness or official launch). Never design/concept/endorsement years. If no formal date is stated but the document gives an explicit implementation period ('implemented between 2017 and 2022', 'implementation phase 2004-2007'), use its first year. Empty only if neither is stated."),
+    start_year     = type_string("Year the project ACTUALLY started per the document. Look in the Key Dates / basic-data table: 'Approval', 'Effectiveness', 'entry into force', 'signature', 'officially launched', French 'mise en vigueur'. Never design/concept/endorsement years, and NEVER an extension approval or revised-closing decision date. If no formal date is stated but the document gives an explicit implementation period ('implemented between 2017 and 2022'), use its first year. Empty only if neither is stated."),
     start_year_evidence = type_string("Short exact quote stating the start (e.g. 'Approval 29-Apr-2014', 'implemented between 2017 and 2022'), with its wording unchanged."),
     closure_year   = type_string("Year the project ACTUALLY closed ('actual closing', 'completed in'; the last year of an explicit implementation period counts if the project is described as finished). Empty if still running ('to date') or not stated."),
     closure_year_evidence = type_string("Short exact quote stating the closing."),
@@ -253,9 +253,9 @@ finance = list(
     "Extract the project financing verbatim. Read the TITLE PAGE wording and",
     "the financing/data-sheet table first."),
   type = type_object(
-    budget_total = type_string("Total budget: sum of ALL financing sources (lead funder + co-financing + counterpart + in-kind). Digits only, EXPANDED to full units: 'UA 1.71 million' -> 1710000, 'USD 3.75 million' -> 3750000."),
-    budget_lead_share = type_string("The lead funder's / main envelope alone (e.g. the GEF or IDA amount), digits only, expanded to full units. Empty if same as budget_total."),
-    disbursed    = type_string("Total actually disbursed ('actual disbursed'/'actual at closing'). Data sheet wins on contradictions (flag them in finance_notes). Digits only, expanded to full units (1.39 million -> 1390000)."),
+    budget_total = type_string("Total PLANNED budget: the financing-plan / data-sheet TOTAL across ALL sources (lead fund grant/credit + co-financing + government counterpart + beneficiary in-kind). Typical table rows: 'GEF grant', 'IDA credit', 'Government', 'Co-financing', 'TOTAL'. NEVER the amount spent/executed - that is disbursed, a different field. Digits only, EXPANDED to full units: 'UA 1.71 million' -> 1710000."),
+    budget_lead_share = type_string("The lead funder's / main envelope alone (e.g. the GEF, GCF, AF or IDA amount), digits only, expanded to full units. Empty if same as budget_total."),
+    disbursed    = type_string("Total actually SPENT/disbursed: look for 'actual disbursed', 'actual at closing', 'total spent', 'expenditure', execution tables, French 'decaisse'. Sum ALL sources actually spent when several are stated. Not commitments, not the plan. Data sheet wins on contradictions (flag them in finance_notes). Digits only, expanded to full units (1.39 million -> 1390000)."),
     currency     = type_string("ISO currency code, e.g. 'USD', 'EUR', 'UA'."),
     instrument_stated = type_string("EXACT wording of the financing instrument(s) from the title page or financing table, verbatim (e.g. 'ON A CREDIT ... AND A GRANT', 'SMALL GRANT', 'GEF Trust Fund grants')."),
     funding_mechanism_portion = type_string("INSTRUMENT-TYPE mix (grant/loan/investment/other — never fund or account names) WITH PERCENTAGES in parentheses joined by ' + ', per the template format: 'grant (40%) + loan (40%) + other-in-kind contribution (20%)'. Compute percentages from stated amounts when the document gives amounts but no percentages. Empty if the split cannot be established."),
