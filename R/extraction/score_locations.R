@@ -80,12 +80,22 @@ codes_to_names <- function(codes) {
   vapply(cds, function(cd) if (cd %in% names(code2name)) code2name[[cd]] else cd,
          character(1), USE.NAMES = FALSE)
 }
-norm_num <- function(x) {
+norm_one_num <- function(x) {
   x <- gsub("[^0-9.]", "", x)
   v <- suppressWarnings(as.numeric(x))
-  # per element: vectorized format() pads a whole vector to common decimals
   vapply(v, function(z) if (is.na(z)) "" else
     format(z, scientific = FALSE, trim = TRUE, digits = 15), character(1))
+}
+# a cell may legitimately hold several numbers ("95; 2,338,654"): return them
+# all, never glue their digits together
+norm_num <- function(x) {
+  out <- unlist(lapply(x, function(s) {
+    parts <- trimws(strsplit(as.character(s), "\\s*[;,]?\\s*(;|\\band\\b)\\s*|;")[[1]])
+    parts <- parts[nzchar(parts)]
+    if (!length(parts)) parts <- as.character(s)
+    norm_one_num(parts)
+  }))
+  out[nzchar(out)]
 }
 toks <- function(x) {
   t <- strsplit(norm_loc(x), " ")[[1]]
@@ -128,8 +138,8 @@ for (pc in sort(unique(g$project_code))) {
     sc <- vapply(seq_len(nrow(hp)), function(j) {
       s <- 0
       gv <- norm_num(trimws(strsplit(gp$result_value[i], "\\|\\|")[[1]]))
-      gv <- gv[nzchar(gv)]
-      if (length(gv) && norm_num(hp$result_value[j]) %in% gv) s <- s + 3
+      hvj <- norm_num(hp$result_value[j])
+      if (length(gv) && length(hvj) && any(hvj %in% gv)) s <- s + 3
       s <- s + 2 * jac(gp$loc_names[[i]], hp$loc_names[[j]])
       s <- s + jac(toks(gp$result_stated[i]), toks(hp$result_stated[j]))
       s <- s + jac(toks(gp$intervention_stated[i]), toks(hp$intervention_stated[j]))

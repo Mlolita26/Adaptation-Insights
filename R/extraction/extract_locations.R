@@ -246,7 +246,7 @@ location_rows = list(
         rationale_stated = type_string("The stressor or perceived benefit this intervention responds to AT THIS LOCATION (drought, flooding, food insecurity, market access...), quoted or closely paraphrased, max 50 words. Empty if the document states none for this location."),
         target_beneficiary_stated = type_string("WHO this intervention targets at this location, in the document's own words (e.g. 'smallholder farmers', '200 women's groups'). Empty if unstated."),
         result_stated = type_string("The concrete result reported for this location, quoted or closely paraphrased, max 50 words. Empty if no result is reported."),
-        result_value = type_string("The result's NUMBER only, as stated: '2829', '43', '>1,000'. Digits, no thousands separators where possible. Empty if the result is qualitative or there is none."),
+        result_value = type_string("EXACTLY ONE number, as stated: '2829', '43', '>1,000'. Never a list, never several numbers separated by semicolons or commas. If this location has several reported results, emit SEVERAL ROWS for it, one per result, repeating the location and intervention. Empty if the result is qualitative or there is none."),
         result_unit_stated = type_string("Counting unit/what-is-counted for that value, in the document's words: 'farmers trained', 'hectares', 'percent of groups'. Empty if no value."),
         evidence_methodology_stated = type_string("HOW the result was assessed, per the document: survey, interviews, monitoring data, field visits..., quoted or closely paraphrased, max 50 words. Empty if unstated."),
         evidence_source_stated = type_string("The evidence SOURCE named for the result: progress reports, M&E system, workshop reports, use metrics... Empty if unstated."),
@@ -358,9 +358,12 @@ fold_locations <- function(res, meta) {
 
 # ------------------------------------------------ verbatim fact-check (code) --
 norm_txt <- function(x) {
-  x <- gsub("[‘’“”]", "'", x)
-  x <- gsub("[–—]", "-", x)
-  # fold accents before lowering: "Côte d'Ivoire" must match "Cote d'Ivoire"
+  # \u escapes, not literal characters: the source file is read in the system
+  # locale, so literal smart quotes here silently failed to match and iconv
+  # then turned the apostrophe into digits ("Cote d209Ivoire")
+  x <- gsub("[\u2018\u2019\u201c\u201d]", " ", x)
+  x <- gsub("[\u2013\u2014]", "-", x)
+  # fold accents before lowering: "Cote d'Ivoire" must match either spelling
   x <- iconv(x, "UTF-8", "ASCII//TRANSLIT", sub = " ")
   x <- tolower(x)
   x <- gsub("[^a-z0-9]+", " ", x)
@@ -369,6 +372,18 @@ norm_txt <- function(x) {
 norm_num <- function(x) gsub("[^0-9]", "", x)
 
 check_value <- function(value, page_cited, pages_txt) {
+  # a cell may still hold several numbers; check each part separately
+  parts <- trimws(strsplit(as.character(value), ";")[[1]])
+  parts <- parts[nzchar(parts)]
+  if (length(parts) > 1) {
+    st <- vapply(parts, check_value, character(1), page_cited, pages_txt,
+                 USE.NAMES = FALSE)
+    st <- st[st != "skipped"]
+    if (!length(st)) return("skipped")
+    if (all(st == "verified")) return("verified")
+    if (any(st == "NOT FOUND")) return("NOT FOUND (part)")
+    return("found_other_page")
+  }
   v <- norm_num(value)
   if (!nzchar(v) || nchar(v) < 2) return("skipped")
   p <- suppressWarnings(as.integer(page_cited))

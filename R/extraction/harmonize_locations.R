@@ -55,6 +55,36 @@ S1_LOCS <- {
 cat("rows:      ", S1_ROWS, "\nlocations: ", S1_LOCS, "\n")
 rows <- read.csv(S1_ROWS, stringsAsFactors = FALSE, colClasses = "character")
 rows[is.na(rows)] <- ""
+
+# ---- one value per row (v1.2) ------------------------------------------------
+# The template wants one row per location x intervention x RESULT. Session 1
+# sometimes packs a location's several results into one cell
+# ("95;2338654;18208;49"), which makes the value unusable. Split those cells
+# into one row each, pairing units positionally when the model supplied them.
+split_multivalue <- function(d) {
+  if (!nrow(d) || !"result_value" %in% names(d)) return(d)
+  out <- vector("list", nrow(d)); n_split <- 0
+  for (i in seq_len(nrow(d))) {
+    v <- trimws(strsplit(d$result_value[i], "\\s*;\\s*")[[1]])
+    v <- v[nzchar(v)]
+    if (length(v) <= 1) { out[[i]] <- d[i, , drop = FALSE]; next }
+    u <- trimws(strsplit(d$result_unit_stated[i], "\\s*;\\s*")[[1]])
+    u <- u[nzchar(u)]
+    rep_rows <- d[rep(i, length(v)), , drop = FALSE]
+    rep_rows$result_value <- v
+    rep_rows$result_unit_stated <- if (length(u) == length(v)) u else d$result_unit_stated[i]
+    rep_rows$row_flags <- trimws(paste(rep_rows$row_flags,
+      "split from a multi-value cell", sep = "; "))
+    rep_rows$row_flags <- sub("^; ", "", rep_rows$row_flags)
+    out[[i]] <- rep_rows; n_split <- n_split + 1
+  }
+  d2 <- do.call(rbind, out)
+  if (n_split) cat(sprintf("  multi-value cells split: %d cell(s) -> %d rows (was %d)\n",
+                           n_split, nrow(d2), nrow(d)))
+  rownames(d2) <- NULL
+  d2
+}
+rows <- split_multivalue(rows)
 locs <- if (!is.na(S1_LOCS)) {
   l <- read.csv(S1_LOCS, stringsAsFactors = FALSE, colClasses = "character")
   l[is.na(l)] <- ""; l
