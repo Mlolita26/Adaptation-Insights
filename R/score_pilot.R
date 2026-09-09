@@ -30,7 +30,10 @@ h <- read.csv(hfile, check.names = FALSE, stringsAsFactors = FALSE); h[is.na(h)]
 g <- read.csv(file.path(REPO, "metadata", "gold_v1_general.csv"),
               check.names = FALSE, stringsAsFactors = FALSE); g[is.na(g)] <- ""
 
-nrm <- function(x) trimws(gsub("\\s+", " ", gsub("[^a-z0-9 .>%/+-]", " ", tolower(x))))
+nrm <- function(x) {
+  x <- gsub("programme", "program", tolower(x))   # UK/US spelling never decides
+  trimws(gsub("\\s+", " ", gsub("[^a-z0-9 .>%/+-]", " ", x)))
+}
 num_one <- function(x) {
   x <- tolower(gsub(",", "", as.character(x)))
   v <- suppressWarnings(as.numeric(x))            # handles 9.1e+07 round-trips
