@@ -34,7 +34,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "s1-v0.9"   # v0.9: finance typology (plan vs spent, table rows), identity anti-examples (report title, extension dates)
+PROMPT_VERSION <- "s1-v1.0"   # v1.0: results-framework pages attached as images to the results call (table-vision)
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))   # for output file names
 stopifnot("OPENAI_API_KEY not set" = nzchar(Sys.getenv("OPENAI_API_KEY")))
 
@@ -142,6 +142,25 @@ select_pages <- function(pages, family, focus = "") {
     }
   }
   keep
+}
+
+# ------------------------------------------ results-framework vision (tier 5) --
+# Results frameworks are TABLES, and pdftools scrambles table layouts - a
+# holdout failure mode (values found on 'other pages', NOT FOUND in tables).
+# When a results-framework/logframe section is detected, its pages are also
+# attached AS IMAGES to the results call so actual values are read from the
+# rendered table. Capped to RF_MAX_IMG pages; ~a cent per document.
+RF_MAX_IMG <- 10
+rf_pages <- function(pages) {
+  low <- tolower(pages)
+  hits <- grep(paste0("results framework|key outputs|logical framework|",
+                      "logframe|cadre logique|matrice de r|cadre de r"), low)
+  if (!length(hits)) return(integer(0))
+  # the annex itself sits at the END; earlier hits are the TOC and body
+  # references — prefer an explicit annex-start hit, else the last mention
+  ann <- grep("annex\\s*[0-9ivx]*[.:]?\\s*(results framework|logical framework)", low)
+  start <- if (length(ann)) ann[length(ann)] else hits[length(hits)]
+  seq(start, min(length(pages), start + RF_MAX_IMG - 1))
 }
 
 build_doc_text <- function(pages, sel) {
@@ -446,7 +465,30 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
     t0 <- Sys.time()
     res <- tryCatch({
       chat <- chat_openai(model = MODEL, system_prompt = SYSTEM)
-      chat$chat_structured(prompt, type = g$type)
+      imgs <- list()
+      if (gname == "results") {
+        rfp <- rf_pages(doc$pages)
+        for (p in rfp) {
+          png <- file.path(tempdir(), paste0("rf_", substr(digest_path(pdf_path), 1, 8),
+                                             "_", p, ".png"))
+          okp <- tryCatch({ pdftools::pdf_convert(doc$local_path, format = "png",
+                            pages = p, filenames = png, dpi = 110, verbose = FALSE); TRUE },
+                          error = function(e) FALSE)
+          if (okp) imgs[[length(imgs) + 1]] <- content_image_file(png, resize = "none")
+        }
+        if (length(imgs)) {
+          cat("  rf-vision  ", length(imgs), "table page(s) attached [page",
+              rfp[1], "onward]\n")
+          prompt <- paste0(prompt,
+            "\n\nATTACHED IMAGES: the results-framework/table pages [page ",
+            paste(rfp[seq_along(imgs)], collapse = ", "), "] rendered as ",
+            "images, because table layouts scramble in the text layer. Read ",
+            "the actual values from the images wherever the text is unclear.")
+        }
+      }
+      if (length(imgs)) do.call(chat$chat_structured,
+                                c(list(prompt), imgs, list(type = g$type)))
+      else chat$chat_structured(prompt, type = g$type)
     }, error = function(e) e)
     secs <- round(as.numeric(difftime(Sys.time(), t0, units = "secs")), 1)
     if (inherits(res, "error")) {
