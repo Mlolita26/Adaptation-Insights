@@ -15,6 +15,10 @@ extraction turns into a structured database.
 > (~1.4 GB of PDFs) live on the team OneDrive under
 > `WP2_Evidence Synthesis\Grey Literature\03_Documents\` and are never
 > committed to git.
+>
+> **Project-wide context** (what Adaptation Insights is, sources, corpus,
+> extraction design, QC) lives in the knowledge base on OneDrive:
+> `WP2_Evidence Synthesis\Grey Literature\00_Knowledge\README.md`.
 
 ## Pipeline overview
 
