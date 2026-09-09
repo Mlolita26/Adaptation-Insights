@@ -97,7 +97,9 @@ norm_loc <- function(x) {
   x <- iconv(x, "UTF-8", "ASCII//TRANSLIT", sub = " ")
   x <- tolower(x)
   x <- gsub("\\s*\\([^)]*\\)", " ", x)          # strip parentheticals (v1.2)
-  x <- gsub("\\b(district|region|province|commune|county|sub-?county|village|town|city|watershed|department|the|of)\\b", " ", x)
+  # plurals too: "Western Provinces" must reduce to the same key as the alias
+  # "Western Province", or it is proposed as a new location
+  x <- gsub("\\b(districts?|regions?|provinces?|communes?|count(y|ies)|sub-?count(y|ies)|villages?|towns?|cities|city|watersheds?|departments?|islands?|the|of)\\b", " ", x)
   x <- gsub("[^a-z0-9]+", " ", x)
   trimws(gsub("\\s+", " ", x))
 }
@@ -121,6 +123,18 @@ alias_forms <- function(nm) {
     out <- c(out, ALIAS$alias[norm_loc(ALIAS$name) == n], ALIAS$name[norm_loc(ALIAS$alias) == n])
   }
   unique(out[nzchar(out)])
+}
+# one spelling per country in the proposals file, or the review list splits
+# ("United Republic of Tanzania" 25 + "Tanzania" 3 for the same country)
+canon_country <- function(x) {
+  if (!nzchar(x) || is.null(ALIAS)) return(x)
+  n <- norm_loc(x)
+  hit <- ALIAS$name[norm_loc(ALIAS$alias) == n]
+  if (length(hit)) return(hit[1])
+  strip <- function(s) trimws(gsub("\\s+", " ",
+    gsub("\\b(republic|united|union|democratic|the|of)\\b", " ", tolower(s))))
+  m <- REG$location_country[strip(REG$location_country) == strip(x) & nzchar(REG$location_country)]
+  if (length(m)) m[1] else x
 }
 
 LOCATION_TYPES <- c("city", "country", "district", "farm", "region",
@@ -152,10 +166,19 @@ loc_level <- function(doc, name) {
 proposals <- list()
 next_no <- local({
   counters <- new.env()
+  # codes already handed out in earlier runs must be counted too, or every run
+  # restarts at registry-max + 1 and re-issues the same codes to other places
+  prev_ids <- local({
+    p <- file.path(REVIEW_DIR, "proposed_new_locations.csv")
+    if (!file.exists(p)) return(character(0))
+    x <- read.csv(p, stringsAsFactors = FALSE, colClasses = "character")
+    x$location_id[!is.na(x$location_id)]
+  })
   function(pcode) {
     key <- pcode
     if (is.null(counters[[key]])) {
-      ex <- REG$location_id[startsWith(REG$location_id, paste0(pcode, "."))]
+      ex <- c(REG$location_id[startsWith(REG$location_id, paste0(pcode, "."))],
+              prev_ids[startsWith(prev_ids, paste0(pcode, "."))])
       ns <- suppressWarnings(as.integer(sub("^.*\\.", "", ex)))
       counters[[key]] <- if (length(ns) && any(!is.na(ns))) max(ns, na.rm = TRUE) else 0
     }
@@ -203,7 +226,7 @@ match_one_loc <- function(name, pcode, doc) {
     location_type = map_loc_type(loc_level(doc, name)),
     coordinate_latitude = "", coordinate_longitude = "",
     coordinate_type = "estimated",
-    location_country = trimws(loc_country(doc, name)),
+    location_country = canon_country(trimws(loc_country(doc, name))),
     first_seen_project = pcode, source_document = doc,
     note = "", stringsAsFactors = FALSE)
   list(code = code, how = "proposed")
