@@ -19,23 +19,24 @@ extraction turns into a structured database.
 ## Pipeline overview
 
 ```
-1. SCRAPE      R/{worldbank,gcf,gef}.R      query each source, filter for
+1. SCRAPE      R/scraping/{worldbank,...}.R query each source, filter for
                                             Africa + agriculture/adaptation,
                                             download documents, log everything
 2. FILTER      (folder organisation)        keep evaluation-type documents,
                                             park proposals; keep 2015–2025,
                                             park older documents
-3. DATE        R/gef_doc_dates.R            recover document dates from the
+3. DATE        R/scraping/gef_doc_dates.R   recover document dates from the
                                             files themselves where the source
                                             website publishes none (GEF)
-4. CATALOGUE   R/zotero_upload.R            push metadata to the shared Zotero
+4. CATALOGUE   R/zotero/zotero_upload.R     push metadata to the shared Zotero
                                             group library via the web API
                                             (RIS files under catalogues/ for
                                             manual import as fallback)
-5. EXTRACT     (separate workflow,          AI-assisted extraction of adaptation
-                not in this repo)           actions & results into the WP2
-                                            template (long format, with
-                                            page/table provenance)
+5. EXTRACT     R/extraction/                two-session AI extraction into the
+                                            WP2 template (Session 1 verbatim +
+                                            fact-check, Session 2 controlled
+                                            vocabularies), scored against the
+                                            gold set; see docs/AI_Extraction_Protocol.md
 ```
 
 ## Corpus status (as of 2026-07-23)
