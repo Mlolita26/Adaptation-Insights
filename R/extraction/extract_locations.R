@@ -29,7 +29,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "loc-v1.0"
+PROMPT_VERSION <- "loc-v1.1"   # v1.1: Africa-only rows, per-country rows for multi-country programs, focus repeated in rows task
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))
 # .Renviron lives in the OneDrive-redirected Documents folder; a shell that
 # overrides HOME (e.g. Git Bash) makes R miss it — load it explicitly
@@ -195,10 +195,18 @@ location_rows = list(
     "(b) A row does not need a result: an intervention described for a",
     "location with no reported outcome is still a row (leave result fields",
     "empty). But prefer rows WITH results where the document reports them.",
-    "(c) Never invent location-specificity: a project-wide total that the",
-    "document does not tie to named locations is NOT a location row — skip",
-    "it (it belongs to the project-level extraction, not here).",
-    "(d) All *_stated fields quote or closely paraphrase the document in",
+    "(c) COUNTRIES ARE LOCATIONS TOO: in a multi-country project or program,",
+    "make one row PER COUNTRY whenever the document describes that country's",
+    "activities or results — check per-country sections, annex tables listing",
+    "countries, and country case studies. Do this for EVERY participating",
+    "country the document covers, even briefly; finer site-level rows come",
+    "in addition where the document gives them.",
+    "(d) Never invent location-specificity: a project-wide total that the",
+    "document does not tie to any named country or place is NOT a location",
+    "row — skip it (it belongs to the project-level extraction, not here).",
+    "(e) ONLY LOCATIONS IN AFRICA: rows for sites or countries outside",
+    "Africa are never extracted, even when the program also works there.",
+    "(f) All *_stated fields quote or closely paraphrase the document in",
     "max 50 words, in the document's language.",
     "RESULTS: a result is a quantity the project changed or delivered at",
     "that location — people reached/trained, hectares restored/irrigated,",
@@ -374,7 +382,8 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
   focus_line <- if (nzchar(focus)) paste0(
     "IMPORTANT — this document covers SEVERAL programs/projects. Extract ",
     "ONLY for ", focus, ". Ignore every other program's sites, rows and ",
-    "results. ") else ""
+    "results, and double-check each row: a location that belongs to another ",
+    "program in this document must not appear. ") else ""
   raw <- list()
   for (gname in names(groups)) {
     g <- groups[[gname]]

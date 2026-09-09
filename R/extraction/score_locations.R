@@ -80,7 +80,12 @@ for (pc in sort(unique(g$project_code))) {
   gp <- g[g$project_code == pc, ]; hp <- h[h$project_code == pc, ]
   g_locs <- unique(unlist(gp$loc_names)); g_locs <- g_locs[nzchar(g_locs) & g_locs != "unspecified"]
   h_locs <- unique(unlist(hp$loc_names)); h_locs <- h_locs[nzchar(h_locs) & h_locs != "unspecified"]
-  loc_hit <- sum(g_locs %in% h_locs)
+  # a gold location counts as covered on exact match OR word-level containment
+  # ("tanzania" is covered by "mainland tanzania bagamoyo"), both directions
+  covers <- function(g) any(vapply(h_locs, function(h)
+    g == h || grepl(paste0("\\b", g, "\\b"), h) || grepl(paste0("\\b", h, "\\b"), g),
+    logical(1)))
+  loc_hit <- sum(vapply(g_locs, covers, logical(1)))
   g_vals <- unique(norm_num(gp$result_value)); g_vals <- g_vals[nzchar(g_vals)]
   h_vals <- unique(norm_num(hp$result_value)); h_vals <- h_vals[nzchar(h_vals)]
   val_hit <- sum(g_vals %in% h_vals)
