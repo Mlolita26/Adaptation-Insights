@@ -28,11 +28,11 @@ suppressPackageStartupMessages({ library(readr) })
 GL   <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
 DATA <- file.path(GL, "03_Documents")
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
-REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..")) else getwd()
+REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..")) else getwd()
 OUT  <- file.path(REPO, "outputs", "extraction", "corpus")
 dir.create(OUT, recursive = TRUE, showWarnings = FALSE)
 RSCRIPT <- file.path(R.home("bin"), "Rscript.exe")
-EXTRACT <- file.path(REPO, "R", "extract_verbatim.R")
+EXTRACT <- file.path(REPO, "R", "extraction", "extract_verbatim.R")
 CHUNK <- 8
 
 CORPUS_DIRS <- c(

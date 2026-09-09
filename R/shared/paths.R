@@ -3,7 +3,7 @@
 # (reorganised 2026-09-09; see the root README.md).
 #
 # New code should source this file instead of hardcoding locations:
-#   source(file.path(REPO, "R", "paths.R"))
+#   source(file.path(REPO, "R", "shared", "paths.R"))
 # Existing scripts still carry inline constants pointing at the same places;
 # they are kept in sync with this file.
 ##############################################################################

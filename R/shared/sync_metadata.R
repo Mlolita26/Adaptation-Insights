@@ -17,7 +17,7 @@ DATA_ROOT <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Lite
 args <- commandArgs(trailingOnly = FALSE)
 file_arg <- grep("^--file=", args, value = TRUE)
 REPO <- if (length(file_arg) > 0) {
-  normalizePath(file.path(dirname(sub("^--file=", "", file_arg[1])), ".."))
+  normalizePath(file.path(dirname(sub("^--file=", "", file_arg[1])), "..", ".."))
 } else {
   getwd()
 }

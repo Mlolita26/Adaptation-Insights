@@ -11,10 +11,19 @@
 # PROJECT_ROOT <- "/path/to/grey_lit_downloader"
 
 # Helper: given the directory that contains 00_config.R, determine PROJECT_ROOT.
-# Rule: if a .Rproj file lives in that directory, it IS the project root.
-#       Otherwise fall back to one level up (legacy behaviour).
+# Rule: walk upward until a directory that looks like the repo root (.Rproj,
+#       .git, or catalogues/); fall back to one level up (legacy behaviour).
 .resolve_project_root <- function(script_dir) {
   script_dir <- normalizePath(script_dir, mustWork = FALSE)
+  d <- script_dir
+  for (i in 1:4) {
+    looks_root <- length(list.files(d, pattern = "\\.Rproj$")) > 0 ||
+      dir.exists(file.path(d, ".git")) || dir.exists(file.path(d, "catalogues"))
+    if (looks_root) return(d)
+    parent <- dirname(d)
+    if (identical(parent, d)) break
+    d <- parent
+  }
   rproj <- list.files(script_dir, pattern = "\\.Rproj$", full.names = FALSE)
   if (length(rproj) > 0) {
     script_dir          # project root == scripts directory

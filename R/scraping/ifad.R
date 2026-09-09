@@ -76,9 +76,9 @@
 }
 
 if (!exists("PATHS")) {
-  .r_dir <- file.path(.find_r_dir(), "R")
-  source(file.path(.r_dir, "00_config.R"))
-  source(file.path(.r_dir, "01_utils.R"))
+  .r_dir <- file.path(.find_r_dir(), "R", "shared")
+  for (.p in file.path(.r_dir, c(".", "..", "../shared", "shared", "R/shared"), "00_config.R")) if (file.exists(.p)) { source(.p); break }
+  for (.p in file.path(.r_dir, c(".", "..", "../shared", "shared", "R/shared"), "01_utils.R")) if (file.exists(.p)) { source(.p); break }
 }
 
 DOWNLOAD_DIR <- file.path(PATHS$downloads, "ifad")
