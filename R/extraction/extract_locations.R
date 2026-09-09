@@ -243,7 +243,7 @@ location_rows = list(
         locations = type_string("Location NAME(S) this row applies to, exactly as the document names them, several joined by '; '. Use the finest level the row's evidence supports."),
         subsector_stated = type_string("The agricultural domain this intervention targets, quoted or closely paraphrased from the document, max 50 words (e.g. crop production, livestock, fisheries, land management, food distribution)."),
         intervention_stated = type_string("WHAT was implemented at this location, quoted or closely paraphrased, max 50 words (e.g. training, irrigation works, seed distribution, agroforestry, insurance product)."),
-        rationale_stated = type_string("The stressor or perceived benefit this intervention responds to AT THIS LOCATION (drought, flooding, food insecurity, market access...), quoted or closely paraphrased, max 50 words. Empty if the document states none for this location."),
+        rationale_stated = type_string("The stressor or perceived benefit this intervention responds to AT THIS LOCATION (drought, flooding, food insecurity, market access...), IN THE DOCUMENT'S OWN WORDS: copy the passage exactly, word for word, max 50 words. Do not rewrite it, summarise it or compose a sentence of your own to fit this field. Empty if the document states no rationale for this location - an empty cell is better than an invented one."),
         target_beneficiary_stated = type_string("WHO this intervention targets at this location, in the document's own words (e.g. 'smallholder farmers', '200 women's groups'). Empty if unstated."),
         result_stated = type_string("The concrete result reported for this location, quoted or closely paraphrased, max 50 words. Empty if no result is reported."),
         result_value = type_string("EXACTLY ONE number in WHOLE DIGITS: 2829, not '2,829'; 4700000, not '4.7 million'; 43, not '43 percent'. No qualifiers, no units, no ranges, no lists, never several numbers separated by semicolons. If this location has several reported results, emit SEVERAL ROWS for it, one per result, repeating the location and intervention. Empty if the result is qualitative or there is none."),
@@ -410,6 +410,27 @@ check_name <- function(name, pages_txt) {
     return("verified (composite)")
   "NOT FOUND"
 }
+# rationale_stated must be the document's own words: exact string match on the
+# cited page, not the looser token coverage used for the paraphrase fields
+check_quote <- function(txt, page_cited, pages_txt) {
+  q <- norm_txt(txt)
+  if (!nzchar(q) || nchar(q) < 12) return("skipped")
+  p <- suppressWarnings(as.integer(page_cited))
+  cited <- if (!is.na(p)) max(1, p - 1):min(length(pages_txt), p + 1) else integer(0)
+  hay <- norm_txt(paste(pages_txt[cited], collapse = " "))
+  if (nzchar(hay) && grepl(q, hay, fixed = TRUE)) return("verified")
+  if (grepl(q, norm_txt(paste(pages_txt, collapse = " ")), fixed = TRUE))
+    return("found_other_page")
+  # a quote joined from two passages with ' ... ' is checked part by part
+  parts <- trimws(strsplit(as.character(txt), "\\s*\\.{3}\\s*")[[1]])
+  parts <- parts[nchar(parts) >= 12]
+  if (length(parts) > 1) {
+    hay_all <- norm_txt(paste(pages_txt, collapse = " "))
+    if (all(vapply(parts, function(p2) grepl(norm_txt(p2), hay_all, fixed = TRUE),
+                   logical(1)))) return("verified (joined quotes)")
+  }
+  "NOT VERBATIM"
+}
 # *_stated fields are quote-or-paraphrase: check token coverage on cited page
 check_paraphrase <- function(txt, page_cited, pages_txt) {
   q <- norm_txt(txt)
@@ -446,6 +467,11 @@ verify_doc <- function(rows_df, locs_df, pages_txt, doc) {
           check_value(rows_df$result_value[i], rows_df$page[i], pages_txt))
     add(paste0("row_", i, " intervention"),
         check_paraphrase(rows_df$intervention_stated[i], rows_df$page[i], pages_txt))
+    # the rationale must be the document's own words, so it is held to the
+    # stricter quote check rather than the paraphrase one
+    if (nzchar(rows_df$rationale_stated[i]))
+      add(paste0("row_", i, " rationale"),
+          check_quote(rows_df$rationale_stated[i], rows_df$page[i], pages_txt))
   }
   do.call(rbind, v)
 }

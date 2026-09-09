@@ -225,24 +225,29 @@ rationale = list(
   task = "Extract why the project was implemented and who it targets, verbatim.",
   type = type_object(
     rationale_project = type_string(paste(
-      "WHY the project was needed, not what it did. Give the context-specific",
-      "hazards, stressors and pain points it responds to, plus the perceived",
-      "benefits it expects, quoting or closely summarising the document in ONE",
-      "sentence of up to 100 words, and capture ALL the stated drivers and how",
-      "they interact.",
-      "CLIMATIC drivers: drought, rainfall variability, flooding, temperature,",
-      "cyclones, sea-level rise, pests and disease pressure linked to climate.",
-      "NON-CLIMATIC drivers: land degradation, soil fertility loss,",
-      "overexploitation, food and nutrition insecurity, poverty, weak market",
-      "access, insecure tenure, weak institutions or extension, gender gaps.",
-      "PERCEIVED BENEFIT: the positive outcome the project expects (resilient",
-      "water management, improved food security, restored land).",
-      "DO NOT write here: the project's objectives or components, the",
-      "activities it carried out, who funded or implemented it, or its results.",
-      "A sentence that begins 'To improve...' or 'The project supported...' is",
-      "the wrong content: state the problem that made it necessary.",
-      "Example of the right shape: 'Drought and land degradation compromise",
-      "smallholder farming systems' resilience.'")),
+      "WHY the project was needed, IN THE DOCUMENT'S OWN WORDS.",
+      "Copy the sentence or sentences that state the problem, EXACTLY as",
+      "printed, word for word. Do NOT rewrite, summarise, translate, tidy or",
+      "recombine them into a sentence of your own, and do not add words to",
+      "make them fit this field. This text is machine-checked against the page.",
+      "Choose the passage that gives the context-specific hazards, stressors",
+      "and pain points, and the perceived benefits, up to 100 words.",
+      "If two separate passages are needed to cover the climatic and the",
+      "non-climatic drivers, quote both and join them with ' ... ', each part",
+      "still word for word.",
+      "If a passage is longer than 100 words, quote its most relevant part",
+      "exactly and mark the cut with '...'.",
+      "CLIMATIC drivers to look for: drought, rainfall variability, flooding,",
+      "temperature, cyclones, sea-level rise, climate-linked pests and disease.",
+      "NON-CLIMATIC: land degradation, soil fertility loss, overexploitation,",
+      "food and nutrition insecurity, poverty, weak market access, insecure",
+      "tenure, weak institutions or extension, gender gaps.",
+      "NEVER put here: the project's objectives or components, the activities",
+      "it carried out, who funded or implemented it, or its results. A",
+      "sentence starting 'To improve...' or 'The project supported...' is the",
+      "wrong content unless the document itself uses those words to describe",
+      "the problem.")),
+    rationale_project_page = type_integer("Page number where the quoted rationale passage appears."),
     target_beneficiary_stated = type_string("EXACT quote (verbatim, machine-checkable) of the passage naming who the project targets/benefits."),
     target_beneficiary_page = type_integer("Page of that quote."),
     GESI_project = type_string("Summary of gender-equality and social-inclusion content as presented (management, design, results, disaggregation, indigenous communities, local knowledge). If the document says nothing about gender or social inclusion, write exactly: The document does not address gender equality or social inclusion. Never leave this empty."),
@@ -444,6 +449,21 @@ verify_doc <- function(row, raw, pages_txt, doc) {
   if (!length(tbp)) tbp <- as_pages(raw$rationale$source_pages)
   add("target_beneficiary_stated",
       check_quote(raw$rationale$target_beneficiary_stated, tbp, pages_txt))
+  # the rationale must be the document's own words, so it is checked like any
+  # other quote; each ' ... '-joined part is checked separately
+  rp <- as_pages(raw$rationale$rationale_project_page)
+  if (!length(rp)) rp <- as_pages(raw$rationale$source_pages)
+  rq <- as.character(raw$rationale$rationale_project %||% "")
+  if (nzchar(rq)) {
+    parts <- trimws(strsplit(rq, "\\s*\\.{3}\\s*")[[1]])
+    parts <- parts[nchar(parts) >= 12]
+    if (!length(parts)) parts <- rq
+    st <- vapply(parts, check_quote, character(1), rp, pages_txt, USE.NAMES = FALSE)
+    add("rationale_project",
+        if (all(st %in% c("verified", "verified_tokens (table)"))) "verified"
+        else if (any(st == "NOT FOUND")) "NOT FOUND"
+        else st[1])
+  }
   fnp <- as_pages(raw$finance$source_pages)
   add("budget_total", check_value(raw$finance$budget_total, fnp, pages_txt))
   add("disbursed",    check_value(raw$finance$disbursed, fnp, pages_txt))
