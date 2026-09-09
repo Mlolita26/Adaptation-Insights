@@ -32,7 +32,7 @@ all_files <- all_files[basename(all_files) != "README.md"]
 
 top <- sub("/.*$", "", all_files)
 src_map <- c(Worldbank = "worldbank", gef = "gef", gcf = "gcf",
-             afdb = "afdb", af = "af", cif = "cif", pilot_gold = "pilot_gold")
+             afdb = "afdb", af = "af", cif = "cif", pilot = "pilot")
 source_of <- unname(src_map[top]); source_of[is.na(source_of)] <- top[is.na(source_of)]
 
 rel_dir <- dirname(all_files); rel_dir[rel_dir == "."] <- ""
@@ -41,7 +41,11 @@ ext     <- tolower(tools::file_ext(fname))
 size_mb <- round(file.info(file.path(DOCS_ROOT, all_files))$size / 1e6, 2)
 
 status_of <- function(src, dir_rel) {
-  if (src == "pilot_gold")                 return("pilot gold set")
+  if (src == "pilot") {
+    if (grepl("gold_set", dir_rel))        return("pilot gold set")
+    if (grepl("holdout_set", dir_rel))     return("pilot holdout set")
+    return("pilot candidate pool")
+  }
   scope <- CORPUS_DIRS[src]
   if (!is.na(scope) && startsWith(paste0(dir_rel, "/"), paste0(scope, "/")))
                                            return("in scope (evaluation corpus)")
@@ -60,6 +64,12 @@ cat("files found under 03_Documents:", nrow(files), "\n")
 
 ## ── 2. Zotero attachments (read-only) ──────────────────────────────────────
 zotero_files <- NULL; zotero_note <- ""
+# .Renviron lives in the OneDrive-redirected Documents folder; a shell that
+# overrides HOME (e.g. Git Bash) makes R miss it — load it explicitly
+if (!nzchar(Sys.getenv("ZOTERO_API_KEY")))
+  for (p in c(file.path(Sys.getenv("OneDrive"), "Documents", ".Renviron"),
+              file.path(Sys.getenv("USERPROFILE"), "Documents", ".Renviron")))
+    if (file.exists(p)) { readRenviron(p); break }
 zkey <- Sys.getenv("ZOTERO_API_KEY"); zlib <- Sys.getenv("ZOTERO_LIBRARY_ID")
 if (nzchar(zkey) && nzchar(zlib)) {
   zotero_files <- tryCatch({
@@ -125,7 +135,7 @@ per_source <- lapply(split(files, files$source), function(g) {
     missing_in_zotero = if (is.null(zotero_files)) "" else
                           sum(!ins$in_zotero, na.rm = TRUE),
     parked_files      = sum(g$status == "parked"),
-    gold_set_files    = sum(g$status == "pilot gold set"),
+    pilot_files       = sum(startsWith(g$status, "pilot")),
     metadata_files    = sum(g$status == "metadata (List)"),
     screen_flagged    = sum(ins$screen_verdict != "" &
                             toupper(ins$screen_verdict) != "OK", na.rm = TRUE),

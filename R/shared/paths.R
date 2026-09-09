@@ -20,7 +20,8 @@ ARCHIVE_DIR  <- file.path(GL_ROOT, "99_Archive")
 
 TEMPLATE_XLSX <- file.path(TEMPLATE_DIR,
   "EvidenceSynthesis_GreyLiterature_AfricanAgricultureAdaptation_UpdatedTemplate_27Aug2026.xlsx")
-GOLD_DOCS_DIR <- file.path(DOCS_ROOT, "pilot_gold/Selection_mixed stakeholders")
+PILOT_DIR     <- file.path(DOCS_ROOT, "pilot")   # gold set, holdout set, candidate pool
+GOLD_DOCS_DIR <- file.path(PILOT_DIR, "gold_set_P001-P010")
 
 # in-scope corpus folders per source (relative to DOCS_ROOT)
 CORPUS_DIRS <- c(
