@@ -141,7 +141,8 @@ for (pc in sort(unique(g$project_code))) {
 S <- do.call(rbind, summary_rows)
 A <- do.call(rbind, align_rows)
 
-tag <- sub("^locations_harmonized_", "", sub("\\.csv$", "", basename(HFILE)))
+tag <- paste0(sub("^locations_harmonized_", "", sub("\\.csv$", "", basename(HFILE))),
+              "_vs_", sub("^(gold_v1_|claude_)", "", sub("\\.csv$", "", basename(GFILE))))
 dir.create(SCORES_DIR, recursive = TRUE, showWarnings = FALSE)
 sf <- file.path(SCORES_DIR, paste0("score_locations_", tag, ".csv"))
 af <- file.path(SCORES_DIR, paste0("align_locations_", tag, ".csv"))
