@@ -152,9 +152,14 @@ match_actor_det <- function(name) {
   if (!nzchar(n)) return(NA_character_)
   hit <- which(areg$nname == n | (nzchar(areg$nacro) & areg$nacro == n))
   if (length(hit) == 1) return(areg$code[hit[1]])
-  hit <- which(vapply(areg$nname, function(x) nzchar(x) &&
-    (grepl(x, n, fixed = TRUE) || grepl(n, x, fixed = TRUE)), logical(1)))
-  if (length(hit) == 1) return(areg$code[hit[1]])
+  # substring containment only for long-enough names: a short acronym like
+  # 'TAF' sits inside unrelated words ('Taflalet') and must go to the LLM
+  # shortlist instead of matching deterministically (Round-4 bug)
+  if (nchar(n) >= 8) {
+    hit <- which(vapply(areg$nname, function(x) nzchar(x) &&
+      (grepl(x, n, fixed = TRUE) || grepl(n, x, fixed = TRUE)), logical(1)))
+    if (length(hit) == 1) return(areg$code[hit[1]])
+  }
   NA_character_
 }
 fuzzy_candidates <- function(name, k = 6) {
@@ -306,7 +311,7 @@ map_doctype_det <- function(d) {
   k <- tolower(d)
   if (grepl("implementation completion", k)) return("implementation completion report")
   if (grepl("performance evaluation report|icr review", k)) return("terminal evaluation")
-  if (grepl("terminal evaluation|final evaluation", k)) return("terminal evaluation")
+  if (grepl("terminal evaluation|final evaluation|final report", k)) return("terminal evaluation")
   if (grepl("mid.?term", k)) return("mid-term evaluation")
   if (grepl("implementation status", k)) return("implementation status report")
   if (grepl("impact (assessment|evaluation)", k)) return("impact evaluation report")

@@ -34,7 +34,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "s1-v0.6"   # v0.6: implementation-period years, full-unit amounts, no table-row funders
+PROMPT_VERSION <- "s1-v0.7"   # v0.7: implementation_period field + R-derived years, body co-implementors, no predecessor figures, no account numbers as IDs
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))   # for output file names
 stopifnot("OPENAI_API_KEY not set" = nzchar(Sys.getenv("OPENAI_API_KEY")))
 
@@ -171,8 +171,9 @@ identity = list(
     start_year_evidence = type_string("Short exact quote stating the start (e.g. 'Approval 29-Apr-2014', 'implemented between 2017 and 2022'), with its wording unchanged."),
     closure_year   = type_string("Year the project ACTUALLY closed ('actual closing', 'completed in'; the last year of an explicit implementation period counts if the project is described as finished). Empty if still running ('to date') or not stated."),
     closure_year_evidence = type_string("Short exact quote stating the closing."),
+    implementation_period = type_string("The implementation period exactly as the document states it, e.g. '2017-2022' or 'implemented between 2017 and 2022', if any such statement exists. Empty otherwise."),
     document_type_stated = type_string("The document's OWN designation of itself, verbatim (e.g. 'Implementation Completion and Results Report', 'Project Performance Evaluation Report', 'Mid-term evaluation of the project ...')."),
-    resource_id    = type_string("The DOCUMENT's own number as printed, e.g. 'ICR00004643', 'GEF/E/C.70/02'. Empty if none."),
+    resource_id    = type_string("The DOCUMENT's own report/document number as printed, e.g. 'ICR00004643', 'GEF/E/C.70/02'. NEVER a grant, loan or trust-fund account number (TF-..., IDA-..., 2100155...). Empty if none."),
     source_pages   = pg())),
 
 geography = list(
@@ -204,7 +205,9 @@ results = list(
     "not translate into any external category. Do NOT include: targets",
     "without actuals, the evaluation's own methodology numbers, rows from",
     "survey questionnaires, interview forms or annexed data-collection",
-    "instruments (questions, rating scales, respondent tallies), other",
+    "instruments (questions, rating scales, respondent tallies),",
+    "PREDECESSOR or historical program figures (results of earlier phases",
+    "or prior initiatives are background, not this project's results), other",
     "projects' results, or FINANCING figures (budgets/disbursements are",
     "inputs, not results)."),
   type = type_object(
@@ -235,7 +238,7 @@ finance = list(
     instrument_stated = type_string("EXACT wording of the financing instrument(s) from the title page or financing table, verbatim (e.g. 'ON A CREDIT ... AND A GRANT', 'SMALL GRANT', 'GEF Trust Fund grants')."),
     funding_mechanism_portion = type_string("INSTRUMENT-TYPE mix (grant/loan/investment/other — never fund or account names) WITH PERCENTAGES in parentheses joined by ' + ', per the template format: 'grant (40%) + loan (40%) + other-in-kind contribution (20%)'. Compute percentages from stated amounts when the document gives amounts but no percentages. Empty if the split cannot be established."),
     funder_names      = type_array(items = type_string(), description = "NAMES of all funding ORGANISATIONS incl. named trust funds and co-financiers, as the document names them. Never account/grant numbers like 'TF-17015' or 'IDA-52030', and never financing-table row labels or generic categories ('Borrower/Recipient', 'Local Beneficiaries', 'Bilateral Agencies') - only actual named organisations."),
-    implementor_names = type_array(items = type_string(), description = "NAMES of the implementing agencies as designated by the data sheet/document (not private partners, borrowers or buyers)."),
+    implementor_names = type_array(items = type_string(), description = "NAMES of the implementing agencies: those designated by the data sheet PLUS any co-implementing national agencies named in the document body (multi-country projects often have one agency per country while the data sheet names only one). Not private partners, borrowers or buyers."),
     finance_notes = type_string("Contradictions between financing tables, counterpart funding that never materialized, or similar. Empty if none."),
     source_pages = pg()))
 )
@@ -420,6 +423,25 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
       row[[if (f == "source_pages") paste0(gname, "_pages") else f]] <-
         if (length(vv) > 1) paste(unlist(vv), collapse = "; ") else
         if (length(vv) == 0) "" else as.character(vv)
+    }
+  }
+  # derive missing years from an explicit implementation period, IN CODE —
+  # deterministic, immune to the model's (correct) caution about whether a
+  # period statement "counts" as an official start (v0.7, QC pattern fix)
+  gv <- function(x) if (is.null(x) || !length(x) || is.na(x)) "" else as.character(x)
+  per <- gv(row$implementation_period)
+  if (nzchar(per)) {
+    yrs <- as.integer(unlist(regmatches(per, gregexpr("(19|20)[0-9]{2}", per))))
+    yrs <- yrs[!is.na(yrs) & yrs >= 1990 & yrs <= 2035]
+    if (length(yrs)) {
+      if (!nzchar(gv(row$start_year))) {
+        row$start_year <- as.character(min(yrs))
+        row$start_year_evidence <- paste0("derived from implementation period: ", per)
+      }
+      if (length(yrs) >= 2 && !nzchar(gv(row$closure_year))) {
+        row$closure_year <- as.character(max(yrs))
+        row$closure_year_evidence <- paste0("derived from implementation period: ", per)
+      }
     }
   }
   # year sanity check (template: only 2000-2025 accepted)
