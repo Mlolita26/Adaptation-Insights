@@ -315,8 +315,8 @@ map_doctype_det <- function(d) {
   if (grepl("mid.?term", k)) return("mid-term evaluation")
   if (grepl("implementation status", k)) return("implementation status report")
   if (grepl("impact (assessment|evaluation)", k)) return("impact evaluation report")
-  # independent-evaluation-office multi-program evaluations
-  if (grepl("independent evaluation office|evaluation of .*programs", k))
+  # independent multi-program / fund-level evaluations
+  if (grepl("independent evaluation office|evaluation of .*programs|independent evaluation of the|evaluation of the pilot program", k))
     return("portfolio performance review")
   if (grepl("^\\s*evaluation of ", k)) return("terminal evaluation")
   d
@@ -325,8 +325,9 @@ map_funding_det <- function(instr) {
   k <- tolower(instr)
   # known funds whose instrument is always a grant, even when the wording is
   # only 'funded by ...' (GEF Trust Fund, Adaptation Fund, LDCF/SCCF windows)
-  if (grepl("gef trust fund|\\bget\\b|adaptation fund|ldcf|sccf", k) &&
+  if (grepl("gef trust fund|\\bget\\b|adaptation fund|ldcf|sccf|green climate fund|\\bgcf\\b|gafsp", k) &&
       !grepl("credit|loan", k)) return("grant")
+  k <- gsub("investment project financing", "", k)   # WB modality label, not an instrument
   has <- c(loan = grepl("credit|loan", k), grant = grepl("grant", k),
            investment = grepl("equity|bond|investment", k))
   found <- names(has)[has]

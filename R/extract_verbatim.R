@@ -34,7 +34,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "s1-v0.7"   # v0.7: implementation_period field + R-derived years, body co-implementors, no predecessor figures, no account numbers as IDs
+PROMPT_VERSION <- "s1-v0.8"   # v0.8: results typology (what counts as a result, with template metric examples), code-side junk gates, holdout one-liners
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))   # for output file names
 stopifnot("OPENAI_API_KEY not set" = nzchar(Sys.getenv("OPENAI_API_KEY")))
 
@@ -187,7 +187,7 @@ identity = list(
     closure_year_evidence = type_string("Short exact quote stating the closing."),
     implementation_period = type_string("The implementation period exactly as the document states it, e.g. '2017-2022' or 'implemented between 2017 and 2022', if any such statement exists. Empty otherwise."),
     document_type_stated = type_string("The document's OWN designation of itself, verbatim (e.g. 'Implementation Completion and Results Report', 'Project Performance Evaluation Report', 'Mid-term evaluation of the project ...')."),
-    resource_id    = type_string("The DOCUMENT's own report/document number as printed, e.g. 'ICR00004643', 'GEF/E/C.70/02'. NEVER a grant, loan or trust-fund account number (TF-..., IDA-..., 2100155...). Empty if none."),
+    resource_id    = type_string("The DOCUMENT's own report/document number as printed, e.g. 'ICR00004643', 'GEF/E/C.70/02'. NEVER a grant, loan or trust-fund account number (TF-..., IDA-..., 2100155...), never internal department/routing codes (RDGW/AHAI), never bare date codes. Empty if none."),
     source_pages   = pg())),
 
 geography = list(
@@ -216,19 +216,27 @@ results = list(
     "Check the results framework / indicator annex first. Include results",
     "whose target was NOT achieved and failed yes/no indicators (a failure",
     "is a finding). Report metric and unit AS THE DOCUMENT WORDS THEM — do",
-    "not translate into any external category. Do NOT include: targets",
-    "without actuals, the evaluation's own methodology numbers, rows from",
-    "survey questionnaires, interview forms or annexed data-collection",
-    "instruments (questions, rating scales, respondent tallies),",
-    "PREDECESSOR or historical program figures (results of earlier phases",
-    "or prior initiatives are background, not this project's results), other",
-    "projects' results, or FINANCING figures (budgets/disbursements are",
-    "inputs, not results)."),
+    "not translate into any external category.",
+    "A RESULT IS A QUANTITY OF SOMETHING THE PROJECT CHANGED OR DELIVERED:",
+    "people (beneficiaries reached, farmers/women/youth trained, households",
+    "served, jobs created), land and water (hectares restored, irrigated,",
+    "under improved management), production and yields (tons, kg/ha, crop",
+    "yield increase, income increase), infrastructure and assets (km of",
+    "roads, wells, markets, storage built), animals, organizations/groups",
+    "formed or strengthened, emissions avoided (tCO2e), policies or plans",
+    "adopted, and adoption/achievement percentages OF SUCH QUANTITIES.",
+    "NOT results, never extract as results: durations and time periods",
+    "(months, years of implementation, extensions), calendar dates,",
+    "counts of reports/meetings/missions/recommendations/contracts,",
+    "staffing or administrative numbers, disbursement rates or amounts,",
+    "targets without actuals, the evaluation's own methodology numbers,",
+    "survey-questionnaire rows, PREDECESSOR/historical program figures,",
+    "or other projects' results."),
   type = type_object(
     results = type_array(description = "One entry per distinct quantitative actual result.",
       items = type_object(
-        value  = type_string("Actual value as stated, e.g. '14325', '>1,000', 'N'."),
-        metric_stated = type_string("What is counted, in the document's own words (the indicator name or phrase, verbatim)."),
+        value  = type_string("The NUMBER only, as stated: e.g. '14325', '>1,000', '47', 'N' for a failed yes/no indicator. Never a date, a duration, or a sentence — descriptive words belong in metric_stated."),
+        metric_stated = type_string("What is counted, in the document's own words (the indicator name or phrase, verbatim) — e.g. wording like 'direct project beneficiaries', 'land area under sustainable management', 'women trained'."),
         unit_stated   = type_string("Counting unit in the document's own words (e.g. 'farmers', 'ha', 'percent'). Empty if none stated."),
         indicator_level = type_enum(values = c("PDO/outcome", "intermediate", "narrative"),
           description = "PDO/outcome = development-objective or outcome indicator; intermediate = component/output indicator; narrative = figure in running text only."),
@@ -251,7 +259,7 @@ finance = list(
     currency     = type_string("ISO currency code, e.g. 'USD', 'EUR', 'UA'."),
     instrument_stated = type_string("EXACT wording of the financing instrument(s) from the title page or financing table, verbatim (e.g. 'ON A CREDIT ... AND A GRANT', 'SMALL GRANT', 'GEF Trust Fund grants')."),
     funding_mechanism_portion = type_string("INSTRUMENT-TYPE mix (grant/loan/investment/other — never fund or account names) WITH PERCENTAGES in parentheses joined by ' + ', per the template format: 'grant (40%) + loan (40%) + other-in-kind contribution (20%)'. Compute percentages from stated amounts when the document gives amounts but no percentages. Empty if the split cannot be established."),
-    funder_names      = type_array(items = type_string(), description = "NAMES of all funding ORGANISATIONS incl. named trust funds and co-financiers, as the document names them. Never account/grant numbers like 'TF-17015' or 'IDA-52030', and never financing-table row labels or generic categories ('Borrower/Recipient', 'Local Beneficiaries', 'Bilateral Agencies') - only actual named organisations."),
+    funder_names      = type_array(items = type_string(), description = "NAMES of all funding ORGANISATIONS incl. named trust funds and co-financiers, as the document names them. Never account/grant numbers like 'TF-17015' or 'IDA-52030', and never financing-table row labels or generic categories in any language ('Borrower/Recipient', 'Local Beneficiaries', 'Bilateral Agencies', 'GOUVERNEMENT/BENEFICIAIRE', 'CONTREPARTIE') - only actual named organisations (a named government like 'Government of Benin' counts)."),
     implementor_names = type_array(items = type_string(), description = "NAMES of the implementing agencies: those designated by the data sheet PLUS any co-implementing national agencies named in the document body (multi-country projects often have one agency per country while the data sheet names only one). Not private partners, borrowers or buyers."),
     finance_notes = type_string("Contradictions between financing tables, counterpart funding that never materialized, or similar. Empty if none."),
     source_pages = pg()))
@@ -278,6 +286,22 @@ fold_results <- function(res, row) {
     "US\\$|USD|EUR|CFAF|\\bUA\\b|disburs|financ|budget|grant amount",
     paste(r$unit_stated, r$metric_stated), ignore.case = TRUE), logical(1))
   rl <- rl[!is_money]
+  # sanity gates (holdout findings): durations, dates, admin counts and
+  # no-data placeholder zeros must never occupy a headline slot
+  is_junk <- vapply(rl, function(r) {
+    v <- tolower(as.character(r$value)); m <- tolower(as.character(r$metric_stated))
+    no_digit  <- !grepl("[0-9]", v) && !v %in% c("n", "y", "no", "yes")
+    duration  <- grepl("[0-9]\\s*-?\\s*(month|week|year)s?\\b", v) ||
+                 grepl("duration|extension|time ?frame|closing date|implementation period", m)
+    datelike  <- grepl("^\\s*[0-9]{1,2} (january|february|march|april|may|june|july|august|september|october|november|december)|(19|20)[0-9]{2}\\s*$", v) &&
+                 grepl("date|closing|launch|approval", m)
+    admin     <- grepl("reports?|meetings?|missions?|recommendations?|contracts?|audits?|supervision", m) &&
+                 !grepl("beneficiar|farmer|train|hectare|household", m)
+    longtext  <- nchar(v) > 40
+    zero_nodata <- grepl("^\\s*0(\\.0+)?\\s*$", v) && !identical(r$status, "not achieved")
+    no_digit || duration || datelike || admin || longtext || zero_nodata
+  }, logical(1))
+  rl <- rl[!is_junk]
   achieved <- Filter(function(r) !identical(r$status, "not achieved"), rl)
   failed   <- Filter(function(r) identical(r$status, "not achieved"), rl)
   top <- rank_results(achieved)
