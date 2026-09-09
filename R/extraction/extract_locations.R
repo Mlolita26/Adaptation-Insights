@@ -29,7 +29,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "loc-v1.2"   # v1.2: enumerated locations injected into the rows call (coverage), clean location-name format, predecessor/third-party/compensation anti-rules, beneficiary required
+PROMPT_VERSION <- "loc-v1.3"   # v1.3: result_unit is free text per the template readme - activity deliverables (workshops held, plans adopted) ARE location-level results, distinguished by result_level, not banned
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))
 # .Renviron lives in the OneDrive-redirected Documents folder; a shell that
 # overrides HOME (e.g. Git Bash) makes R miss it — load it explicitly
@@ -215,21 +215,28 @@ location_rows = list(
     "(h) WHO BENEFITS: fill target_beneficiary_stated whenever the row has a",
     "result. If the passage does not name the group, use the group the",
     "document names for that component or for the project as a whole.",
-    "RESULTS: a result is a quantity the project changed or delivered at",
-    "that location — people reached/trained, hectares restored/irrigated,",
-    "tons produced, km built, animals, groups formed, tCO2e avoided,",
-    "adoption percentages, yield or income increases.",
+    "RESULTS: a result is a quantity the project delivered or changed at that",
+    "location. result_unit is FREE TEXT in this sheet, so use the document's",
+    "own wording: 'people trained', 'hectares restored', 'tons produced',",
+    "'km built', 'groups formed', 'tCO2e avoided', 'percent adopting',",
+    "'training workshops held', 'plans adopted'. Deliverables of activity",
+    "(workshops held, plans adopted, systems installed, infrastructure",
+    "completed) ARE results here — classify them by impact-pathway level",
+    "(process or output) rather than leaving them out. Prefer the outcome",
+    "the document reports over the activity that produced it when both are",
+    "given for the same location.",
     "NEVER results, do not extract these as a result value:",
-    "durations, calendar dates; counts of reports, meetings, missions,",
-    "workshops, studies, plans, policies, laws or other documents produced;",
-    "staffing or administrative numbers; disbursements or budget amounts;",
-    "targets without actuals; the evaluation's own sample sizes;",
+    "durations and calendar dates; the evaluation's own methodology numbers",
+    "(sample sizes, people interviewed, focus groups); staffing and",
+    "administrative counts (missions, supervision visits, audits,",
+    "recommendations); disbursements, budgets or any money amount, except a",
+    "stated income or price change for beneficiaries; targets with no actual;",
     "figures from a PREDECESSOR or earlier-phase programme (check the years:",
     "a figure from before this project started belongs to another project);",
     "figures an interviewee reports about their OWN organisation's business",
     "(sector evidence, not this project's result);",
-    "people compensated or resettled under safeguards (that is a cost of",
-    "the project, not an adaptation result)."),
+    "people compensated or resettled under safeguards (a cost of the",
+    "project, not an adaptation result)."),
   type = type_object(
     rows = type_array(description = "One entry per location x intervention (x result).",
       items = type_object(
