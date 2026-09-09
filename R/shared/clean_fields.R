@@ -166,6 +166,74 @@ is_institution_only <- function(stated) {
   grepl(INSTITUTIONAL_RX, s) && !grepl(end_group, s)
 }
 
+## ---- results: coverage is not achievement ------------------------------------
+# "20 pilot villages" says WHERE the project worked, not what it changed. A
+# place count is a result only when the document reports something achieved at
+# those places (adopted, established, trained, restored), not when it merely
+# targets, selects or covers them.
+PLACE_UNIT_RX <- paste0("\\b(villages?|districts?|countries|country|sites?|",
+  "regions?|provinces?|communities|communes?|towns?|cities|city|wards?|",
+  "sub-?counties|locations?|areas?|zones?|landscapes?|watersheds?)\\b")
+# stems with an open suffix: a trailing \\b would stop "clarifi" matching
+# "clarified", which is how these lists quietly fail
+ACHIEVED_RX <- paste0("\\b(adopt|establish|form|train|receiv|restor|",
+  "rehabilitat|construct|built|build|deliver|implement|achiev|complet|",
+  "operational|function|certifi|registr|register|licens|reach|benefit|",
+  "produc|increas|reduc|improv|protect|conserv|clarifi|secur|demarcat|",
+  "gazett|mapp|sign|launch|install|equipp|suppli|distribut|provid|",
+  "carried out|conduct|practis|practic|harvest|plant|irrigat)[a-z]*")
+TARGETING_RX <- paste0("\\b(target|select|chosen|choose|identif|plann|",
+  "intend|foreseen|propos|cover|worked in|operates? in|present in|",
+  "pilot(ed)? in|scope|comprising|consisting)[a-z]*")
+is_coverage_not_result <- function(value, unit, stated = "") {
+  u <- tolower(paste(unit %||% ""))
+  s <- tolower(paste(stated %||% ""))
+  if (!nzchar(trimws(paste(u, s)))) return(FALSE)
+  if (!grepl(PLACE_UNIT_RX, u)) return(FALSE)      # only place-counted values
+  both <- paste(u, s)
+  if (grepl(TARGETING_RX, both) && !grepl(ACHIEVED_RX, both)) return(TRUE)
+  if (!grepl(ACHIEVED_RX, both)) return(TRUE)       # nothing was achieved there
+  # something WAS achieved: the place count is the result only when it is what
+  # the sentence counts. "500 barges supplied ... in 77 villages" counts barges,
+  # so 77 is coverage; "tenure clarified in 20 villages" counts villages.
+  v <- suppressWarnings(as.numeric(gsub("[^0-9.]", "", as.character(value))))
+  nums <- suppressWarnings(as.numeric(gsub(",", "",
+            regmatches(s, gregexpr("[0-9][0-9,]*(\\.[0-9]+)?", s))[[1]])))
+  nums <- nums[!is.na(nums)]
+  if (is.na(v) || !length(nums)) return(FALSE)      # cannot tell: keep it
+  !identical(nums[1], v)
+}
+
+## ---- one gate for "is this actually a result?" -------------------------------
+# Returns "" when the value is a real result, otherwise the reason to reject it.
+# Used by both pipelines so the two sheets apply the same test.
+result_reject_reason <- function(value, unit, stated = "") {
+  v <- tolower(trimws(as.character(value %||% "")))
+  m <- tolower(paste(unit %||% "", stated %||% ""))
+  if (!nzchar(v) && !nzchar(trimws(m))) return("")
+  if (grepl(paste0("\\b(rating|ratings|score|scored|scoring|scale of|likert|",
+                   "out of (5|4|6|10)|satisfactor|unsatisfactor|",
+                   "highly likely|negligible)\\b"), m) ||
+      grepl("scale|rating", v))
+    return("RATING NOT A RESULT")
+  if (grepl(paste0("us\\$|usd|eur|cfaf|mzn|\\bua\\b|disburs|budget|",
+                   "grant amount|expenditure|cost of"), m) &&
+      !grepl("income|revenue|price|saving|profit", m))
+    return("MONEY NOT A RESULT")
+  if (grepl("[0-9]\\s*-?\\s*(month|week|year)s?\\b", v) ||
+      grepl("duration|extension|closing date", m))
+    return("DURATION NOT A RESULT")
+  if (grepl("compensat|resettl|expropriat|displaced person", m))
+    return("COMPENSATION NOT A RESULT")
+  if (grepl(paste0("\\b(reports?|meetings?|missions?|recommendations?|",
+                   "audits?|supervision)\\b"), m) &&
+      !grepl("beneficiar|farmer|train|hectare|household|workshop", m))
+    return("ADMIN COUNT NOT A RESULT")
+  if (is_coverage_not_result(value, unit, stated))
+    return("COVERAGE NOT A RESULT - says where, not what changed")
+  ""
+}
+
 ## ---- text fields -----------------------------------------------------------
 # Control characters occasionally arrive in prose fields where a dash was in
 # the PDF ("natural resource base <TAB>6 particularly soil"). Repair the dash

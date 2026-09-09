@@ -301,7 +301,15 @@ results = list(
     "staffing or administrative numbers, disbursement rates or amounts,",
     "targets without actuals, the evaluation's own methodology numbers,",
     "survey-questionnaire rows, PREDECESSOR/historical program figures,",
-    "or other projects' results."),
+    "or other projects' results.",
+    "NOT A RESULT EITHER: an evaluation RATING or score ('4 out of 5',",
+    "'moderately satisfactory') is a judgement about the project, not",
+    "something it delivered. And a COUNT OF PLACES that only says where",
+    "the project worked - '20 pilot villages', '3 countries covered',",
+    "'sites targeted' - is coverage, not a result: a result is what the",
+    "implementation PRODUCED. A place count counts only when the document",
+    "reports something achieved there (villages where tenure was",
+    "clarified, communities that adopted a practice)."),
   type = type_object(
     results = type_array(description = "One entry per distinct quantitative actual result.",
       items = type_object(
@@ -369,7 +377,12 @@ fold_results <- function(res, row) {
                  !grepl("beneficiar|farmer|train|hectare|household", m)
     longtext  <- nchar(v) > 40
     zero_nodata <- grepl("^\\s*0(\\.0+)?\\s*$", v) && !identical(r$status, "not achieved")
-    no_digit || duration || datelike || admin || longtext || zero_nodata
+    # shared gate: ratings, and place counts that say where the project worked
+    # rather than what changed there ("20 pilot villages")
+    shared <- nzchar(result_reject_reason(as.character(r$value),
+                                          as.character(r$unit_stated),
+                                          as.character(r$metric_stated)))
+    no_digit || duration || datelike || admin || longtext || zero_nodata || shared
   }, logical(1))
   rl <- rl[!is_junk]
   achieved <- Filter(function(r) !identical(r$status, "not achieved"), rl)

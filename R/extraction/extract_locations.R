@@ -29,7 +29,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "loc-v1.3"   # v1.3: result_unit is free text per the template readme - activity deliverables (workshops held, plans adopted) ARE location-level results, distinguished by result_level, not banned
+PROMPT_VERSION <- "loc-v1.4"   # v1.4: ultimate + evidenced beneficiary, document's own beneficiary statement captured, verbatim rationale, one shared result gate (coverage and ratings are not results)
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))
 # .Renviron lives in the OneDrive-redirected Documents folder; a shell that
 # overrides HOME (e.g. Git Bash) makes R miss it — load it explicitly
@@ -52,6 +52,7 @@ if (length(args) == 1 && grepl("\\.csv$", args[1])) {
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..")) else getwd()
 OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "outputs", "extraction", "locations"))
+source(file.path(REPO, "R", "shared", "clean_fields.R"))
 RAW_DIR <- file.path(OUT_DIR, "raw")
 dir.create(RAW_DIR, recursive = TRUE, showWarnings = FALSE)
 
@@ -246,7 +247,14 @@ location_rows = list(
     "figures an interviewee reports about their OWN organisation's business",
     "(sector evidence, not this project's result);",
     "people compensated or resettled under safeguards (a cost of the",
-    "project, not an adaptation result)."),
+    "project, not an adaptation result);",
+    "an evaluation RATING or score ('4 out of 5', 'moderately satisfactory')",
+    "- that is a judgement about the project, not something it delivered;",
+    "a COUNT OF PLACES that only says where the project worked - '20 pilot",
+    "villages', '3 countries covered', 'sites targeted'. That is coverage.",
+    "A result is what the implementation PRODUCED. A place count counts only",
+    "when the document reports something achieved at those places (villages",
+    "where tenure was clarified, communities that adopted a practice)."),
   type = type_object(
     rows = type_array(description = "One entry per location x intervention (x result).",
       items = type_object(
@@ -317,21 +325,12 @@ fold_rows <- function(res, meta) {
   # A row survives on its location + intervention alone. A result that breaks
   # the typology rules is scrubbed and flagged, NOT used to drop the row —
   # dropping cost us location coverage in v1.1.
-  bad_result <- function(r) {
-    v <- tolower(g(r, "result_value"))
-    m <- tolower(paste(g(r, "result_unit_stated"), g(r, "result_stated")))
-    if (!nzchar(v) && !nzchar(trimws(m))) return("")
-    if (grepl("us\\$|usd|eur|cfaf|mzn|\\bua\\b|disburs|budget|grant amount", m))
-      return("MONEY NOT A RESULT")
-    if (grepl("[0-9]\\s*-?\\s*(month|week|year)s?\\b", v) ||
-        grepl("duration|extension|closing date", m)) return("DURATION NOT A RESULT")
-    if (grepl("compensat|resettl|expropriat|displaced person", m))
-      return("COMPENSATION NOT A RESULT")
-    if (grepl("reports?|meetings?|missions?|recommendations?|audits?|supervision", m) &&
-        !grepl("beneficiar|farmer|train|hectare|household|workshop", m))
-      return("ADMIN COUNT NOT A RESULT")
-    ""
-  }
+  # one shared gate (R/shared/clean_fields.R) so both sheets reject the same
+  # things: money, durations, compensation, admin counts, ratings, and place
+  # counts that say where the project worked rather than what changed
+  bad_result <- function(r)
+    result_reject_reason(g(r, "result_value"), g(r, "result_unit_stated"),
+                         g(r, "result_stated"))
   keep <- vapply(rl, function(r)
     nzchar(g(r, "locations")) && nzchar(g(r, "intervention_stated")), logical(1))
   rl <- rl[keep]
