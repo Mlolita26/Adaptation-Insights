@@ -75,8 +75,22 @@ read_doc <- function(path) {
     path <- short
   }
   pages <- pdf_text(path)
-  list(pages = pages, n_pages = length(pages))
+  list(pages = pages, n_pages = length(pages), local_path = path)
 }
+
+# -------------------------------------------- catalogue prefill (tier 1) ----
+# metadata/doc_index.csv maps every corpus FILENAME to its catalogue row
+# (built by R/build_doc_index.R; 100% coverage over the 656 in-scope files).
+# Precedence: catalogue > cover-vision > text extraction. Displaced extracted
+# values are kept in *_extracted columns for QC.
+DOC_INDEX <- local({
+  p <- file.path(REPO, "metadata", "doc_index.csv")
+  if (file.exists(p)) {
+    di <- read.csv(p, stringsAsFactors = FALSE, colClasses = "character")
+    di[is.na(di)] <- ""
+    di
+  } else NULL
+})
 
 # ------------------------------------------------- section maps (big docs) --
 # For known document families the template fields live in fixed sections, so
@@ -302,7 +316,8 @@ norm_txt <- function(x) {
 norm_num <- function(x) gsub("[^0-9]", "", x)
 
 check_quote <- function(quote, pages_cited, pages_txt) {
-  q <- norm_txt(quote)
+  if (is.null(quote) || !length(quote) || is.na(quote[1])) return("skipped")
+  q <- norm_txt(quote[1])
   if (!nzchar(q) || nchar(q) < 8) return("skipped")
   cited <- unique(unlist(lapply(pages_cited, function(p)
     max(1, p - 1):min(length(pages_txt), p + 1))))
@@ -320,7 +335,8 @@ check_quote <- function(quote, pages_cited, pages_txt) {
   "NOT FOUND"
 }
 check_value <- function(value, pages_cited, pages_txt) {
-  v <- norm_num(value)
+  if (is.null(value) || !length(value) || is.na(value[1])) return("skipped")
+  v <- norm_num(value[1])
   if (!nzchar(v) || nchar(v) < 2) return("skipped")
   cited <- unique(unlist(lapply(pages_cited, function(p)
     max(1, p - 1):min(length(pages_txt), p + 1))))
@@ -332,6 +348,8 @@ check_value <- function(value, pages_cited, pages_txt) {
 }
 
 check_name <- function(name, pages_txt) {   # actor names: anywhere in the doc
+  if (is.null(name) || !length(name) || is.na(name[1])) return("skipped")
+  name <- name[1]
   n <- norm_txt(name)
   if (!nzchar(n) || nchar(n) < 3) return("skipped")
   hay <- norm_txt(paste(pages_txt, collapse = " "))
@@ -429,6 +447,64 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
   # deterministic, immune to the model's (correct) caution about whether a
   # period statement "counts" as an official start (v0.7, QC pattern fix)
   gv <- function(x) if (is.null(x) || !length(x) || is.na(x)) "" else as.character(x)
+
+  # ------ tier 2: image-cover fallback (glossy reports whose cover is an
+  # image: the text layer sees only running headers - detect via a near-empty
+  # first page, read the cover with ONE small vision call)
+  if (nchar(trimws(doc$pages[1])) < 150) {
+    png <- file.path(tempdir(), paste0("cover_", substr(digest_path(pdf_path), 1, 8), ".png"))
+    okc <- tryCatch({ pdftools::pdf_convert(doc$local_path, format = "png", pages = 1,
+                      filenames = png, dpi = 150, verbose = FALSE); TRUE },
+                    error = function(e) FALSE)
+    if (okc) {
+      cov <- tryCatch({
+        ch <- chat_openai(model = MODEL, system_prompt = SYSTEM)
+        ch$chat_structured(
+          paste("This image is the COVER PAGE of a project evaluation document",
+                "whose text layer is empty. Read from the image:"),
+          content_image_file(png, resize = "none"),
+          type = type_object(
+            cover_title = type_string("The report/project title as printed on the cover, verbatim."),
+            cover_year  = type_string("Publication year printed on the cover (copyright line, date). Empty if none visible."),
+            cover_publisher = type_string("Publisher/lead organisation shown on the cover. Empty if none.")))
+      }, error = function(e) { warning("cover vision failed: ", conditionMessage(e)); NULL })
+      if (!is.null(cov)) {
+        if (nzchar(gv(cov$cover_title))) {
+          row$project_title_extracted <- gv(row$project_title)
+          row$project_title <- trimws(gsub("\\s+", " ", gv(cov$cover_title)))
+          row$title_source <- "cover_vision"
+        }
+        cyr <- regmatches(gv(cov$cover_year), regexpr("(19|20)[0-9]{2}", gv(cov$cover_year)))
+        if (!nzchar(gv(row$publication_year)) && length(cyr))
+          row$publication_year <- cyr
+        if (!nzchar(gv(row$project_lead_name)) && nzchar(gv(cov$cover_publisher)))
+          row$project_lead_name <- gv(cov$cover_publisher)
+        cat("  cover      read by vision fallback\n")
+      }
+    }
+  }
+
+  # ------ tier 1: catalogue prefill (corpus documents) - catalogue wins
+  if (!is.null(DOC_INDEX)) {
+    ixr <- DOC_INDEX[DOC_INDEX$filename == basename(pdf_path), ]
+    if (nrow(ixr) == 1 && ixr$match_method != "unmatched") {
+      stash <- function(field, val) {
+        if (nzchar(val)) {
+          row[[paste0(field, "_extracted")]] <<- gv(row[[field]])
+          row[[field]] <<- val
+        }
+      }
+      stash("project_title", ixr$title)
+      stash("project_id", ixr$project_id)
+      stash("resource_id", ixr$report_no)
+      if (!nzchar(gv(row$publication_year)) && nzchar(ixr$year) && ixr$year != "NA")
+        row$publication_year <- ixr$year
+      row$reference_link_1 <- ixr$url
+      row$prefill <- ixr$match_method
+      cat("  prefill    from catalogue (", ixr$match_method, ")\n")
+    }
+  }
+
   per <- gv(row$implementation_period)
   if (nzchar(per)) {
     yrs <- as.integer(unlist(regmatches(per, gregexpr("(19|20)[0-9]{2}", per))))
