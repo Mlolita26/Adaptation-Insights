@@ -41,7 +41,7 @@ BATCH_SIZE  <- 50
 ATTACH_FILES <- TRUE
 
 GL   <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
-DATA <- file.path(GL, "Data/Project_doc")
+DATA <- file.path(GL, "03_Documents")
 
 SOURCES  <- c("World Bank", "GEF", "GCF", "AfDB", "Adaptation Fund", "CIF")
 STATUSES <- c("included", "to screen", "screened out")
@@ -628,7 +628,7 @@ main <- function() {
           for (f in res$failed) cli_alert_danger("  adopt failed: {f$message}")
         Sys.sleep(1)
       }
-      log_path <- file.path(GL, "Data/zotero_reconciliation_log.csv")
+      log_path <- file.path(GL, "04_Extraction_Results/review/zotero_reconciliation_log.csv")
       readr::write_csv(bind_rows(recon_log), log_path,
                        append = file.exists(log_path))
       cli_alert_success("adoptions logged to {log_path}")

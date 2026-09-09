@@ -39,7 +39,7 @@ MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))   # for output file names
 stopifnot("OPENAI_API_KEY not set" = nzchar(Sys.getenv("OPENAI_API_KEY")))
 
 GL <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
-GOLD_P001 <- file.path(GL, "Data/Docs/Selection_mixed stakeholders/P001",
+GOLD_P001 <- file.path(GL, "03_Documents/pilot_gold/Selection_mixed stakeholders/P001",
   "P001_World Bank_Implementation Completion and Results Report_2019_worldbank_3A-AFCC2_RI_-Support_to_NPCA_TerrAfrica_Secretariat_--_P149269_Implementation_Completion_and_Results_Report_2019.pdf")
 
 # Input: PDF path(s), or a MANIFEST csv (columns: project_code, pdf, focus).

@@ -29,7 +29,7 @@ suppressPackageStartupMessages({
 MODEL <- Sys.getenv("HARMONIZE_MODEL", "gpt-5-mini")
 PROMPT_VERSION <- "s2-v0.3"
 GL <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
-TEMPLATE <- file.path(GL, "Evidence Extraction",
+TEMPLATE <- file.path(GL, "02_Template",
   "EvidenceSynthesis_GreyLiterature_AfricanAgricultureAdaptation_UpdatedTemplate_27Aug2026.xlsx")
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)

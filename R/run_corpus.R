@@ -26,7 +26,7 @@
 suppressPackageStartupMessages({ library(readr) })
 
 GL   <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
-DATA <- file.path(GL, "Data/Project_doc")
+DATA <- file.path(GL, "03_Documents")
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..")) else getwd()
 OUT  <- file.path(REPO, "data", "extraction", "corpus")

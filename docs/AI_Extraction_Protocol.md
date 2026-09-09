@@ -142,7 +142,7 @@ redesign):
 
 - **Template**: the refined extraction template
   `EvidenceSynthesis_GreyLiterature_AfricanAgricultureAdaptation_UpdatedTemplate_27Aug2026.xlsx`
-  (`Evidence Extraction\`, released 27 Aug 2026) — the pinned version;
+  (`02_Template\`, released 27 Aug 2026) — the pinned version;
   extractions declare the template version they follow. It supersedes the
   earlier working-database structure (v02/v03; fields reduced and
   clarified) and triggers the schema regeneration of Section 7, Phase 2.
@@ -151,7 +151,7 @@ redesign):
 - **Keyword taxonomy**: the live keyword file
   (`Keywords_implementation_updated_032026.xlsx`, SharePoint) informs
   screening rules and vocabulary synonyms; a local copy of the earlier
-  version sits in `Evidence Extraction\`.
+  version sits in `02_Template\`.
 - **Gold standard**: P001–P010 hand-extracted records in template v02;
   source documents under `Data\Docs\Selection_mixed stakeholders\`.
 
@@ -161,7 +161,7 @@ Three pillars, each with a single job:
 
 | Pillar | Location | Holds | Sync |
 |---|---|---|---|
-| **OneDrive** | `WP2_Evidence Synthesis\Grey Literature\Data\Project_doc\{source}\` | The **documents** (canonical store). Folder semantics: `Docs\2015_2026` (or `evaluation_docs\2015_2026`) = in-scope working set; `to_screen\`, `screened_out\`, `pre_2015\`, `proposal_stage\` = parked states; `List\` = per-source metadata, filters docs, screening evidence | Manual promotion from scraper inbox |
+| **OneDrive** | `WP2_Evidence Synthesis\Grey Literature\03_Documents\{source}\` | The **documents** (canonical store). Folder semantics: `Docs\2015_2026` (or `evaluation_docs\2015_2026`) = in-scope working set; `to_screen\`, `screened_out\`, `pre_2015\`, `proposal_stage\` = parked states; `List\` = per-source metadata, filters docs, screening evidence | Manual promotion from scraper inbox |
 | **Zotero** | Shared group library *(to be created; API key pending)* | The **catalogue**: one record per corpus document with metadata, source URL, and a link to the OneDrive PDF. Team-browsable; duplicate detection via source-ID tags | RIS import now; automated idempotent push via `R/zotero_upload.R` once the group library exists |
 | **GitHub** | `github.com/Mlolita26/Adaptation-Insights` | Everything **programmatic**: scrapers, screening/extraction code, metadata mirrors (`metadata/{source}/`), filters docs, this protocol. No PDFs, no secrets (`.Renviron` gitignored) | `R/sync_metadata.R` copies `List\` → `metadata/`; commit + push |
 

@@ -23,7 +23,7 @@ source(file.path(.this_dir, "af.R"))
 
 GCF_EXISTING_DIR <- file.path(
   "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature",
-  "Data/Project_doc/gcf/Docs/evaluation_docs")
+  "03_Documents/gcf/Docs/evaluation_docs")
 
 results <- run_mcf_scraper(prefix = "GCF.", source_name = "gcf_cpe")
 

@@ -13,7 +13,7 @@ extraction turns into a structured database.
 
 > **This repo contains code and metadata only.** The documents themselves
 > (~1.4 GB of PDFs) live on the team OneDrive under
-> `WP2_Evidence Synthesis\Grey Literature\Data\Project_doc\` and are never
+> `WP2_Evidence Synthesis\Grey Literature\03_Documents\` and are never
 > committed to git.
 
 ## Pipeline overview
@@ -114,7 +114,7 @@ Rscript R/sync_metadata.R    # refresh metadata/ from OneDrive, then commit
 
 Scrapers download into `downloads/{source}/` and write catalogues to `data/`.
 Vetted documents are then promoted to the OneDrive corpus
-(`Data\Project_doc\{source}\Docs\...`) and the catalogue CSVs to
+(`03_Documents\{source}\Docs\...`) and the catalogue CSVs to
 `...\{source}\List\` — `sync_metadata.R` mirrors those back into this repo.
 
 ## Cataloguing in Zotero

@@ -3,7 +3,7 @@
 #
 # The document corpus (PDFs) lives on OneDrive and is NOT in git. This script
 # copies the per-source metadata (CSV catalogues, download logs, RIS files)
-# from the canonical location Data/Project_doc/{source}/List into the repo's
+# from the canonical location 03_Documents/{source}/List into the repo's
 # metadata/ folder so GitHub always carries an up-to-date catalogue of what
 # the corpus contains.
 #
@@ -11,7 +11,7 @@
 #   Rscript R/sync_metadata.R
 ##############################################################################
 
-DATA_ROOT <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature/Data/Project_doc"
+DATA_ROOT <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature/03_Documents"
 
 # repo root = parent of this script's directory (same logic as 00_config.R)
 args <- commandArgs(trailingOnly = FALSE)

@@ -3,7 +3,7 @@
 #
 # The GEF website does not expose per-document dates, and
 # gef_all_documents.csv has no date column. This script recovers a year for
-# each file in Data/Project_doc/gef/Docs/evaluation_docs from, in order of
+# each file in 03_Documents/gef/Docs/evaluation_docs from, in order of
 # trust:
 #   1. year_text     — month+year dates on the first pages (PDF) or in the
 #                      body text (docx); evaluation covers carry the report
@@ -18,15 +18,15 @@
 # (image-only, would need OCR). Legacy .doc/.xls and archives get no year
 # here — handled separately.
 #
-# Output: Data/Project_doc/gef/List/gef_evaluation_dates.csv
+# Output: 03_Documents/gef/List/gef_evaluation_dates.csv
 # Usage:  "C:\Program Files\R\R-4.4.2\bin\Rscript.exe" R/gef_doc_dates.R
 ##############################################################################
 
 suppressPackageStartupMessages(library(pdftools))
 
 BASE <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
-DOCS <- file.path(BASE, "Data/Project_doc/gef/Docs/evaluation_docs")
-OUT  <- file.path(BASE, "Data/Project_doc/gef/List/gef_evaluation_dates.csv")
+DOCS <- file.path(BASE, "03_Documents/gef/Docs/evaluation_docs")
+OUT  <- file.path(BASE, "03_Documents/gef/List/gef_evaluation_dates.csv")
 
 N_PAGES   <- 8     # pages of PDF text to scan for dates
 MIN_CHARS <- 400   # less text than this over N_PAGES => treat as scanned

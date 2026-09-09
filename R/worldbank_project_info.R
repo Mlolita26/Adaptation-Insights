@@ -26,7 +26,7 @@ library(processx)
 # ═══════════ CONFIG ═══════════
 
 CHROMEDRIVER_PATH <- "C:/Users/mlolita/Downloads/chromedriver-win64/chromedriver-win64/chromedriver.exe"
-INPUT_METADATA    <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature/Data/Project_doc/Worldbank/List/worldbank_metadata.csv"
+INPUT_METADATA    <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature/03_Documents/Worldbank/List/worldbank_metadata.csv"
 OUT_ID_MAP        <- "worldbank_project_id_map.csv"
 OUT_PROJECTS      <- "worldbank_projects_from_docs.csv"
 OUT_DOCS_JOINED   <- "worldbank_documents_with_project_info.csv"
