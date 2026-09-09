@@ -34,7 +34,7 @@ TEMPLATE <- file.path(GL, "Evidence Extraction",
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..")) else getwd()
-OUT_DIR <- file.path(REPO, "data", "extraction")
+OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "data", "extraction"))
 
 args <- commandArgs(trailingOnly = TRUE)
 s1_csv <- if (length(args)) args[1] else {
