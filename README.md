@@ -58,20 +58,34 @@ are parked in clearly named folders, never deleted.
 ## Repository layout
 
 ```
-├── R/
-│   ├── 00_config.R              paths, HTTP settings, country/keyword lists
-│   ├── 01_utils.R               shared HTTP, download, logging helpers
-│   ├── worldbank.R              World Bank Documents & Reports API scraper ✅
-│   ├── gcf.R                    Green Climate Fund scraper (Drupal AJAX) ✅
-│   ├── gef.R                    Global Environment Facility scraper (HTML) ✅
-│   ├── afdb.R                   AfDB scraper (PCRs, PCR reviews, PPERs, IDEV) ✅
-│   ├── ifad.R                   stub — to build 🔲
-│   ├── worldbank_project_info.R project-level metadata from WB project pages
-│   ├── gef_doc_dates.R          document date recovery (see below)
-│   ├── zotero_upload.R          push catalogue to Zotero group library (API)
-│   ├── sync_metadata.R          refresh catalogues/ from the OneDrive corpus
-│   ├── run_all.R                master runner
-│   └── install_packages.R      dependency installer
+├── R/                           scripts, classified by function
+│   ├── scraping/                document retrieval from the source websites
+│   │   ├── worldbank.R          World Bank Documents & Reports API ✅
+│   │   ├── gcf.R                Green Climate Fund (Drupal AJAX) ✅
+│   │   ├── gef.R                Global Environment Facility (HTML) ✅
+│   │   ├── afdb.R               AfDB (PCRs, PCR reviews, PPERs, IDEV) ✅
+│   │   ├── af.R / cif.R         Adaptation Fund (CPR API) / CIF sitemap ✅
+│   │   ├── ifad.R               stub — to build 🔲
+│   │   ├── gcf_gapfill.R        GCF gap-fill via the CPR API
+│   │   ├── worldbank_project_info.R  project-level metadata from WB pages
+│   │   ├── gef_doc_dates.R      document date recovery (see below)
+│   │   └── run_all.R            master runner for the scrapers
+│   ├── extraction/              AI-assisted extraction pipeline
+│   │   ├── extract_verbatim.R   Session 1: verbatim extraction + fact-check
+│   │   ├── harmonize.R          Session 2: map to controlled vocabularies
+│   │   ├── score_pilot.R        score a run against a reference CSV
+│   │   ├── screen_corpus.R      cheap sweep: is each file really an evaluation?
+│   │   ├── run_corpus.R         resumable full-corpus runner
+│   │   └── build_doc_index.R    join corpus files to catalogue metadata
+│   ├── zotero/
+│   │   ├── zotero_upload.R      push catalogue to Zotero group library (API)
+│   │   └── zotero_dedup_report.R  duplicate report incl. standalone attachments
+│   └── shared/
+│       ├── 00_config.R          paths, HTTP settings, country/keyword lists
+│       ├── 01_utils.R           shared HTTP, download, logging helpers
+│       ├── paths.R              canonical OneDrive folder constants
+│       ├── sync_metadata.R      refresh catalogues/ from the OneDrive corpus
+│       └── install_packages.R   dependency installer
 ├── catalogues/                    per-source catalogues — the git-tracked mirror
 │   ├── worldbank/               metadata CSV (354 docs), download log,
 │   │                            RIS file, filename-rename map, project info
@@ -91,9 +105,9 @@ are parked in clearly named folders, never deleted.
 
 1. Install R (≥ 4.4) and dependencies:
    ```
-   Rscript R/install_packages.R
+   Rscript R/shared/install_packages.R
    ```
-   (`pdftools` additionally required for `gef_doc_dates.R`.)
+   (`pdftools` additionally required for `R/scraping/gef_doc_dates.R`.)
 
 2. For Zotero upload, create `~/.Renviron` with:
    ```
@@ -105,11 +119,11 @@ are parked in clearly named folders, never deleted.
 ## Usage
 
 ```bash
-Rscript R/worldbank.R        # scrape one source
-Rscript R/run_all.R          # scrape all working sources
-Rscript R/gef_doc_dates.R    # recover GEF document dates
-Rscript R/zotero_upload.R    # push new items to the Zotero group library
-Rscript R/sync_metadata.R    # refresh catalogues/ from OneDrive, then commit
+Rscript R/scraping/worldbank.R        # scrape one source
+Rscript R/scraping/run_all.R          # scrape all working sources
+Rscript R/scraping/gef_doc_dates.R    # recover GEF document dates
+Rscript R/zotero/zotero_upload.R    # push new items to the Zotero group library
+Rscript R/shared/sync_metadata.R    # refresh catalogues/ from OneDrive, then commit
 ```
 
 Scrapers download into `downloads/{source}/` and write catalogues to `data/`.
@@ -121,7 +135,7 @@ Vetted documents are then promoted to the OneDrive corpus
 
 Two routes:
 
-- **Automated (preferred):** `R/zotero_upload.R` pushes items to the shared
+- **Automated (preferred):** `R/zotero/zotero_upload.R` pushes items to the shared
   Zotero group library. Each item is tagged `wbdoc:{id}` (or source
   equivalent), and the script checks existing tags first — it is idempotent
   and safe to re-run; only new documents upload.
