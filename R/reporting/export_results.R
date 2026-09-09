@@ -31,6 +31,16 @@ newest <- function(dir, pat, exclude = NULL) {
 # nzchar() on a missing column returns logical(0), which silently collapses an
 # OR chain to length zero and empties the review sheet
 has <- function(x, cn) if (cn %in% names(x)) nzchar(x[[cn]]) else rep(FALSE, nrow(x))
+
+## Excel keeps an exclusive lock on an open workbook, and saveWorkbook only
+## warns when it cannot replace the file - so check first and write a dated
+## copy alongside instead of pretending the refresh happened.
+writable <- function(p) {
+  if (!file.exists(p)) return(TRUE)
+  con <- suppressWarnings(try(file(p, "ab"), silent = TRUE))
+  if (inherits(con, "try-error")) return(FALSE)
+  close(con); TRUE
+}
 rd <- function(f) {
   d <- read.csv(f, stringsAsFactors = FALSE, colClasses = "character", check.names = FALSE)
   d[is.na(d)] <- ""; d
@@ -70,9 +80,14 @@ write_book <- function(rows, sheet_name, extra_cols, out_file, src, review_rule,
               "Rscript 05_Pipeline/R/reporting/export_results.R",
               "columns follow the 27 Aug 2026 template exactly; working files stay in 05_Pipeline/outputs/"),
     stringsAsFactors = FALSE))
+  locked <- !writable(out_file)
+  if (locked) out_file <- sub("\\.xlsx$", format(Sys.time(), "_%Y%m%d_%H%M.xlsx"), out_file)
   saveWorkbook(wb, out_file, overwrite = TRUE)
   cat(sprintf("written: %s\n         %d rows, %d flagged for review (from %s)\n",
               out_file, nrow(main), nrow(review), basename(src)))
+  if (locked)
+    cat("         NOTE: the _latest file is open in Excel so it could not be replaced.\n",
+        "        Close it and rerun to refresh the usual filename.\n", sep = "")
 }
 
 ## ---- location-specific ------------------------------------------------------

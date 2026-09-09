@@ -36,6 +36,12 @@ MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
 PROMPT_VERSION <- "s1-v1.1"   # v1.1: team field rules - no shouty titles, no codes in titles, numeric-only location_count, location_notes always filled, GESI stated when absent, whole-digit results, % for percentages
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))   # for output file names
+# .Renviron lives in the OneDrive-redirected Documents folder; a shell that
+# overrides HOME (e.g. Git Bash) makes R miss it, so load it explicitly
+if (!nzchar(Sys.getenv("OPENAI_API_KEY")))
+  for (p in c(file.path(Sys.getenv("OneDrive"), "Documents", ".Renviron"),
+              file.path(Sys.getenv("USERPROFILE"), "Documents", ".Renviron")))
+    if (file.exists(p)) { readRenviron(p); break }
 stopifnot("OPENAI_API_KEY not set" = nzchar(Sys.getenv("OPENAI_API_KEY")))
 
 GL <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"

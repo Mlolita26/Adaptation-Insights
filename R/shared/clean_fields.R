@@ -60,6 +60,25 @@ n_shouted <- function(x) {
   }, logical(1)))
 }
 
+# A shouted banner is any run of two or more consecutive SHOUTED words, so
+# "CULTIVATING RESILIENCE The Journey of..." is de-shouted down to its banner
+# while a lone acronym ("Support to NPCA TerrAfrica Secretariat") is left be.
+is_shouted_tok <- function(t) {
+  lt <- gsub("[^A-Za-z]", "", t)
+  nchar(lt) >= 3 && lt == toupper(lt) && !toupper(lt) %in% KNOWN_ACRONYMS
+}
+deshout_runs <- function(x) {
+  toks <- strsplit(x, " ", fixed = TRUE)[[1]]
+  if (length(toks) < 2) return(x)
+  sh <- vapply(toks, is_shouted_tok, logical(1), USE.NAMES = FALSE)
+  r <- rle(sh)
+  ends <- cumsum(r$lengths); starts <- ends - r$lengths + 1L
+  for (j in which(r$values & r$lengths >= 2L))
+    for (i in starts[j]:ends[j])
+      toks[i] <- title_case_one(toks[i], i == 1L)
+  paste(toks, collapse = " ")
+}
+
 clean_title <- function(x) {
   if (is.null(x) || !length(x) || is.na(x[1])) return("")
   x <- trimws(gsub("\\s+", " ", as.character(x[1])))
@@ -69,11 +88,7 @@ clean_title <- function(x) {
   x <- gsub("\\(\\s*\\)", " ", x)                  # brackets left empty
   x <- trimws(gsub("\\s+", " ", x))
   x <- gsub("[ ,;:_-]+$", "", x)
-  if (n_shouted(x) >= 3) {
-    parts <- strsplit(x, " ")[[1]]
-    x <- paste(vapply(seq_along(parts), function(i) title_case_one(parts[i], i == 1L),
-                      character(1)), collapse = " ")
-  }
+  x <- deshout_runs(x)
   trimws(x)
 }
 
@@ -229,6 +244,10 @@ result_reject_reason <- function(value, unit, stated = "") {
                    "audits?|supervision)\\b"), m) &&
       !grepl("beneficiar|farmer|train|hectare|household|workshop", m))
     return("ADMIN COUNT NOT A RESULT")
+  # a yes/no milestone indicator ("platform is up: Y") carries no quantity
+  if (grepl("^(y|n|yes|no|true|false|achieved|not achieved)$", v) ||
+      grepl("yes\\s*/\\s*no|y\\s*/\\s*n\\b|binary indicator", m))
+    return("YES/NO INDICATOR NOT A RESULT")
   if (is_coverage_not_result(value, unit, stated))
     return("COVERAGE NOT A RESULT - says where, not what changed")
   ""
@@ -247,8 +266,15 @@ clean_text <- function(x) {
   s <- gsub("[\t]\\s*[0-9]{1,4}(?=\\s)", " -", s, perl = TRUE)
   s <- gsub("[--\t]", " ", s)
   s <- trimws(gsub("\\s+", " ", s))
+  # a word the PDF broke over a line end ("ag- ricultural"): no space before
+  # the hyphen, one after, letters on both sides. A real aside (" - ") has a
+  # space on both sides and a real compound ("climate-smart") has none.
+  split_word <- grepl("[a-z]- [a-z]", s)
+  if (split_word) s <- gsub("([a-z])- ([a-z])", "\\1\\2", s)
   out$value <- s
-  if (had) out$note <- "CHARACTER ARTIFACT REPAIRED - check punctuation"
+  notes <- c(if (had) "CHARACTER ARTIFACT REPAIRED - check punctuation",
+             if (split_word) "WORD REJOINED ACROSS A LINE BREAK - check spelling")
+  if (length(notes)) out$note <- paste(notes, collapse = "; ")
   out
 }
 GESI_NONE <- "The document does not address gender equality or social inclusion."
@@ -272,11 +298,25 @@ check_count_vs_notes <- function(count, notes) {
   cnt <- suppressWarnings(as.integer(gsub("[^0-9]", "", as.character(count %||% ""))))
   n <- as.character(notes %||% "")
   if (is.na(cnt) || !nzchar(n)) return("")
+  # page citations are not counts of anything
+  n <- gsub("\\[[^]]*\\b(page|pages|p|pp)\\b[^]]*\\]", " ", n, ignore.case = TRUE)
+  n <- gsub("\\((?:[^()]*\\b(?:page|pages|p|pp)\\b[^()]*)\\)", " ", n,
+            ignore.case = TRUE, perl = TRUE)
+  n <- gsub("\\b(page|pages|pp?)\\.?\\s*[0-9]+(\\s*[-]\\s*[0-9]+)?", " ", n,
+            ignore.case = TRUE)
+  # the count is often written out in the same sentence ("five districts")
+  words <- c(one = 1, two = 2, three = 3, four = 4, five = 5, six = 6, seven = 7,
+             eight = 8, nine = 9, ten = 10, eleven = 11, twelve = 12,
+             thirteen = 13, fourteen = 14, fifteen = 15, sixteen = 16,
+             seventeen = 17, eighteen = 18, nineteen = 19, twenty = 20)
+  for (w in names(words))
+    n <- gsub(paste0("\\b", w, "\\b"), words[[w]], n, ignore.case = TRUE)
   nums <- suppressWarnings(as.integer(regmatches(n, gregexpr("\\b[0-9]{1,4}\\b", n))[[1]]))
   nums <- nums[!is.na(nums)]
   if (!length(nums) || cnt %in% nums) return("")
   # an explicit reconciliation ("15 of the 26", "of which") is acceptable
-  if (grepl("\\bof (the )?[0-9]|of which|out of\\b", tolower(n))) return("")
+  if (grepl("\\bof (the )?[0-9]|of which|out of\\b|\\bpartial\\b|\\bincluding\\b",
+            tolower(n))) return("")
   paste0("COUNT AND NOTES DISAGREE: count ", cnt,
          ", notes mention ", paste(unique(nums), collapse = "/"))
 }

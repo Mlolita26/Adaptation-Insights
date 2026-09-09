@@ -88,6 +88,7 @@ rows <- split_multivalue(rows)
 
 # ---- team field rules: whole-digit values, % for percentages -----------------
 source(file.path(REPO, "R", "shared", "clean_fields.R"))
+source(file.path(REPO, "R", "shared", "vocab_cache.R"))
 if (nrow(rows)) {
   n_fix <- 0
   for (i in seq_len(nrow(rows))) {
@@ -332,6 +333,20 @@ LEVEL_DEFS <- paste(
 # one batched structured call: items {idx, choice}
 llm_choose <- function(items, vocab, defs, what) {
   if (!nrow(items)) return(character(0))
+  # reuse the decision this snippet already got (see R/shared/vocab_cache.R)
+  cache <- vocab_cache_load(REPO, what, vocab)
+  cached <- setNames(rep("", nrow(items)), items$idx)
+  if (length(cache)) {
+    k <- vapply(items$text, vocab_key, character(1), USE.NAMES = FALSE)
+    got <- k %in% names(cache)
+    if (any(got)) {
+      cached[got] <- unname(cache[k[got]])
+      cat(sprintf("  %-18s %d of %d from the decision cache\n", what,
+                  sum(got), nrow(items)))
+      items <- items[!got, , drop = FALSE]
+      if (!nrow(items)) return(cached)
+    }
+  }
   chat <- chat_openai(model = MODEL, system_prompt = paste(
     "You classify grey-literature extraction snippets into a fixed vocabulary.",
     "Choose EXACTLY one vocabulary value per item, from the list given.",
@@ -347,13 +362,17 @@ llm_choose <- function(items, vocab, defs, what) {
       choice = type_string("One vocabulary value verbatim, or 'CANDIDATE: ...'.")))),
     error = function(e) { warning(what, " LLM batch failed: ", conditionMessage(e)); NULL })
   out <- setNames(rep("", nrow(items)), items$idx)
-  if (is.null(res)) return(out)
+  if (is.null(res)) return(cached)   # keeps whatever the cache already knew
   if (is.data.frame(res)) res <- lapply(seq_len(nrow(res)), function(i) as.list(res[i, ]))
   for (r in res) {
     k <- as.character(r$idx)
     if (k %in% names(out)) out[k] <- as.character(r$choice)
   }
-  out
+  vocab_cache_save(REPO, what, vocab, items$text, unname(out[as.character(items$idx)]))
+  # the answers just taken, plus the ones the cache already knew
+  all <- cached
+  all[names(out)] <- out
+  all
 }
 
 CAND_LOG <- file.path(REVIEW_DIR, "candidate_vocab_log.csv")
@@ -448,6 +467,29 @@ rows <- apply_vocab(rows, "target_beneficiary",
     v <- v[nzchar(v)]
     if (length(v)) v[1] else ""
   }
+  # Before borrowing anything, read the row's OWN passage: an intervention or
+  # result that says "farmers trained" names its beneficiary even when the
+  # beneficiary field was left blank. Skipping this step made a project-level
+  # phrase such as "coastal communities" overwrite rows whose own text said
+  # farmers, which is a less precise answer drawn from weaker evidence.
+  n_own <- 0
+  for (i in which(need)) {
+    own <- paste(rows$result_stated[i], rows$intervention_stated[i],
+                 rows$subsector_stated[i])
+    if (!grepl(BENEFIT_RX, tolower(own))) next
+    tb <- det_target(own)
+    if (!nzchar(tb)) next
+    rows$target_beneficiary[i] <- tb
+    rows$notes_extra[i] <- paste0(rows$notes_extra[i],
+      "; beneficiary read from this row's own passage (", tb, "): \"",
+      substr(trimws(own), 1, 90), "\"")
+    n_own <- n_own + 1
+  }
+  if (n_own)
+    cat(sprintf("  %-18s %d row(s) named their beneficiary in their own passage\n",
+                "beneficiary", n_own))
+  need <- need & !nzchar(rows$target_beneficiary)
+
   for (pc in unique(rows$project_code_hint[need])) {
     idx <- which(need & rows$project_code_hint == pc)
     ev <- doc_ben(pc); from <- "the document's own beneficiary statement"

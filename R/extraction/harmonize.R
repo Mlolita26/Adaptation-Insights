@@ -28,6 +28,12 @@ suppressPackageStartupMessages({
 
 MODEL <- Sys.getenv("HARMONIZE_MODEL", "gpt-5-mini")
 PROMPT_VERSION <- "s2-v0.3"
+# .Renviron lives in the OneDrive-redirected Documents folder; a shell that
+# overrides HOME (e.g. Git Bash) makes R miss it, so load it explicitly
+if (!nzchar(Sys.getenv("OPENAI_API_KEY")))
+  for (.p in c(file.path(Sys.getenv("OneDrive"), "Documents", ".Renviron"),
+               file.path(Sys.getenv("USERPROFILE"), "Documents", ".Renviron")))
+    if (file.exists(.p)) { readRenviron(.p); break }
 GL <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
 TEMPLATE <- file.path(GL, "02_Template",
   "EvidenceSynthesis_GreyLiterature_AfricanAgricultureAdaptation_UpdatedTemplate_27Aug2026.xlsx")
@@ -35,6 +41,7 @@ TEMPLATE <- file.path(GL, "02_Template",
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..")) else getwd()
 OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "outputs", "extraction"))
+source(file.path(REPO, "R", "shared", "vocab_cache.R"))
 
 args <- commandArgs(trailingOnly = TRUE)
 s1_csv <- if (length(args)) args[1] else {
@@ -88,6 +95,20 @@ DEFS <- list(
 llm_map <- function(field, texts, options, definitions = "") {
   idx <- which(nzchar(texts) & !texts %in% options)   # skip already-valid/empty
   if (!length(idx)) return(texts)
+  # reuse the decision this extract already got, so a rerun is comparable
+  cache <- vocab_cache_load(REPO, field, options)
+  out0 <- texts
+  hit <- vapply(texts[idx], function(t) {
+    k <- vocab_key(t); if (k %in% names(cache)) unname(cache[k]) else ""
+  }, character(1), USE.NAMES = FALSE)
+  if (any(nzchar(hit))) {
+    out0[idx[nzchar(hit)]] <- hit[nzchar(hit)]
+    cat(sprintf("  %-22s %d of %d from the decision cache\n", field,
+                sum(nzchar(hit)), length(idx)))
+    idx <- idx[!nzchar(hit)]
+    if (!length(idx)) return(out0)
+  }
+  texts <- out0
   chat <- chat_openai(model = MODEL, system_prompt = paste(
     "You harmonise verbatim extracts from project evaluations into a fixed",
     "controlled vocabulary. You see only the extract, never the document.",
@@ -118,6 +139,7 @@ llm_map <- function(field, texts, options, definitions = "") {
       ch <- paste0("CANDIDATE: ", texts[idx[j]])   # validation: never off-list
     out[idx[j]] <- ch
   }
+  vocab_cache_save(REPO, field, options, texts[idx], out[idx])
   out
 }
 
@@ -182,6 +204,23 @@ resolve_actors <- function(all_names) {
   uniq <- uniq[nzchar(uniq)]
   map <- setNames(vapply(uniq, match_actor_det, character(1)), uniq)
   pending <- names(map)[is.na(map)]
+  # An organisation the model already recognised stays recognised: without
+  # this, two harmonise runs of the same extraction matched 25 actors and
+  # then 18, so the proposal list churned for no reason. Only positive
+  # matches are remembered, and only while the code is still in the registry.
+  acache <- vocab_cache_load(REPO, "actor_match", "registry")
+  if (length(pending) && length(acache)) {
+    hit <- vapply(pending, function(p) {
+      k <- vocab_key(p)
+      if (k %in% names(acache) && acache[[k]] %in% areg$code) unname(acache[k]) else ""
+    }, character(1), USE.NAMES = FALSE)
+    if (any(nzchar(hit))) {
+      map[pending[nzchar(hit)]] <- hit[nzchar(hit)]
+      cat("  actors                ", sum(nzchar(hit)),
+          "matched from the decision cache\n")
+      pending <- pending[!nzchar(hit)]
+    }
+  }
   if (length(pending)) {                     # one batched LLM disambiguation
     cand_codes <- lapply(pending, function(p) areg$code[fuzzy_candidates(p)])
     lines <- vapply(seq_along(pending), function(i) {
@@ -225,6 +264,10 @@ resolve_actors <- function(all_names) {
         if (cd %in% cand_codes[[j]]) map[pending[j]] <- cd
         else newinfo[[pending[j]]] <- mm     # NEW: keep scale/acronym/type
       }
+      settled <- pending[!is.na(map[pending])]
+      if (length(settled))
+        vocab_cache_save(REPO, "actor_match", "registry", settled,
+                         unname(map[settled]))
     }
   } else newinfo <- list()
   new <- names(map)[is.na(map)]
@@ -302,10 +345,15 @@ unit_syn <- c("ha" = "hectares", "hectare" = "hectares", "hectares" = "hectares"
   "tco2e" = "tCO2e", "mtco2" = "tCO2e", "mtco2e" = "tCO2e", "tons" = "tons",
   "tonnes" = "tons", "t" = "tons", "number" = "quantity", "count" = "quantity",
   "quantity" = "quantity", "countries" = "quantity", "yes/no" = "quantity")
+# the general normaliser drops "%" and "/" entirely, which silently wiped
+# every percentage unit and every "kg/ha", so units get their own one
+unrm <- function(x) trimws(gsub("\\s+", " ", tolower(gsub("[.]+$", "", x))))
 map_unit_det <- function(u) {
-  k <- nrm(u)
-  if (!nzchar(k)) return("")
-  if (k %in% names(unit_syn)) unname(unit_syn[k]) else u
+  k <- unrm(u)
+  if (k %in% names(unit_syn)) return(unname(unit_syn[k]))
+  k2 <- nrm(u)
+  if (!nzchar(k2)) return(if (nzchar(k)) u else "")
+  if (k2 %in% names(unit_syn)) unname(unit_syn[k2]) else u
 }
 map_doctype_det <- function(d) {
   k <- tolower(d)
@@ -398,6 +446,62 @@ for (i in 1:3) {
                  gc_chr(paste0("result", i, "_unit_stated")),
                  h[[paste0("result", i, "_unit")]])
 }
+
+# ------------------------------------------- field rules, applied again -----
+# Session 1 already applies these, but a harmonise of an older run must not
+# publish rows that predate a rule, and the location sheet joins on
+# project_code, which only exists here as the session's code hint.
+source(file.path(REPO, "R", "shared", "clean_fields.R"))
+h$project_code <- gc_chr("project_code_hint")
+h$project_title <- vapply(gc_chr("project_title"), clean_title, character(1),
+                          USE.NAMES = FALSE)
+h$location_count <- vapply(gc_chr("location_count"), clean_count, character(1),
+                           USE.NAMES = FALSE)
+h$GESI_project <- vapply(gc_chr("GESI_project"), clean_gesi, character(1),
+                         USE.NAMES = FALSE)
+for (fld in c("rationale_project", "location_notes", "result_notes",
+              paste0("result", 1:3), paste0("result", 1:3, "_metric"),
+              paste0("result", 1:3, "_unit"), paste0("result", 1:3, "_metric_stated"),
+              paste0("result", 1:3, "_unit_stated"))) {
+  v <- gc_chr(fld); v[is.na(v)] <- ""; h[[fld]] <- v
+}
+rule_notes <- rep("", nrow(h))
+add_note <- function(i, msg) if (nzchar(msg))
+  rule_notes[i] <<- trimws(paste(rule_notes[i], msg, sep = if (nzchar(rule_notes[i])) "; " else ""))
+for (i in seq_len(nrow(h))) {
+  for (fld in c("rationale_project", "location_notes", "result_notes")) {
+    ct <- clean_text(h[[fld]][i]); h[[fld]][i] <- ct$value
+    if (nzchar(ct$note)) add_note(i, paste0(fld, ": ", ct$note))
+  }
+  add_note(i, check_count_vs_notes(h$location_count[i], h$location_notes[i]))
+  # drop anything the shared gate says is not a result, then close the gap so
+  # result1 is always the first real one
+  keep <- list()
+  for (k in 1:3) {
+    v <- h[[paste0("result", k)]][i]
+    u <- h[[paste0("result", k, "_unit")]][i]
+    s <- paste(h[[paste0("result", k, "_metric_stated")]][i],
+               h[[paste0("result", k, "_unit_stated")]][i])
+    if (!nzchar(trimws(v)) && !nzchar(trimws(h[[paste0("result", k, "_metric")]][i]))) next
+    why <- result_reject_reason(v, u, s)
+    if (nzchar(why)) { add_note(i, paste0("result", k, " dropped: ", why)); next }
+    cn <- clean_number(v)
+    if (nzchar(cn$note)) add_note(i, paste0("result", k, ": ", cn$note))
+    keep[[length(keep) + 1L]] <- list(
+      v = if (nzchar(cn$value)) cn$value else v,
+      m = h[[paste0("result", k, "_metric")]][i], u = u)
+  }
+  for (k in 1:3) {
+    got <- if (k <= length(keep)) keep[[k]] else list(v = "", m = "", u = "")
+    h[[paste0("result", k)]][i] <- got$v
+    h[[paste0("result", k, "_metric")]][i] <- got$m
+    h[[paste0("result", k, "_unit")]][i] <- got$u
+  }
+}
+h$result_notes <- trimws(ifelse(nzchar(rule_notes),
+  paste(h$result_notes, rule_notes, sep = ifelse(nzchar(h$result_notes), " | ", "")),
+  h$result_notes))
+cat("field rules: ", sum(nzchar(rule_notes)), " row(s) picked up a note\n", sep = "")
 
 # ------------------------------------------------ template-shaped output ----
 TEMPLATE_COLS <- c("project_code", "project_title", "project_id", "project_lead",
