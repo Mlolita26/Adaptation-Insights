@@ -85,6 +85,26 @@ split_multivalue <- function(d) {
   d2
 }
 rows <- split_multivalue(rows)
+
+# ---- team field rules: whole-digit values, % for percentages -----------------
+source(file.path(REPO, "R", "shared", "clean_fields.R"))
+if (nrow(rows)) {
+  n_fix <- 0
+  for (i in seq_len(nrow(rows))) {
+    if (!nzchar(rows$result_value[i])) next
+    cn <- clean_number(rows$result_value[i])
+    u  <- clean_unit(rows$result_unit_stated[i], rows$result_value[i])
+    if (!identical(cn$value, rows$result_value[i]) ||
+        !identical(u, rows$result_unit_stated[i])) n_fix <- n_fix + 1
+    rows$result_value[i] <- cn$value
+    rows$result_unit_stated[i] <- u
+    if (nzchar(cn$note))
+      rows$row_flags[i] <- trimws(paste(rows$row_flags[i], cn$note, sep = "; "))
+  }
+  rows$row_flags <- sub("^; ", "", rows$row_flags)
+  cat(sprintf("  %-18s %d value/unit cells normalised (whole digits, %%)\n",
+              "field rules", n_fix))
+}
 locs <- if (!is.na(S1_LOCS)) {
   l <- read.csv(S1_LOCS, stringsAsFactors = FALSE, colClasses = "character")
   l[is.na(l)] <- ""; l

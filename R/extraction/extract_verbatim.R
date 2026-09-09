@@ -34,7 +34,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "s1-v1.0"   # v1.0: results-framework pages attached as images to the results call (table-vision)
+PROMPT_VERSION <- "s1-v1.1"   # v1.1: team field rules - no shouty titles, no codes in titles, numeric-only location_count, location_notes always filled, GESI stated when absent, whole-digit results, % for percentages
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))   # for output file names
 stopifnot("OPENAI_API_KEY not set" = nzchar(Sys.getenv("OPENAI_API_KEY")))
 
@@ -59,6 +59,7 @@ if (length(args) == 1 && grepl("\\.csv$", args[1])) {
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..")) else getwd()
 OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "outputs", "extraction"))
+source(file.path(REPO, "R", "shared", "clean_fields.R"))
 RAW_DIR <- file.path(OUT_DIR, "raw")
 dir.create(RAW_DIR, recursive = TRUE, showWarnings = FALSE)
 
@@ -196,7 +197,7 @@ GROUPS <- list(
 identity = list(
   task = "Extract the project identity and timeline, verbatim from the document.",
   type = type_object(
-    project_title  = type_string("The PROJECT's name, word by word as stated - from the cover ('...Project (P123456)'), the data sheet's 'Project Name' row, or the 'evaluation of the project X' phrasing (extract X). Never the REPORT's own name (e.g. 'PPCR Evaluation Report' is a report title, not a project title)."),
+    project_title  = type_string("The PROJECT's name, word by word as stated - from the cover ('...Project (P123456)'), the data sheet's 'Project Name' row, or the 'evaluation of the project X' phrasing (extract X). Never the REPORT's own name (e.g. 'PPCR Evaluation Report' is a report title, not a project title). WRITE IT IN NORMAL SENTENCE CASE even when the cover shouts it in capitals. Keep abbreviations as they are (APPSA, RFS, AFCC2/RI) but NEVER include a project or document code: no 'P149269', no '(GEF ID 9072)', no 'ICR00004643', no trailing '-- Pxxxxxx'."),
     project_id     = type_string("The publisher's project identifier exactly as printed IN THIS DOCUMENT, e.g. 'P149269'. Empty if none printed."),
     project_lead_name = type_string("NAME of the ORGANISATION leading the project, as the document names it (often the implementing agency or publisher, e.g. 'World Bank'). Never an internal department, global practice, division or regional unit of an organisation — name the organisation itself."),
     publication_year = type_string("Year the source document was published (front page)."),
@@ -215,9 +216,9 @@ geography = list(
     "aggregate location lists that appear in different sections."),
   type = type_object(
     scope_stated   = type_string("Exact quote of the document's own statement of geographic scope/coverage (e.g. 'The study's geographical scope was nationwide' or the countries list)."),
-    location_count = type_string("Number of DISTINCT African locations named anywhere as receiving interventions, counted at the MOST PRECISE level the document supports: if specific villages, sites or districts are enumerated, count those (e.g. '20 pilot villages' beats '4 countries'); fall back to counting countries only when nothing finer is enumerated. Aggregate across the whole document; count each location once. Prefix ~ for estimates; 'N/A' if unspecified."),
+    location_count = type_string("A BARE NUMBER and nothing else - digits only, no words, no '~', no 'N/A', no unit. It is the count of DISTINCT African locations named anywhere as receiving interventions, at the MOST PRECISE level the document supports: if specific villages, sites or districts are enumerated, count those (20 pilot villages beats 4 countries); fall back to counting countries only when nothing finer is enumerated. Aggregate across the whole document; count each location once. Leave empty only when the document truly never says."),
     location_count_basis = type_string("One sentence saying exactly what was counted, at which level (villages/districts/countries) and where the lists are (pages), so the count can be checked."),
-    location_notes = type_string("Scope beyond Africa as 'total of X international locations, of which Y African'. Empty if Africa-only."),
+    location_notes = type_string("ALWAYS fill this. A VERBATIM sentence or phrase from the document that says more about where the project worked - the list of countries or sites, the phrase describing the coverage, or the statement of geographic scope. Quote it exactly, do not paraphrase. If the project also worked outside Africa, add the count in the form 'total of X international locations, of which Y African' after the quote."),
     source_pages   = pg())),
 
 rationale = list(
@@ -226,7 +227,7 @@ rationale = list(
     rationale_project = type_string("The context-specific rationale: climatic and non-climatic hazards, stressors, pain points and perceived benefits that justified the project — quoting or closely summarising the document, ONE sentence up to 100 words, capturing ALL stated drivers and their interactions."),
     target_beneficiary_stated = type_string("EXACT quote (verbatim, machine-checkable) of the passage naming who the project targets/benefits."),
     target_beneficiary_page = type_integer("Page of that quote."),
-    GESI_project = type_string("Summary of gender-equality and social-inclusion content as presented (management, design, results, disaggregation, indigenous communities, local knowledge). Empty string if none."),
+    GESI_project = type_string("Summary of gender-equality and social-inclusion content as presented (management, design, results, disaggregation, indigenous communities, local knowledge). If the document says nothing about gender or social inclusion, write exactly: The document does not address gender equality or social inclusion. Never leave this empty."),
     source_pages = pg())),
 
 results = list(
@@ -254,9 +255,9 @@ results = list(
   type = type_object(
     results = type_array(description = "One entry per distinct quantitative actual result.",
       items = type_object(
-        value  = type_string("The NUMBER only, as stated: e.g. '14325', '>1,000', '47', 'N' for a failed yes/no indicator. Never a date, a duration, or a sentence — descriptive words belong in metric_stated."),
+        value  = type_string("The NUMBER in WHOLE DIGITS, nothing else: 14325, not '14,325'; 4700000, not '4.7 million'; 47, not '47 percent'; 15, not '15.00'. No qualifiers ('over', 'approximately'), no units, no ranges, no sentences - put those in metric_stated or scope. 'N' or 'Y' for a yes/no indicator."),
         metric_stated = type_string("What is counted, in the document's own words (the indicator name or phrase, verbatim) — e.g. wording like 'direct project beneficiaries', 'land area under sustainable management', 'women trained'."),
-        unit_stated   = type_string("Counting unit in the document's own words (e.g. 'farmers', 'ha', 'percent'). Empty if none stated."),
+        unit_stated   = type_string("Counting unit in the document's own words (e.g. 'farmers', 'ha', 'households'). For a percentage write the symbol %, not the word. Empty if none stated."),
         indicator_level = type_enum(values = c("PDO/outcome", "intermediate", "narrative"),
           description = "PDO/outcome = development-objective or outcome indicator; intermediate = component/output indicator; narrative = figure in running text only."),
         status = type_enum(values = c("achieved", "partially achieved", "not achieved", "no target stated"),
@@ -591,6 +592,29 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
     y <- suppressWarnings(as.integer(row[[yf]]))
     if (!is.na(y) && (y < 2000 || y > 2025))
       row[[paste0(yf, "_flag")]] <- "OUT OF 2000-2025 RANGE"
+  }
+  # ---- team field rules (9 Sep 2026), applied in code AFTER the catalogue
+  # prefill, because catalogue titles are often shouty and carry the P-code
+  row$project_title_raw <- gv(row$project_title)
+  row$project_title <- clean_title(row$project_title)
+  if (!identical(row$project_title, row$project_title_raw) &&
+      nzchar(row$project_title_raw)) row$title_cleaned <- "yes"
+  lc_raw <- gv(row$location_count)
+  row$location_count <- clean_count(lc_raw)
+  if (nzchar(lc_raw) && !identical(lc_raw, row$location_count))
+    row$location_count_raw <- lc_raw
+  row$location_notes <- clean_location_notes(gv(row$location_notes), gv(row$scope_stated))
+  row$GESI_project <- clean_gesi(gv(row$GESI_project))
+  for (i in 1:3) {
+    vf <- paste0("result", i); uf <- paste0(vf, "_unit_stated")
+    cn <- clean_number(gv(row[[vf]]))
+    if (nzchar(gv(row[[vf]]))) {
+      row[[vf]] <- cn$value
+      row[[uf]] <- clean_unit(gv(row[[uf]]), gv(row[[vf]]))
+      if (nzchar(cn$note))
+        row$result_notes <- trimws(paste(gv(row$result_notes),
+                                         paste0(vf, ": ", cn$note), sep = " | "))
+    }
   }
   ver <- tryCatch(verify_doc(row, raw, doc$pages, basename(pdf_path)),
                   error = function(e) { warning("verify failed: ", conditionMessage(e)); NULL })
