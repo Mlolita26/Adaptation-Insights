@@ -113,13 +113,19 @@ short <- nchar(actor_nrm(all_rows$synonym)) < 3
 reject(all_rows[short, ], "under 3 characters - not an identifier")
 all_rows <- all_rows[!short, , drop = FALSE]
 
-# 3. collides with a different institution's own name or acronym
-own <- unique(c(reg$nname, reg$nacro[nchar(reg$nacro) >= 3]))
-owner <- c(setNames(reg$code, reg$nname),
-           setNames(reg$code, reg$nacro)[nchar(reg$nacro) >= 3])
+# 3. collides with a different institution's own name or acronym.
+# Every code that claims the form, not just the first one found: ULB is the
+# registry acronym of BOTH the Free University of Brussels and the Free
+# University of Burkina, and looking up only the first claimant let a trusted
+# synonym for Brussels quietly win an argument the registry has not settled.
+own_code <- c(split(reg$code, reg$nname),
+              split(reg$code, reg$nacro)[nchar(names(split(reg$code, reg$nacro))) >= 3])
 f <- actor_nrm(all_rows$synonym)
-clash_other <- f %in% own & owner[f] != all_rows$actor_code & !is.na(owner[f])
-reject(all_rows[clash_other, ], "is another institution's own name or acronym")
+clash_other <- vapply(seq_along(f), function(i) {
+  cds <- own_code[[f[i]]]
+  !is.null(cds) && any(cds != all_rows$actor_code[i])
+}, logical(1))
+reject(all_rows[clash_other, ], "a different institution already owns this name or acronym")
 all_rows <- all_rows[!clash_other, , drop = FALSE]
 
 # 2. claimed by more than one code -> may still help as a candidate, but may

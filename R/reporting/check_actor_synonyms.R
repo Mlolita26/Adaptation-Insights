@@ -43,16 +43,22 @@ cat("registry", nrow(reg), "actors | synonyms",
 ## ---- 1. no form may point at two institutions ------------------------------
 # The whole guarantee in one test. A form that two codes claim cannot be used
 # to decide anything, so if one is in the trusted tier the file is wrong.
+# Compared against EVERY form in the index, not only against other synonyms.
+# A trusted synonym that happens to equal a registry acronym another code also
+# carries would otherwise win silently - which is what "ULB" did for the Free
+# University of Brussels while the Free University of Burkina carries the same
+# acronym.
 trusted <- IDX$keys[IDX$keys$tier == "trusted", , drop = FALSE]
 clash <- data.frame()
 if (nrow(trusted)) {
-  per <- tapply(trusted$code, trusted$form, function(x) length(unique(x)))
-  bad <- names(per)[per > 1]
+  all_codes <- split(IDX$keys$code, IDX$keys$form)
+  bad <- unique(trusted$form[vapply(trusted$form, function(f)
+    length(unique(all_codes[[f]])) > 1, logical(1))])
   if (length(bad)) {
     clash <- do.call(rbind, lapply(bad, function(f) {
-      k <- trusted[trusted$form == f, ]
+      k <- IDX$keys[IDX$keys$form == f, ]
       data.frame(form = f, codes = paste(unique(k$code), collapse = " / "),
-                 synonyms = paste(unique(k$via), collapse = " / "),
+                 synonyms = paste(unique(k$via[nzchar(k$via)]), collapse = " / "),
                  stringsAsFactors = FALSE)
     }))
   }
