@@ -287,11 +287,25 @@ resolve_actors <- function(all_names) {
     # automatically (no re-extraction needed).
     prefix_of <- function(code) gsub("[0-9]+$", "", code)
     next_code <- local({
-      taken <- table(prefix_of(areg$code))
+      # Codes handed out in earlier runs must be counted too, or every run
+      # restarts at registry-max + 1 and issues the same code to a different
+      # organisation. The location side already does this; this side did not.
+      prev <- unlist(lapply(
+        c(file.path(OUT_DIR, "proposed_new_actors.csv"),
+          file.path(REVIEW_DIR, "proposed_new_actors.csv")), function(f) {
+          if (!file.exists(f)) return(character(0))
+          d <- tryCatch(read.csv(f, stringsAsFactors = FALSE), error = function(e) NULL)
+          if (is.null(d) || !"suggested_code" %in% names(d)) character(0)
+          else as.character(d$suggested_code)
+        }))
+      prev <- prev[nzchar(prev) & !is.na(prev)]
+      known <- c(areg$code, prev)
+      taken <- table(prefix_of(known))
       maxn  <- vapply(names(taken), function(p) {
         suppressWarnings(max(as.integer(gsub("^[A-Za-z]+", "",
-          areg$code[prefix_of(areg$code) == p])), na.rm = TRUE))
+          known[prefix_of(known) == p])), na.rm = TRUE))
       }, numeric(1))
+      maxn[!is.finite(maxn)] <- 0
       counter <- as.list(maxn)
       function(prefix) {
         n <- if (!is.null(counter[[prefix]])) counter[[prefix]] + 1 else 1
@@ -299,13 +313,50 @@ resolve_actors <- function(all_names) {
         paste0(prefix, n)
       }
     })
+    # The old version promised to reuse the registry's prefix and then just
+    # uppercased the first three letters, so Malawi got MAL where the registry
+    # uses MWI. Ask the registry instead. For each prefix, which country do its
+    # own actor names mention most? BF says Burkina Faso 54 times, GHA says
+    # Ghana 35, ZAM says Zambia 25. Invert that, and a country whose name two
+    # prefixes claim (NIG and NER are both Niger, CG and COG both Congo, ZA and
+    # ZAF both South Africa) gets no code rather than a guessed one.
+    PREFIX_COUNTRY <- local({
+      pad <- paste0(" ", nrm(areg$name), " ")
+      pre <- prefix_of(areg$code)
+      words <- unlist(strsplit(pad, " ", fixed = TRUE))
+      words <- unique(words[nchar(words) >= 4])
+      out <- character(0)
+      for (p in setdiff(unique(pre), c("GLO", "CON", "REG"))) {
+        k <- which(pre == p)
+        if (length(k) < 2) next
+        n <- vapply(words, function(w)
+          sum(grepl(paste0(" ", w, " "), pad[k], fixed = TRUE)), integer(1))
+        # a country name is mentioned by many of a prefix's own actors and
+        # hardly at all by the rest of the registry
+        share_out <- vapply(words, function(w)
+          sum(grepl(paste0(" ", w, " "), pad[-k], fixed = TRUE)), integer(1))
+        score <- n / pmax(1, n + share_out)
+        cand <- which(n >= 2 & score >= 0.8)
+        if (!length(cand)) next
+        out[p] <- names(sort(n[cand], decreasing = TRUE))[1]
+      }
+      out
+    })
     country_prefix <- function(country) {
-      # reuse whatever prefix the registry already uses for that country if
-      # any national actor exists; else first 3 letters uppercased
       k <- nrm(country)
       if (!nzchar(k)) return("")
-      toupper(substr(gsub(" ", "", k), 1, 3))
+      # the inferred table is keyed on single words, so "Burkina Faso" is
+      # looked up whole and then by its first distinctive word
+      keys <- unique(c(k, Filter(function(w) nchar(w) >= 4,
+                                 strsplit(k, " ", fixed = TRUE)[[1]])))
+      for (kk in keys) {
+        owners <- names(PREFIX_COUNTRY)[PREFIX_COUNTRY == kk]
+        if (length(owners) == 1) return(owners)
+        if (length(owners) > 1) return("")      # two prefixes claim it
+      }
+      ""
     }
+
     rows <- lapply(new, function(nm) {
       inf <- newinfo[[nm]]
       scale <- if (!is.null(inf)) as.character(inf$scale) else "unknown"
@@ -317,7 +368,9 @@ resolve_actors <- function(all_names) {
         suggested_country = if (!is.null(inf)) as.character(inf$country) else "",
         suggested_code = if (nzchar(pre)) next_code(pre) else "",
         suggested_actor_type = if (!is.null(inf)) as.character(inf$actor_type) else "",
-        status = "REVIEW: confirm/edit, add row to actor_codes, then re-run harmonize",
+        status = if (nzchar(pre))
+          "REVIEW: confirm/edit, add row to actor_codes, then re-run harmonize"
+        else "REVIEW: no code suggested - the country prefix is ambiguous or unknown; pick one, add the row, re-run harmonize",
         stringsAsFactors = FALSE)
     })
     nn <- do.call(rbind, rows)
