@@ -41,10 +41,37 @@ sheets <- list(
 missing <- names(sheets)[!file.exists(unlist(sheets))]
 if (length(missing)) stop("missing reference file(s): ", paste(missing, collapse = ", "))
 
+## The reference CSVs mark acceptable alternate answers with "||" - "either
+## of these scores as correct". That is a scoring device, NOT the template's
+## multi-value separator, which is a semicolon ("GLO18; CON3"). Publishing
+## "81 || 95" in a cell invites somebody to read it as data, so the workbook
+## shows the first answer in the cell and lists the alternates on their own
+## sheet. The CSVs the scorer reads keep the marker.
+ALT <- character(0)
+split_alternates <- function(d, sheet) {
+  for (cn in names(d)) {
+    k <- which(grepl("||", d[[cn]], fixed = TRUE))
+    for (i in k) {
+      parts <- trimws(strsplit(d[[cn]][i], "||", fixed = TRUE)[[1]])
+      # an empty side is itself an accepted answer ("blank or 119444"), so
+      # empties are kept rather than dropped
+      if (length(parts) < 2) next
+      shown <- function(x) if (nzchar(x)) x else "(blank)"
+      id <- if ("row_id" %in% names(d)) d$row_id[i] else
+            if ("project_code" %in% names(d)) d$project_code[i] else as.character(i)
+      ALT <<- c(ALT, paste(sheet, id, cn, shown(parts[1]),
+                           paste(vapply(parts[-1], shown, character(1)),
+                                 collapse = " ; "), sep = "\t"))
+      d[[cn]][i] <- parts[1]
+    }
+  }
+  d
+}
+
 wb <- createWorkbook()
 hdr <- createStyle(textDecoration = "bold", fgFill = "#EEEEEE", border = "bottom")
 for (nm in names(sheets)) {
-  d <- rd(sheets[[nm]])
+  d <- split_alternates(rd(sheets[[nm]]), nm)
   addWorksheet(wb, nm)
   writeData(wb, nm, d, headerStyle = hdr, withFilter = TRUE)
   freezePane(wb, nm, firstRow = TRUE)
@@ -53,14 +80,28 @@ for (nm in names(sheets)) {
   cat(sprintf("  %-28s %4d rows  (%s)\n", nm, nrow(d), basename(sheets[[nm]])))
 }
 
+if (length(ALT)) {
+  a <- do.call(rbind, lapply(strsplit(ALT, "\t", fixed = TRUE), function(p)
+    data.frame(sheet = p[1], row = p[2], field = p[3], answer_shown = p[4],
+               also_accepted = p[5], stringsAsFactors = FALSE)))
+  addWorksheet(wb, "accepted_alternatives")
+  writeData(wb, "accepted_alternatives", a, headerStyle = hdr, withFilter = TRUE)
+  freezePane(wb, "accepted_alternatives", firstRow = TRUE)
+  setColWidths(wb, "accepted_alternatives", cols = 1:5, widths = c(28, 10, 24, 60, 60))
+  cat(sprintf("  %-28s %4d cells had more than one acceptable answer\n",
+              "accepted_alternatives", nrow(a)))
+}
+
 about <- data.frame(
   sheet = c("reading_reference_locations", "lucy_gold_locations",
-            "lucy_gold_general", "", "generated", "regenerate with", "caution"),
+            "lucy_gold_general", "accepted_alternatives", "separators",
+            "generated", "regenerate with", "caution"),
   what = c(
     "The ten gold PDFs read end to end and extracted by hand-equivalent reading, not by the pipeline. 308 location rows. This is the human-analog benchmark: it shows what a careful reader finds, which is what the pipeline is trying to match. qc_flag marks rows the reader was unsure about.",
     "Lucy's manual extraction, working database v02. 60 location rows. The original gold standard.",
     "Lucy's manual extraction of the general sheet, v02. One row per project.",
-    "",
+    "Cells where more than one answer is accepted as correct (a project's short and long title, a figure quoted two ways). The sheets above show the first answer; this lists the others. The scorer counts any of them as a match.",
+    "The template's separator for several values in one cell is a SEMICOLON, as the readme sheet says for funder, implementor and location ('GLO18; CON3; FRA33'). The pipeline follows it. The '||' marker in the underlying reference CSVs means 'either answer is acceptable', not 'both values apply', which is why it is split out here rather than shown in a cell.",
     format(Sys.time(), "%Y-%m-%d %H:%M"),
     "Rscript 05_Pipeline/R/reporting/export_reference.R",
     "Neither reference is truth. Both have verified errors, listed in scores/location_extraction_comparison_2026-09-09.md (sections C and D). Read that before treating a disagreement as a pipeline mistake."),
