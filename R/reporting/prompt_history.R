@@ -1,13 +1,17 @@
 ##############################################################################
-# prompt_history.R - how the extraction prompts got to where they are.
+# prompt_history.R - every version of the extraction prompts, with the actual
+# text, pulled out of git.
 #
-# Two sheets, nothing else: a read me, and one row per prompt version saying
-# what was going wrong, what changed, whether the fix went in the prompt or in
-# code, and what it did to the score.
+# Two sheets, nothing else:
+#   read me         how to read it
+#   prompt history  one row per version per prompt block: what was going
+#                   wrong, what changed, whether the fix went in the prompt or
+#                   in code, and the prompt itself
 #
-# The history is curated, not computed: it comes from the commit log and the
-# score files, written down here so it survives. Add a row whenever a version
-# number changes.
+# The prompt text is not retyped here. It is read out of the scripts as they
+# stood at the commit that introduced each version, so it cannot drift from
+# what actually ran. The notes on what went wrong are curated, from the commit
+# log and the score files.
 #
 #   Rscript R/reporting/prompt_history.R
 ##############################################################################
@@ -18,175 +22,227 @@ full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
 source(file.path(REPO, "R", "shared", "paths.R"))
 
-H <- function(...) data.frame(..., stringsAsFactors = FALSE)
+## ---- read the prompts out of git -------------------------------------------
+git <- function(...) {
+  o <- suppressWarnings(system2("git", c("-C", shQuote(REPO), ...),
+                                stdout = TRUE, stderr = FALSE))
+  if (is.null(o)) character(0) else o
+}
 
-hist <- rbind(
-H(version = "v0.2-qc1", script = "extract_general.R", date = "2026-09-08",
-  sheet = "general",
-  problem = "First extraction read against the gold standard by hand. The mistakes were systematic, not random: wrong years, report title used as project title, amounts in millions rather than full digits.",
-  change  = "Rules written straight from the audit findings, one per observed mistake.",
-  fixed_in = "prompt",
-  effect  = "first measurable baseline"),
+# text from the "(" at or after `from` to its matching ")", ignoring quotes
+balanced <- function(s, from) {
+  i <- regexpr("(", substr(s, from, nchar(s)), fixed = TRUE)[1]
+  if (i < 0) return("")
+  i <- from + i - 1
+  ch <- strsplit(substr(s, i, nchar(s)), "")[[1]]
+  depth <- 0L; inq <- ""; esc <- FALSE
+  for (k in seq_along(ch)) {
+    c <- ch[k]
+    if (esc) { esc <- FALSE
+    } else if (c == "\\") { esc <- TRUE
+    } else if (nzchar(inq)) { if (c == inq) inq <- ""
+    } else if (c == '"' || c == "'") { inq <- c
+    } else if (c == "(") { depth <- depth + 1L
+    } else if (c == ")") { depth <- depth - 1L
+      if (depth == 0L) return(paste(ch[seq_len(k)], collapse = "")) }
+  }
+  paste(ch, collapse = "")
+}
 
-H(version = "s1-v0.5", script = "extract_verbatim.R", date = "2026-09-08",
-  sheet = "general",
-  problem = "Long documents were cut at a character limit, so facts in the middle were never seen. A project start year sat on page 191 of a 294 page evaluation. Short acronyms also matched the wrong organisation.",
-  change  = "Section maps for World Bank ICRs and GEF evaluations: the document is cut to the sections that hold template fields, keeping the original page numbers so citations stay checkable. Survey annexes excluded. Name the organisation, never its department.",
-  fixed_in = "prompt and code",
-  effect  = "mid document facts recoverable"),
+# the literal strings inside an R paste(...) call, joined the way paste joins
+strings_in <- function(block) {
+  ch <- strsplit(block, "")[[1]]; out <- character(0)
+  i <- 1L; n <- length(ch)
+  while (i <= n) {
+    if (ch[i] == '"' || ch[i] == "'") {
+      q <- ch[i]; j <- i + 1L; buf <- character(0); esc <- FALSE
+      while (j <= n) {
+        d <- ch[j]
+        if (esc) { buf <- c(buf, d); esc <- FALSE }
+        else if (d == "\\") esc <- TRUE
+        else if (d == q) break
+        else buf <- c(buf, d)
+        j <- j + 1L
+      }
+      out <- c(out, paste(buf, collapse = "")); i <- j + 1L
+    } else i <- i + 1L
+  }
+  paste(out, collapse = " ")
+}
 
-H(version = "s1-v0.6", script = "extract_verbatim.R", date = "2026-09-08",
-  sheet = "general",
-  problem = "Years came from approval or extension dates. Amounts were written as 1.71 million. Financing table row labels such as Borrower or Local Beneficiaries were being read as funders.",
-  change  = "Take years from the stated implementation period. Amounts in full digits. Row labels are not organisations.",
-  fixed_in = "prompt",
-  effect  = "round 2: 78% field agreement"),
+prompt_blocks <- function(src) {
+  res <- list()
+  m <- regexpr("SYSTEM[ ]*<-[ ]*", src)
+  if (m > 0) {
+    after <- m + attr(m, "match.length")
+    if (substr(src, after, after + 4) == "paste")
+      res[["system prompt"]] <- strings_in(balanced(src, after))
+    else {
+      q <- regmatches(substr(src, after, after + 4000),
+                      regexpr('^[ ]*"([^"\\\\]|\\\\.)*"', substr(src, after, after + 4000)))
+      if (length(q)) res[["system prompt"]] <- strings_in(q)
+    }
+  }
+  for (g in gregexpr("\n[ ]{0,4}[a-z_]+[ ]*=[ ]*list\\(", src)[[1]]) {
+    if (g < 0) next
+    nm <- sub("^\n[ ]*([a-z_]+).*$", "\\1",
+              regmatches(src, regexpr("\n[ ]{0,4}[a-z_]+[ ]*=[ ]*list\\(",
+                                      substr(src, g, nchar(src))))[1])
+    nm <- sub("^\n[ ]*", "", sub("[ ]*=.*$", "", substr(src, g + 1, g + 40)))
+    blk <- balanced(src, g)
+    t <- regexpr("task[ ]*=[ ]*", blk)
+    if (t < 0) next
+    rest <- substr(blk, t + attr(t, "match.length"), nchar(blk))
+    txt <- if (grepl("^[ ]*paste", rest)) strings_in(balanced(rest, 1)) else
+      strings_in(regmatches(rest, regexpr('^[ ]*"([^"\\\\]|\\\\.)*"', rest)))
+    if (length(txt) && nzchar(txt)) res[[paste(nm, "task")]] <- txt
+  }
+  k <- 0
+  for (h in gregexpr("system_prompt[ ]*=[ ]*paste\\(", src)[[1]]) {
+    if (h < 0) next
+    k <- k + 1
+    res[[paste0("coding instruction ", k)]] <- strings_in(balanced(src, h))
+  }
+  res
+}
 
-H(version = "s1-v0.7", script = "extract_verbatim.R", date = "2026-09-09",
-  sheet = "general",
-  problem = "Years still wrong on some projects. Co-implementing agencies named in the body were missed because the data sheet names only one. Figures from the predecessor programme were being pulled in. Account numbers such as TF-17015 were used as the report id.",
-  change  = "An explicit implementation_period field with the years derived in R rather than asked of the model. Body co-implementors. Predecessor figures excluded. An account number is never an id.",
-  fixed_in = "prompt and code",
-  effect  = "round 5: 88% on the corrected gold"),
+FILES <- c("R/extraction/extract_verbatim.R", "R/extract_verbatim.R",
+           "R/extraction/extract_locations.R", "R/extract_locations.R",
+           "R/extraction/extract_general.R",
+           "R/extraction/harmonize.R", "R/extraction/harmonize_locations.R")
 
-H(version = "s1-v0.8", script = "extract_verbatim.R", date = "2026-09-09",
-  sheet = "general",
-  problem = "Things that are not results were filling the three result slots: project durations, dates, numbers of meetings and reports, disbursement rates.",
-  change  = "A results typology with worked examples of what counts, plus an explicit list of what never counts. Gates in code so a rejected value can never reach a headline slot.",
-  fixed_in = "prompt and code",
-  effect  = "result slots stop filling with admin counts"),
+rows <- list(); seen <- character(0)
+for (path in FILES) {
+  log <- git("log", "--reverse", "--date=short", "--pretty=format:%H|%ad", "--", path)
+  for (line in log) {
+    if (!grepl("\\|", line)) next
+    sha <- sub("\\|.*$", "", line); dt <- sub("^.*\\|", "", line)
+    src <- paste(git("show", paste0(sha, ":", path)), collapse = "\n")
+    if (!nzchar(trimws(src))) next
+    v <- regmatches(src, regexpr('(PROMPT_VERSION|HARM_VERSION)[ ]*<-[ ]*"[^"]+"', src))
+    if (!length(v)) next
+    # the value between the quotes; a greedy ^.*" eats the whole match
+    ver <- sub('^[^"]*"([^"]+)".*$', "\\1", v)
+    script <- basename(path)
+    key <- paste(script, ver)
+    if (key %in% seen) next
+    seen <- c(seen, key)
+    for (nm in names(prompt_blocks(src))) {
+      txt <- trimws(gsub("[[:space:]]+", " ", prompt_blocks(src)[[nm]]))
+      if (nchar(txt) < 20) next
+      rows[[length(rows) + 1L]] <- data.frame(
+        version = ver, script = script, date = dt, component = nm,
+        chars = nchar(txt), prompt_text = txt, stringsAsFactors = FALSE)
+    }
+  }
+}
+P <- do.call(rbind, rows)
+stopifnot("no prompts found in git history" = !is.null(P) && nrow(P) > 0)
 
-H(version = "s1-v0.9", script = "extract_verbatim.R", date = "2026-09-09",
-  sheet = "general",
-  problem = "Budget and disbursed were being confused, and French documents were read badly on finance. The report's own title was still sometimes taken as the project title.",
-  change  = "Finance typology: financing plan rows, planned against spent, and the French terms for disbursement. Anti examples for identity fields.",
-  fixed_in = "prompt",
-  effect  = "finance fields stabilise"),
+## ---- did this block change from the version before it? ----------------------
+ord <- c("v0.2-qc1", "s1-v0.3", "s1-v0.4", "s1-v0.5", "s1-v0.6", "s1-v0.7",
+         "s1-v0.8", "s1-v0.9", "s1-v1.0", "s1-v1.1",
+         "loc-v1.0", "loc-v1.1", "loc-v1.2", "loc-v1.3", "loc-v1.4",
+         "s2-v0.3", "loc-s2-v1.0")
+P$rank <- match(P$version, ord); P$rank[is.na(P$rank)] <- 99
+P <- P[order(P$script, P$component, P$rank), ]
+P$changed <- "first version"
+for (i in seq_len(nrow(P))) {
+  if (i == 1) next
+  same <- P$script[i] == P$script[i - 1] && P$component[i] == P$component[i - 1]
+  if (!same) { P$changed[i] <- "first version"; next }
+  P$changed[i] <- if (identical(P$prompt_text[i], P$prompt_text[i - 1]))
+    "unchanged" else "CHANGED"
+}
 
-H(version = "s1-v1.0", script = "extract_verbatim.R", date = "2026-09-09",
-  sheet = "general",
-  problem = "Indicator tables scramble when a PDF is turned into text, so results framework annexes were unreadable exactly where the numbers live.",
-  change  = "Those pages are attached to the results call as images as well as text, capped at ten pages.",
-  fixed_in = "prompt and code",
-  effect  = "results framework values become readable"),
+## ---- what was going wrong, per version (curated) ---------------------------
+why <- data.frame(rbind(
+ c("v0.2-qc1","Rules written from the first hand audit of the gold standard: wrong years, report title used as project title, amounts in millions.","prompt"),
+ c("s1-v0.3","First working two-session extraction.","prompt"),
+ c("s1-v0.4","Early tuning against the gold standard.","prompt"),
+ c("s1-v0.5","Long documents were cut at a character limit, so facts in the middle were never seen. A start year sat on page 191 of a 294 page evaluation. Short acronyms matched the wrong organisation.","prompt and code"),
+ c("s1-v0.6","Years came from approval or extension dates. Amounts written as 1.71 million. Financing table row labels read as funders.","prompt"),
+ c("s1-v0.7","Years still wrong on some projects. Co-implementing agencies named in the body missed. Predecessor programme figures pulled in. Account numbers used as the report id.","prompt and code"),
+ c("s1-v0.8","Durations, meeting counts and disbursement rates were filling the three result slots.","prompt and code"),
+ c("s1-v0.9","Budget and disbursed confused. French finance sections read badly. Report title still sometimes taken as project title.","prompt"),
+ c("s1-v1.0","Indicator tables scramble when a PDF is turned into text, exactly where the numbers live.","prompt and code"),
+ c("s1-v1.1","Team review: capitals in titles, document codes in titles, location count as a phrase, gender field left empty, decimals in results, the word percentage instead of a sign.","code"),
+ c("loc-v1.0","First location specific extraction, one row per location, intervention and result.","prompt"),
+ c("loc-v1.1","The enumeration step found 228 locations but the row step kept 74.","prompt and code"),
+ c("loc-v1.2","A verified list of errors from reading the ten documents three ways.","prompt and code"),
+ c("loc-v1.3","We had banned workshop counts as results, which contradicted the template's own example unit. Real results were being discarded.","prompt and code"),
+ c("loc-v1.4","Beneficiary was often the delivering ministry rather than the people. Rationale was reworded rather than quoted. Coverage counts and rating scales recorded as results.","prompt and code"),
+ c("s2-v0.3","The coding step could return a value that is not on the template list, and had to pick an option even when the extract stated nothing.","prompt and code"),
+ c("loc-s2-v1.0","Location codes, subsector, beneficiary and result level all needed assigning from verbatim text without inventing codes.","code")),
+ stringsAsFactors = FALSE)
+names(why) <- c("version", "what_was_going_wrong", "fixed_in")
+effect <- c("v0.2-qc1"="first measurable baseline", "s1-v0.6"="round 2: 78% field agreement",
+  "s1-v0.7"="round 5: 88% on the corrected gold", "s1-v1.1"="title mismatches 4 to 1",
+  "loc-v1.0"="44% of gold locations, 27 of 60 rows", "loc-v1.1"="the biggest single gain in coverage",
+  "loc-v1.3"="82% of gold locations, 47 of 60 rows", "loc-v1.4"="84% of gold locations, 50 of 60 rows",
+  "s2-v0.3"="32 cells correctly left empty on the gold set")
+P <- merge(P, why, by = "version", all.x = TRUE)
+P$measured_effect <- unname(effect[P$version]); P$measured_effect[is.na(P$measured_effect)] <- ""
+P <- P[order(P$script, P$component, P$rank), ]
 
-H(version = "s1-v1.1", script = "extract_verbatim.R", date = "2026-09-09",
-  sheet = "general",
-  problem = "Team review of the output: titles in capitals, document codes inside titles, location count written as a phrase, gender field left empty rather than saying nothing was found, results with decimals, the word percentage instead of a sign.",
-  change  = "Field rules written once in shared code and applied twice, at extraction and again at coding, so re-running an old extraction picks up rules written since.",
-  fixed_in = "code",
-  effect  = "title mismatches 4 to 1"),
-
-H(version = "loc-v1.0", script = "extract_locations.R", date = "2026-09-09",
-  sheet = "location",
-  problem = "First location specific extraction. One row per location, intervention and result.",
-  change  = "New script, same two session design.",
-  fixed_in = "prompt",
-  effect  = "44% of the gold locations, 27 of 60 rows"),
-
-H(version = "loc-v1.1", script = "extract_locations.R", date = "2026-09-09",
-  sheet = "location",
-  problem = "The enumeration step found 228 locations but the row step kept only 74. Most of what was found was being thrown away.",
-  change  = "The list of locations found is fed into the row prompt. Scorer given containment matching so a place named two ways is not counted as a miss.",
-  fixed_in = "prompt and code",
-  effect  = "the single biggest gain in coverage"),
-
-H(version = "loc-v1.2", script = "extract_locations.R", date = "2026-09-09",
-  sheet = "location",
-  problem = "A verified list of errors from reading the ten documents three ways: our own read, the gold, and the pipeline.",
-  change  = "Each error on the list addressed individually.",
-  fixed_in = "prompt and code",
-  effect  = "errors closed one by one"),
-
-H(version = "loc-v1.3", script = "extract_locations.R", date = "2026-09-09",
-  sheet = "location",
-  problem = "We had banned workshop and training counts as results, which contradicted the template's own example unit, training workshops held. Real results were being discarded.",
-  change  = "Activity deliverables are location level results. Rule corrected and the wrongly removed reference values restored.",
-  fixed_in = "prompt and code",
-  effect  = "82% of gold locations, 47 of 60 rows"),
-
-H(version = "loc-v1.4", script = "extract_locations.R", date = "2026-09-09",
-  sheet = "location",
-  problem = "Beneficiary was often the ministry that delivered the work rather than the people who benefited. Rationale was reworded to fit the column instead of quoted. Coverage counts such as 20 pilot villages targeted, and rating scales, were being recorded as results.",
-  change  = "Beneficiary must be the ultimate group and must be evidenced, with the document's own statement captured. Rationale must be the document's own words and is fact checked. One shared gate rejects coverage counts and ratings.",
-  fixed_in = "prompt and code",
-  effect  = "84% of gold locations, 50 of 60 rows"),
-
-H(version = "s2-v0.3", script = "harmonize.R", date = "2026-09-08",
-  sheet = "coding",
-  problem = "The coding step could return a value that is not on the template's list.",
-  change  = "Every value validated in code. Anything off the list becomes a candidate and goes to a review log instead of into the data.",
-  fixed_in = "code",
-  effect  = "no off list value can reach the sheet"),
-
-H(version = "s2-v0.3 (rules v2)", script = "harmonize.R", date = "2026-09-14",
-  sheet = "coding",
-  problem = "The model had to choose an option even when the extract stated nothing. A results framework line naming nobody became a beneficiary.",
-  change  = "The coding step may answer NOT STATED and leave the cell empty. The answer is recorded so a re-run does not pay to ask again.",
-  fixed_in = "prompt and code",
-  effect  = "32 cells correctly left empty on the gold set"),
-
-H(version = "loc-s2-v1.0", script = "harmonize_locations.R", date = "2026-09-09",
-  sheet = "coding",
-  problem = "Location codes, subsector, beneficiary and result level all needed assigning from verbatim text.",
-  change  = "Deterministic keyword pass first, then one batched call per field for what is left. Unmatched places become proposals with a suggested code.",
-  fixed_in = "code",
-  effect  = "codes never invented by the model")
-)
-
-names(hist) <- c("Version", "Script", "Date", "Sheet",
-                 "What was going wrong", "What changed",
-                 "Fixed in", "Measured effect")
-
-readme <- data.frame(
-  ` ` = c(
-  "WHAT THIS IS",
-  "How the extraction prompts got to where they are, one row per version.",
-  "",
-  "HOW TO READ IT",
-  "Each row starts with something that was actually wrong in the output, usually",
-  "found by comparing a run against the gold standard. The next columns say what",
-  "we changed and whether the fix belonged in the prompt or in the code.",
-  "",
-  "WHY 'FIXED IN' MATTERS",
-  "A fix in code is deterministic and free, and it applies to old runs when they",
-  "are re-processed. A fix in the prompt costs a re-run of the documents. We move",
-  "a rule into code whenever the answer is mechanical.",
-  "",
-  "THE THIRD KIND OF FIX",
-  "Some disagreements could not be fixed either way, because the template itself",
-  "does not say what the right answer is. Those became questions for the template",
-  "owner rather than prompt changes. They are tracked in QC_Common_Mistakes.docx,",
-  "not here.",
-  "",
-  "KEEPING IT CURRENT",
-  "Add a row whenever a version number changes in one of the extraction scripts.",
-  "Current versions: s1-v1.1 (general), loc-v1.4 (location), s2-v0.3 and",
-  "loc-s2-v1.0 (coding).",
-  "",
-  "Rebuilt with: Rscript 05_Pipeline/R/reporting/prompt_history.R"),
+out <- data.frame(
+  Version = P$version, Script = P$script, Date = P$date, `Prompt block` = P$component,
+  `Changed from previous` = P$changed,
+  `What was going wrong` = P$what_was_going_wrong,
+  `Fixed in` = P$fixed_in, `Measured effect` = P$measured_effect,
+  Characters = P$chars, `The prompt itself` = P$prompt_text,
   check.names = FALSE, stringsAsFactors = FALSE)
 
+## ---- the workbook -----------------------------------------------------------
+readme <- data.frame(` ` = c(
+ "WHAT THIS IS",
+ "Every version of the extraction prompts, with the actual text, and what each",
+ "change was trying to fix.",
+ "",
+ "HOW TO READ IT",
+ "One row per version per prompt block. A document is read by a system prompt",
+ "plus one instruction per group of fields, so a version has several rows.",
+ "Sort by 'Prompt block' to read one instruction down the versions and see how",
+ "it grew. The 'Changed from previous' column marks where the text actually",
+ "moved, so you can skip the versions where a block stayed the same.",
+ "",
+ "WHERE THE TEXT COMES FROM",
+ "It is read out of the scripts as they stood at the commit that introduced each",
+ "version, not retyped, so it cannot drift from what really ran.",
+ "",
+ "WHY 'FIXED IN' MATTERS",
+ "A fix in code is deterministic and free, and it applies to old runs when they",
+ "are reprocessed. A fix in the prompt costs a rerun of the documents. We move a",
+ "rule into code whenever the answer is mechanical, which is why the later rows",
+ "say code.",
+ "",
+ "THE THIRD KIND OF FIX",
+ "Some disagreements could not be fixed either way, because the template does",
+ "not say what the right answer is. Those became questions for the template",
+ "owner. They are tracked in QC_Common_Mistakes.docx, not here.",
+ "",
+ "Rebuilt with: Rscript 05_Pipeline/R/reporting/prompt_history.R"),
+ check.names = FALSE, stringsAsFactors = FALSE)
+
 wb <- createWorkbook()
-hdr <- createStyle(textDecoration = "bold", fgFill = "#DCE9F5", border = "bottom",
-                   valign = "top")
+hdr  <- createStyle(textDecoration = "bold", fgFill = "#DCE9F5", border = "bottom", valign = "top")
 wrap <- createStyle(wrapText = TRUE, valign = "top")
-boldc <- createStyle(textDecoration = "bold", valign = "top")
+boldc<- createStyle(textDecoration = "bold", valign = "top")
+small<- createStyle(fontSize = 9, wrapText = TRUE, valign = "top")
 
 addWorksheet(wb, "read me")
 writeData(wb, "read me", readme)
 setColWidths(wb, "read me", 1, 92)
-addStyle(wb, "read me", boldc, rows = c(2, 5, 10, 15, 21), cols = 1, gridExpand = TRUE)
+addStyle(wb, "read me", boldc, rows = c(2, 6, 13, 17, 23), cols = 1, gridExpand = TRUE)
 
 addWorksheet(wb, "prompt history")
-writeData(wb, "prompt history", hist, headerStyle = hdr, withFilter = TRUE)
-setColWidths(wb, "prompt history", 1:8, c(18, 22, 12, 10, 62, 62, 16, 30))
-addStyle(wb, "prompt history", wrap, rows = 2:(nrow(hist) + 1), cols = 1:8,
-         gridExpand = TRUE)
-addStyle(wb, "prompt history", boldc, rows = 2:(nrow(hist) + 1), cols = 1,
-         gridExpand = TRUE)
+writeData(wb, "prompt history", out, headerStyle = hdr, withFilter = TRUE)
+setColWidths(wb, "prompt history", 1:10, c(13, 22, 11, 19, 20, 54, 16, 30, 11, 120))
+addStyle(wb, "prompt history", wrap, rows = 2:(nrow(out) + 1), cols = 1:9, gridExpand = TRUE)
+addStyle(wb, "prompt history", small, rows = 2:(nrow(out) + 1), cols = 10, gridExpand = TRUE)
+addStyle(wb, "prompt history", boldc, rows = 2:(nrow(out) + 1), cols = 1, gridExpand = TRUE)
 freezePane(wb, "prompt history", firstActiveRow = 2, firstActiveCol = 2)
-for (r in 2:(nrow(hist) + 1)) setRowHeights(wb, "prompt history", r, 62)
+for (r in 2:(nrow(out) + 1)) setRowHeights(wb, "prompt history", r, 90)
 
 f <- file.path(RESULTS_DIR, "prompt_history.xlsx")
 writable <- function(p) {
@@ -198,4 +254,6 @@ writable <- function(p) {
 if (!writable(f)) f <- sub("[.]xlsx$", format(Sys.time(), "_%Y%m%d_%H%M.xlsx"), f)
 saveWorkbook(wb, f, overwrite = TRUE)
 cat("written:", f, "\n")
-cat("  versions recorded:", nrow(hist), "\n")
+cat("  versions:", length(unique(out$Version)),
+    "| prompt blocks:", nrow(out),
+    "| blocks that changed:", sum(out$`Changed from previous` == "CHANGED"), "\n")
