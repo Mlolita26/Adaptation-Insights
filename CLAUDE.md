@@ -33,6 +33,24 @@ AI_grey_litterature/
 └── tests/
 ```
 
+
+## The knowledge folder is part of the deliverable
+
+`..\00_Knowledge\` is the shared memory of this workstream: twelve short
+markdown files that let a person or an AI session start from where we are
+now instead of reverse-engineering it from code.
+
+**Keep it current in the same commit as the change.** A new script, a new
+output file, a score that moved, a rule the pipeline now enforces, a
+decision taken or a question raised: each has a home there, and the trigger
+table in `00_Knowledge\README.md` says which file. `01_current_state.md` is
+the only file allowed to carry live numbers, so update it there and nowhere
+else. Move the `Last verified` date on anything you touch.
+
+This is not documentation for its own sake. The folder is what makes the
+work handoverable, and it rots in about a week if it is treated as a
+separate chore.
+
 ## Git conventions
 - Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`
 - One feature branch per new scraper: `feat/{source-name}`
