@@ -453,6 +453,27 @@ for (i in 1:3) {
 # project_code, which only exists here as the session's code hint.
 source(file.path(REPO, "R", "shared", "clean_fields.R"))
 h$project_code <- gc_chr("project_code_hint")
+
+# A beneficiary must be a group of people. When the passage the extraction
+# quoted names none - P006's document says "7. Beneficiary : 4 LCBC
+# countries: Cameroon, Niger, Nigeria and Chad", a geography - the model
+# maps it to the nearest option anyway and invents an answer. Re-read the
+# project's own title, rationale and results instead; P006's title is
+# "... Integrated Pest Management for Subsistence Farming".
+ben_stated <- gc_chr("target_beneficiary_stated")
+for (i in seq_len(nrow(h))) {
+  if (!names_no_people(ben_stated[i])) next
+  from <- paste(h$project_title[i], gc_chr("rationale_project")[i],
+                gc_chr("result1_metric_stated")[i], gc_chr("result2_metric_stated")[i],
+                gc_chr("result3_metric_stated")[i])
+  tb <- detect_beneficiary(from)
+  was <- h$target_beneficiary_project[i]
+  if (nzchar(tb) && !identical(tb, was)) {
+    h$target_beneficiary_project[i] <- tb
+    cat(sprintf("  beneficiary            %s: quoted passage named no people (\"%s\"); read %s from the project's own words instead\n",
+                h$project_code[i], substr(ben_stated[i], 1, 60), tb))
+  }
+}
 h$project_title <- vapply(gc_chr("project_title"), clean_title, character(1),
                           USE.NAMES = FALSE)
 h$location_count <- vapply(gc_chr("location_count"), clean_count, character(1),

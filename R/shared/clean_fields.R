@@ -169,16 +169,63 @@ INSTITUTIONAL_RX <- paste0(
   "committee|commission|bureau|unit|staff|officers?|inspectors?|rangers?|",
   "researchers?|scientists?|extension (agents?|officers?|workers?|staff)|",
   "partners?|platform|consultants?|technicians?)\\b")
+# Stems are left open on the right: a closing \\b after "communit" or
+# "beneficiar" never matches "communities" or "beneficiaries", which is how
+# this regex quietly failed to see the very words it was looking for. Only
+# the entries that need protection from a longer word keep their boundary
+# ("men" must not match "mentioned").
+END_GROUP_RX <- paste0("\\b(farmer|smallholder|small-?holder|producer|",
+  "household|communit|women|youth|villager|pastoralist|herder|fisher|",
+  "fisherfolk|beneficiar|population|people|famil(y|ies)|cooperativ|",
+  "association member|group member|vulnerable|children|elderly|migrant|",
+  "indigenous|men\\b|poor\\b)")
 # TRUE when the stated beneficiary names only intermediaries, with no end group
 is_institution_only <- function(stated) {
   s <- tolower(trimws(as.character(stated %||% "")))
   if (!nzchar(s)) return(FALSE)
-  end_group <- paste0("\\b(farmer|farmers|smallholder|producer|producers|",
-    "household|households|communit|women|youth|men\\b|villager|pastoralist|",
-    "herder|fisher|fishers|fisherfolk|fishing communit|beneficiar|population|",
-    "people|families|cooperative|association members|group members|",
-    "vulnerable|poor|children|elderly|migrant|indigenous)\\b")
-  grepl(INSTITUTIONAL_RX, s) && !grepl(end_group, s)
+  grepl(INSTITUTIONAL_RX, s) && !grepl(END_GROUP_RX, s)
+}
+# Wider net: TRUE when the passage names no group of people at all. A
+# document line reading "Beneficiary: 4 LCBC countries: Cameroon, Niger,
+# Nigeria and Chad" names a geography, and mapping that to the nearest
+# vocabulary option silently invents an answer.
+names_no_people <- function(stated) {
+  s <- tolower(trimws(as.character(stated %||% "")))
+  # a field label is not a group: "7. Beneficiary : 4 LCBC countries" names
+  # countries, and the word "Beneficiary" in front of it proves nothing
+  s <- sub("^[0-9.() ]*(target |primary |direct |main )*beneficiar(y|ies)[ ]*[:.-][ ]*",
+           "", s)
+  nzchar(s) && !grepl(END_GROUP_RX, s)
+}
+
+# Keyword reading of a passage into the template's beneficiary vocabulary.
+# Returns "" when nothing matches or when several groups tie, so a judgement
+# call still goes to the model rather than being guessed here.
+detect_beneficiary <- function(txt) {
+  t <- tolower(paste(as.character(txt), collapse = " "))
+  pat <- c(
+    "subsistence farmer" = "subsistence farm",
+    "smallholder farmer" = "smallholder|small-?scale farm|small-?holder",
+    "artisanal fisher" = "artisanal fish|small-?scale fish",
+    "pastoralist/herder" = "pastoralist|herder",
+    "farmer association" = "farmer associations?\\b",
+    "farmer group" = "farmer groups?\\b",
+    "producer organization" = "producer organi",
+    "cooperative" = "cooperativ",
+    "women's group/organization" = "women'?s group|women'?s organi",
+    "women (female-headed households)" = "female-?headed",
+    "youth" = "\\byouth\\b|young people",
+    "household" = "households?\\b",
+    "indigenous peoples" = "indigenous",
+    "agribusiness" = "agribusiness|agri-?enterprise",
+    "farm laborer" = "farm labou?rer",
+    "children" = "\\bchildren\\b", "elderly" = "elderly", "migrant" = "migrant",
+    "people with disabilities/ disability" = "disabilit",
+    "vulnerable population" = "vulnerable",
+    "community" = "communit")
+  hit <- names(pat)[vapply(pat, function(p) grepl(p, t), logical(1))]
+  if (!length(hit)) return("")
+  hit[1]   # pat is ordered most specific first
 }
 
 ## ---- results: coverage is not achievement ------------------------------------
