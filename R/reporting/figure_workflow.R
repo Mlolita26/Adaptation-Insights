@@ -19,7 +19,9 @@ OUT  <- file.path(REPO, "docs", "workflow.png")
 
 BLUE <- "#1B75BC"; BLUE_D <- "#125A91"; GREY <- "#6B6B6B"; INK <- "#222222"
 
-png(OUT, width = 1700, height = 1150, res = 150)
+# shaped for a portrait page: it sits at about 7 inches wide in the
+# protocol, so it is built tall rather than wide
+png(OUT, width = 1350, height = 1300, res = 150)
 op <- par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
 plot(NA, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, xlab = "", ylab = "")
 
@@ -47,10 +49,17 @@ diamond <- function(x, y, w, h, lines, cex = 0.7) {
           col = BLUE_D, border = NA)
   label(x, y, lines, cex = cex)
 }
-# stacked-document shape for the files a run leaves behind
-docs <- function(x, y, w, h, lines, cex = 0.64) {
+# stacked-document shape: what the output is called, then the file it is
+docs <- function(x, y, w, h, title, files, cex = 0.6, fcex = 0.46) {
   for (k in 2:1) rbox(x + k * 0.7, y + k * 0.7, w, h, fill = "#7FB5DF")
-  rbox(x, y, w, h, fill = BLUE); label(x, y, lines, cex = cex)
+  rbox(x, y, w, h, fill = BLUE)
+  nt <- length(title); nf <- length(files)
+  ty <- y + h/2 - 2.4
+  for (i in seq_len(nt)) text(x, ty - (i - 1) * 2.1 * cex, title[i],
+                              col = "white", cex = cex, font = 2)
+  fy <- ty - nt * 2.1 * cex - 1.1
+  for (i in seq_len(nf)) text(x, fy - (i - 1) * 2.0 * fcex, files[i],
+                              col = "#CFE4F5", cex = fcex)
 }
 arrow <- function(x0, y0, x1, y1) arrows(x0, y0, x1, y1, length = 0.09,
                                          col = GREY, lwd = 1.6, xpd = NA)
@@ -60,55 +69,66 @@ elbow <- function(pts) {                       # right-angled connector
   n <- nrow(pts); arrow(pts[n - 1, 1], pts[n - 1, 2], pts[n, 1], pts[n, 2])
 }
 
-text(3, 95, "EXTRACTION WORKFLOW", adj = 0, cex = 1.5, font = 2, col = INK)
-text(3, 91.2, "what runs, what it is checked against, and what it leaves behind",
-     adj = 0, cex = 0.75, col = GREY)
+text(3, 97, "EXTRACTION WORKFLOW", adj = 0, cex = 1.25, font = 2, col = INK)
+text(3, 93.6, "what runs, what it is checked against, and what it leaves behind",
+     adj = 0, cex = 0.66, col = GREY)
 
-SP <- 38                                        # the spine
-node(SP, 84, 30, 8, c("Documents", "03_Documents\\{source}\\  -  in-scope only"))
-arrow(SP, 80, SP, 76.5)
-node(SP, 72, 30, 8, c("Session 1  -  verbatim extraction",
-                      "every quote checked against its page"))
-arrow(SP, 68, SP, 64.5)
-node(SP, 60, 30, 8, c("Session 2  -  coding",
-                      "verbatim extract into controlled vocabularies"))
-arrow(SP, 56, SP, 51)
+SP <- 30                                        # the spine
+node(SP, 88, 40, 6.5, c("Documents", "03_Documents\\{source}\\  -  in-scope only"), cex = 0.66)
+arrow(SP, 84.7, SP, 82.8)
+node(SP, 79, 40, 6.5, c("Session 1  -  verbatim extraction",
+                        "every quote checked against its page"), cex = 0.66)
+arrow(SP, 75.7, SP, 73.8)
+node(SP, 70, 40, 6.5, c("Session 2  -  coding",
+                        "verbatim extract into controlled vocabularies"), cex = 0.66)
+arrow(SP, 66.7, SP, 64.8)
 
-diamond(SP, 44, 26, 13, c("Accuracy against the", "gold standard", "above threshold?"))
-text(SP - 14.5, 50.5, "on a subset:", adj = 1, cex = 0.63, col = GREY)
-text(SP - 14.5, 48.2, "10 gold documents", adj = 1, cex = 0.63, col = GREY)
+diamond(SP, 58, 34, 11, c("Accuracy against the gold", "standard above threshold?"), cex = 0.66)
+text(SP - 18.5, 58, "on a subset of", adj = 1, cex = 0.58, col = GREY)
+text(SP - 18.5, 55.6, "10 gold documents", adj = 1, cex = 0.58, col = GREY)
 
 # NO - tune and come back
-text(SP + 14.8, 46.2, "NO", adj = 0, cex = 0.66, col = INK)
-node(80, 44, 30, 13, c("Improve the prompts", "sharpen the field definitions",
+text(SP + 18.5, 60, "NO", adj = 0, cex = 0.62, col = INK)
+node(78, 58, 38, 13, c("Improve the prompts", "sharpen the field definitions",
                        "add the actors and locations", "the documents actually name"),
-     fill = BLUE_D, cex = 0.66)
-arrow(SP + 13, 44, 65, 44)
-elbow(rbind(c(80, 50.5), c(80, 72), c(55.5, 72)))
-text(82, 62, "run it again", adj = 0, cex = 0.62, col = GREY)
+     fill = BLUE_D, cex = 0.62)
+arrow(SP + 17, 58, 59, 58)
+elbow(rbind(c(78, 64.5), c(78, 79), c(50.5, 79)))
+text(80, 72, "run it again", adj = 0, cex = 0.58, col = GREY)
 
 # YES - go to the whole corpus
-text(SP + 1.2, 35.5, "YES", adj = 0, cex = 0.66, col = INK)
-arrow(SP, 37.5, SP, 33.5)
-node(SP, 29, 30, 8, c("Run on the full corpus", "656 in-scope documents"))
+text(SP + 1.5, 53.5, "YES", adj = 0, cex = 0.62, col = INK)
+arrow(SP, 52.5, SP, 50.8)
+node(SP, 45.5, 40, 6.5, c("Run on the full corpus", "656 in-scope documents"), cex = 0.66)
 
-# the outputs - one row, six files, nothing clipped or overlapping
-text(SP, 22.6, "what a run leaves behind", cex = 0.78, font = 2, col = INK)
-segments(SP, 25.0, SP, 24.0, col = GREY, lwd = 1.6)
-segments(SP, 21.0, SP, 19.6, col = GREY, lwd = 1.6)
-xs <- c(8.5, 24.8, 41.1, 57.4, 73.7, 90)
-segments(min(xs), 19.6, max(xs), 19.6, col = GREY, lwd = 1.6)
-for (x in xs) arrow(x, 19.6, x, 16.4)
+text(50, 39.5, "what a run leaves behind", cex = 0.72, font = 2, col = INK)
+segments(SP, 42.2, SP, 41.2, col = GREY, lwd = 1.6)
+segments(SP, 38.2, SP, 36.6, col = GREY, lwd = 1.6)
+segments(17, 36.6, 83, 36.6, col = GREY, lwd = 1.6)
+xs <- c(17, 50, 83)
+for (x in xs) arrow(x, 36.6, x, 33.6)
 
-docs(xs[1], 11.5, 14, 9, c("EXTRACTED DATA", "project sheet", "+ location sheet"))
-docs(xs[2], 11.5, 14, 9, c("Proposed", "new actors", "to review"))
-docs(xs[3], 11.5, 14, 9, c("Proposed", "new locations", "to review"))
-docs(xs[4], 11.5, 14, 9, c("Fields flagged", "for manual", "review"))
-docs(xs[5], 11.5, 14, 9, c("Questions for the", "template owner"))
-docs(xs[6], 11.5, 14, 9, c("Cost and", "model use", "(not yet written)"))
+R1 <- "04_Extraction_Results\\"
+R2 <- "04_Extraction_Results\\review\\"
+docs(xs[1], 27, 31, 12, c("EXTRACTED DATA"),
+     c(paste0(R1, "extracted_records_latest.xlsx"),
+       paste0(R1, "location_records_latest.xlsx")), cex = 0.66, fcex = 0.5)
+docs(xs[2], 27, 31, 12, c("Proposed new actors"),
+     c(paste0(R2, "proposed_new_actors"), "_AUDIT.xlsx"), cex = 0.66, fcex = 0.5)
+docs(xs[3], 27, 31, 12, c("Proposed new locations"),
+     c(paste0(R2, "proposed_new_locations"), "_AUDIT.xlsx"), cex = 0.66, fcex = 0.5)
 
-text(SP, 3.4, "the first is the result; the other five are what needs a person",
-     cex = 0.68, col = GREY)
+
+docs(xs[1], 11.5, 31, 12, c("Fields to check by hand"),
+     c("the needs_review sheet", "inside both workbooks"), cex = 0.66, fcex = 0.5)
+docs(xs[2], 11.5, 31, 12, c("Questions for the template owner"),
+     c(paste0(R2, "candidate_vocab_log.csv"),
+       "01_Protocol\\QC_Common_Mistakes.docx"), cex = 0.62, fcex = 0.5)
+docs(xs[3], 11.5, 31, 12, c("Cost and model use"),
+     c("not yet written -", "printed to the console only"), cex = 0.66, fcex = 0.5)
+
+text(50, 3.2, "the first is the result; the other five are what needs a person",
+     cex = 0.62, col = GREY)
 
 par(op); invisible(dev.off())
 cat("written:", OUT, "\n")
