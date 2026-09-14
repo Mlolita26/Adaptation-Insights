@@ -26,6 +26,7 @@ suppressPackageStartupMessages({ library(openxlsx) })
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
 source(file.path(REPO, "R", "shared", "paths.R"))
+source(file.path(REPO, "R", "shared", "actor_names.R"))
 
 rd <- function(f) {
   d <- read.csv(f, stringsAsFactors = FALSE, colClasses = "character")
@@ -43,18 +44,12 @@ cat("auditing:", PROP, "\n")
 p <- rd(PROP)
 if (!nrow(p)) { cat("proposal file is empty\n"); quit(save = "no") }
 
-A <- read.xlsx(TEMPLATE_XLSX, sheet = "actor_codes"); A[is.na(A)] <- ""
-names(A)[1:4] <- c("name", "acro", "code", "type")
-A <- A[nzchar(A$code), ]
+# same registry, same trimming and the same idea of "same name" as the
+# matcher whose proposals this audits - it used to have its own, stricter
+# copy, so it reported duplicates the matcher could never actually reach
+A <- actor_registry(TEMPLATE_XLSX)
 
-fold <- function(x) {
-  s <- tolower(as.character(x))
-  s <- gsub("[(][^)]*[)]", " ", s)
-  s <- gsub("centre", "center", s); s <- gsub("organisation", "organization", s)
-  s <- gsub("programme", "program", s); s <- gsub("labour", "labor", s)
-  s <- gsub("\\b(the|of|for|and)\\b", " ", s)
-  trimws(gsub(" +", " ", gsub("[^a-z0-9 ]", " ", s)))
-}
+fold <- actor_fold
 A$f <- fold(A$name); A$fa <- fold(A$acro)
 
 UNIT_RX <- paste0("\\b(project|programme|program) (coordination|implementation|",
@@ -112,13 +107,8 @@ for (i in seq_len(nrow(p))) {
 #
 # Neither can be settled automatically, so both are surfaced for a person
 # rather than decided here.
-STOP <- c("the", "of", "for", "and", "in", "de", "la", "national", "institute",
-          "agency", "ministry", "project", "development", "african", "africa")
-toks <- function(x) { t <- strsplit(fold(x), " ")[[1]]; t[nchar(t) > 3 & !t %in% STOP] }
-acros <- function(name, acro) {
-  a <- unlist(regmatches(name, gregexpr("\\b[A-Z]{3,8}\\b", name)))
-  unique(toupper(trimws(c(a, acro))[nzchar(trimws(c(a, acro)))]))
-}
+toks  <- actor_tokens      # the same distinctive-word set the matcher uses
+acros <- actor_acronyms
 overlap <- function(a, b)
   if (!length(a) || !length(b)) 0 else length(intersect(a, b)) / max(length(a), length(b))
 

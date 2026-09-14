@@ -34,13 +34,13 @@ if (!nzchar(Sys.getenv("OPENAI_API_KEY")))
   for (.p in c(file.path(Sys.getenv("OneDrive"), "Documents", ".Renviron"),
                file.path(Sys.getenv("USERPROFILE"), "Documents", ".Renviron")))
     if (file.exists(.p)) { readRenviron(.p); break }
-GL <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
-TEMPLATE <- file.path(GL, "02_Template",
-  "EvidenceSynthesis_GreyLiterature_AfricanAgricultureAdaptation_UpdatedTemplate_27Aug2026.xlsx")
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..")) else getwd()
 OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "outputs", "extraction"))
+# paths live in one place; this script used to carry its own copy of the
+# template location, which is how it drifted from the audits that check it
+source(file.path(REPO, "R", "shared", "paths.R"))
 source(file.path(REPO, "R", "shared", "vocab_cache.R"))
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -177,80 +177,33 @@ log_candidates <- function(df_doc, field, stated, chosen) {
 }
 
 # -------------------------------------------------------- actor registry -----
-actors <- suppressMessages(read_excel(TEMPLATE, sheet = "actor_codes"))
-names(actors) <- tolower(trimws(names(actors)))
-codecol <- grep("code", names(actors), value = TRUE)[1]
-namecol <- grep("name", names(actors), value = TRUE)[1]
-acrocol <- grep("acronym|accronym|abbrev", names(actors), value = TRUE)[1]  # sheet spells it 'actor_accronym'
-areg <- data.frame(
-  code = trimws(as.character(actors[[codecol]])),
-  name = trimws(as.character(actors[[namecol]])),
-  acro = if (!is.na(acrocol)) trimws(as.character(actors[[acrocol]])) else "",
-  stringsAsFactors = FALSE)
-areg <- areg[nzchar(areg$code) & nzchar(areg$name), ]
-nrm <- function(x) trimws(gsub("[^a-z0-9 ]", " ", gsub("\\s+", " ", tolower(x))))
-# Three things made the matcher propose organisations the registry already
-# holds: British spelling against an American registry entry ("Centre for
-# Coordination..." vs ZA2 "Center for..."), an acronym carried inline
-# ("Zambia Agricultural Research Institute (ZARI)" vs ZAM7), and a missing
-# space ("MercyCorps" vs USA52 "Mercy Corps"). Each costs the team a review
-# of a duplicate, so each is folded away before comparing.
-nrm_actor <- function(x) {
-  s <- tolower(as.character(x))
-  s <- gsub("[(][^)]*[)]", " ", s)          # drop an inline acronym
-  s <- gsub("centre", "center", s)
-  s <- gsub("organisation", "organization", s)
-  s <- gsub("programme", "program", s)
-  s <- gsub("labour", "labor", s)
-  trimws(gsub(" +", " ", gsub("[^a-z0-9 ]", " ", s)))
-}
-squash <- function(x) gsub(" ", "", x, fixed = TRUE)   # spacing-insensitive
-areg$nname <- nrm(areg$name); areg$nacro <- nrm(areg$acro)
-areg$aname <- nrm_actor(areg$name); areg$aacro <- nrm_actor(areg$acro)
-
-match_actor_det <- function(name) {
-  n <- nrm(name)
-  if (!nzchar(n)) return(NA_character_)
-  hit <- which(areg$nname == n | (nzchar(areg$nacro) & areg$nacro == n))
-  if (length(hit) == 1) return(areg$code[hit[1]])
-  a <- nrm_actor(name)
-  if (nchar(a) >= 6) {
-    hit <- which(areg$aname == a | (nzchar(areg$aacro) & areg$aacro == a))
-    if (length(hit) == 1) return(areg$code[hit[1]])
-    sq <- squash(a)
-    hit <- which(squash(areg$aname) == sq |
-                 (nzchar(areg$aacro) & squash(areg$aacro) == sq))
-    if (length(hit) == 1) return(areg$code[hit[1]])
-  }
-  # substring containment only for long-enough names: a short acronym like
-  # 'TAF' sits inside unrelated words ('Taflalet') and must go to the LLM
-  # shortlist instead of matching deterministically (Round-4 bug)
-  if (nchar(n) >= 8) {
-    hit <- which(vapply(areg$nname, function(x) nzchar(x) &&
-      (grepl(x, n, fixed = TRUE) || grepl(n, x, fixed = TRUE)), logical(1)))
-    if (length(hit) == 1) return(areg$code[hit[1]])
-  }
-  NA_character_
-}
-fuzzy_candidates <- function(name, k = 6) {
-  n <- nrm(name)
-  words <- strsplit(n, " ")[[1]]; words <- words[nchar(words) > 3]
-  hits <- unique(c(
-    which(vapply(areg$nname, function(x) nzchar(x) &&
-      (grepl(x, n, fixed = TRUE) || grepl(n, x, fixed = TRUE)), logical(1))),
-    # acronyms catch renames (e.g. 'NEPAD Agency' -> AUDA-NEPAD registry row)
-    which(vapply(areg$nacro, function(x) nzchar(x) &&
-      (grepl(x, n, fixed = TRUE) || grepl(n, x, fixed = TRUE) ||
-       any(vapply(words, function(w) grepl(w, x, fixed = TRUE), logical(1)))),
-      logical(1))),
-    agrep(n, areg$nname, max.distance = 0.25)))
-  head(hits, k)
-}
+# The registry, the name comparison and the matching tiers all live in
+# R/shared/actor_names.R now, so that the audit which checks this script's
+# proposals uses the same definition of "same organisation" as the matcher
+# that made them, and so that the checks can run without an API key.
+source(file.path(REPO, "R", "shared", "actor_names.R"))
+areg <- actor_registry(TEMPLATE_XLSX)
+ASYN <- local({
+  f <- file.path(REPO, "catalogues", "actor_synonyms.csv")
+  if (!file.exists(f)) return(NULL)
+  d <- read.csv(f, stringsAsFactors = FALSE, colClasses = "character",
+                encoding = "UTF-8")
+  d[is.na(d)] <- ""
+  if (!nrow(d)) NULL else d
+})
+AIDX <- actor_index(areg, ASYN)
+cat("  actors                 registry", nrow(areg), "| synonyms",
+    if (is.null(ASYN)) 0 else nrow(ASYN), "
+")
+# nrm() is still used by map_unit_det() and country_prefix() below; it is the
+# same function, kept under its old name so those two do not change.
+nrm <- actor_nrm
 
 resolve_actors <- function(all_names) {
   uniq <- unique(trimws(unlist(strsplit(all_names[nzchar(all_names)], ";\\s*"))))
   uniq <- uniq[nzchar(uniq)]
-  map <- setNames(vapply(uniq, match_actor_det, character(1)), uniq)
+  map <- setNames(vapply(uniq, function(u) match_actor_det(u, AIDX)$code,
+                       character(1)), uniq)
   pending <- names(map)[is.na(map)]
   # An organisation the model already recognised stays recognised: without
   # this, two harmonise runs of the same extraction matched 25 actors and
@@ -270,9 +223,10 @@ resolve_actors <- function(all_names) {
     }
   }
   if (length(pending)) {                     # one batched LLM disambiguation
-    cand_codes <- lapply(pending, function(p) areg$code[fuzzy_candidates(p)])
+    cand_rows  <- lapply(pending, function(p) actor_candidates(p, AIDX))
+    cand_codes <- lapply(cand_rows, function(cc) areg$code[cc$rows])
     lines <- vapply(seq_along(pending), function(i) {
-      cand <- fuzzy_candidates(pending[i])
+      cand <- cand_rows[[i]]$rows
       paste0(i, ") '", pending[i], "' -> candidates: ",
              if (length(cand)) paste0(areg$code[cand], "=", areg$name[cand],
                                       ifelse(nzchar(areg$acro[cand]),
