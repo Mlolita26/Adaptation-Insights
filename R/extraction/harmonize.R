@@ -460,18 +460,42 @@ h$project_code <- gc_chr("project_code_hint")
 # maps it to the nearest option anyway and invents an answer. Re-read the
 # project's own title, rationale and results instead; P006's title is
 # "... Integrated Pest Management for Subsistence Farming".
+# Second source when the project's own words settle nothing: the location
+# pass read every passage in the document row by row, so the group it found
+# most often is evidenced where the general sheet's quote is not.
+loc_ben <- function(pcode) {
+  fs <- list.files(file.path(OUT_DIR, "locations"),
+                   pattern = "^locations_harmonized_.*\\.csv$", full.names = TRUE)
+  if (!length(fs)) return("")
+  d <- tryCatch(read.csv(fs[which.max(file.mtime(fs))], stringsAsFactors = FALSE,
+                         colClasses = "character"), error = function(e) NULL)
+  if (is.null(d) || !all(c("project_code", "target_beneficiary") %in% names(d))) return("")
+  v <- d$target_beneficiary[d$project_code == pcode]
+  v <- v[!is.na(v) & nzchar(v)]
+  if (!length(v)) return("")
+  names(sort(table(v), decreasing = TRUE))[1]
+}
+
 ben_stated <- gc_chr("target_beneficiary_stated")
 for (i in seq_len(nrow(h))) {
   if (!names_no_people(ben_stated[i])) next
   from <- paste(h$project_title[i], gc_chr("rationale_project")[i],
                 gc_chr("result1_metric_stated")[i], gc_chr("result2_metric_stated")[i],
                 gc_chr("result3_metric_stated")[i])
-  tb <- detect_beneficiary(from)
+  tb <- detect_beneficiary(from); why <- "the project's own words"
+  if (!nzchar(tb)) { tb <- loc_ben(h$project_code[i])
+                     why <- "the group the location rows evidence most often" }
   was <- h$target_beneficiary_project[i]
-  if (nzchar(tb) && !identical(tb, was)) {
+  if (!nzchar(tb)) {
+    cat(sprintf("  beneficiary            %s: quoted passage named no people and nothing else evidences a group; kept %s for review\n",
+                h$project_code[i], if (nzchar(was)) was else "(empty)"))
+  } else if (!identical(tb, was)) {
     h$target_beneficiary_project[i] <- tb
-    cat(sprintf("  beneficiary            %s: quoted passage named no people (\"%s\"); read %s from the project's own words instead\n",
-                h$project_code[i], substr(ben_stated[i], 1, 60), tb))
+    cat(sprintf("  beneficiary            %s: quoted passage named no people (\"%s\"); read %s from %s\n",
+                h$project_code[i], substr(ben_stated[i], 1, 55), tb, why))
+  } else {
+    cat(sprintf("  beneficiary            %s: quoted passage named no people, but %s is confirmed by %s\n",
+                h$project_code[i], was, why))
   }
 }
 h$project_title <- vapply(gc_chr("project_title"), clean_title, character(1),

@@ -185,6 +185,15 @@ is_institution_only <- function(stated) {
   if (!nzchar(s)) return(FALSE)
   grepl(INSTITUTIONAL_RX, s) && !grepl(END_GROUP_RX, s)
 }
+# "beneficiaries", "people", "population", "end-users" are not groups, they
+# are counting words. A results-framework line reading "Number of direct
+# project beneficiaries - Comoros (target: 10,000)" names nobody, and if it
+# is allowed to count as naming people the model has to guess a category.
+SPECIFIC_GROUP_RX <- paste0("\\b(farmer|smallholder|small-?holder|producer|",
+  "household|communit|women|youth|villager|pastoralist|herder|fisher|",
+  "fisherfolk|famil(y|ies)|cooperativ|association member|group member|",
+  "vulnerable|children|elderly|migrant|indigenous|men\\b|poor\\b)")
+
 # Wider net: TRUE when the passage names no group of people at all. A
 # document line reading "Beneficiary: 4 LCBC countries: Cameroon, Niger,
 # Nigeria and Chad" names a geography, and mapping that to the nearest
@@ -195,7 +204,7 @@ names_no_people <- function(stated) {
   # countries, and the word "Beneficiary" in front of it proves nothing
   s <- sub("^[0-9.() ]*(target |primary |direct |main )*beneficiar(y|ies)[ ]*[:.-][ ]*",
            "", s)
-  nzchar(s) && !grepl(END_GROUP_RX, s)
+  nzchar(s) && !grepl(SPECIFIC_GROUP_RX, s)
 }
 
 # Keyword reading of a passage into the template's beneficiary vocabulary.
