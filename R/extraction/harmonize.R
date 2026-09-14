@@ -189,13 +189,39 @@ areg <- data.frame(
   stringsAsFactors = FALSE)
 areg <- areg[nzchar(areg$code) & nzchar(areg$name), ]
 nrm <- function(x) trimws(gsub("[^a-z0-9 ]", " ", gsub("\\s+", " ", tolower(x))))
+# Three things made the matcher propose organisations the registry already
+# holds: British spelling against an American registry entry ("Centre for
+# Coordination..." vs ZA2 "Center for..."), an acronym carried inline
+# ("Zambia Agricultural Research Institute (ZARI)" vs ZAM7), and a missing
+# space ("MercyCorps" vs USA52 "Mercy Corps"). Each costs the team a review
+# of a duplicate, so each is folded away before comparing.
+nrm_actor <- function(x) {
+  s <- tolower(as.character(x))
+  s <- gsub("[(][^)]*[)]", " ", s)          # drop an inline acronym
+  s <- gsub("centre", "center", s)
+  s <- gsub("organisation", "organization", s)
+  s <- gsub("programme", "program", s)
+  s <- gsub("labour", "labor", s)
+  trimws(gsub(" +", " ", gsub("[^a-z0-9 ]", " ", s)))
+}
+squash <- function(x) gsub(" ", "", x, fixed = TRUE)   # spacing-insensitive
 areg$nname <- nrm(areg$name); areg$nacro <- nrm(areg$acro)
+areg$aname <- nrm_actor(areg$name); areg$aacro <- nrm_actor(areg$acro)
 
 match_actor_det <- function(name) {
   n <- nrm(name)
   if (!nzchar(n)) return(NA_character_)
   hit <- which(areg$nname == n | (nzchar(areg$nacro) & areg$nacro == n))
   if (length(hit) == 1) return(areg$code[hit[1]])
+  a <- nrm_actor(name)
+  if (nchar(a) >= 6) {
+    hit <- which(areg$aname == a | (nzchar(areg$aacro) & areg$aacro == a))
+    if (length(hit) == 1) return(areg$code[hit[1]])
+    sq <- squash(a)
+    hit <- which(squash(areg$aname) == sq |
+                 (nzchar(areg$aacro) & squash(areg$aacro) == sq))
+    if (length(hit) == 1) return(areg$code[hit[1]])
+  }
   # substring containment only for long-enough names: a short acronym like
   # 'TAF' sits inside unrelated words ('Taflalet') and must go to the LLM
   # shortlist instead of matching deterministically (Round-4 bug)
