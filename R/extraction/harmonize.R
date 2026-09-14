@@ -209,7 +209,13 @@ resolve_actors <- function(all_names) {
   # this, two harmonise runs of the same extraction matched 25 actors and
   # then 18, so the proposal list churned for no reason. Only positive
   # matches are remembered, and only while the code is still in the registry.
-  acache <- vocab_cache_load(REPO, "actor_match", "registry")
+  # Comparing a matcher change against the run before it is meaningless
+  # while the cache is answering: it already holds the codes and would
+  # reproduce them whatever the matcher now does. ACTOR_CACHE=off turns
+  # it off for an A/B run.
+  acache <- if (identical(tolower(Sys.getenv("ACTOR_CACHE")), "off"))
+    setNames(character(0), character(0)) else
+    vocab_cache_load(REPO, "actor_match", "registry")
   if (length(pending) && length(acache)) {
     hit <- vapply(pending, function(p) {
       k <- vocab_key(p)
