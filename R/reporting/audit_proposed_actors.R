@@ -60,6 +60,12 @@ A$f <- fold(A$name); A$fa <- fold(A$acro)
 UNIT_RX <- paste0("\\b(project|programme|program) (coordination|implementation|",
   "management) unit\\b|\\b(pcu|piu|pmu)\\b|\\btask ?force\\b|",
   "\\bsteering committee\\b|\\bworking group\\b|\\bfocal points?\\b")
+# A credit number ("IDA-52030", "IDA H-828-A3") and a postal address
+# ("LCBC P.O. Box 727 N'Djamena") both arrived as proposed organisations.
+# They are references to a grant or a place, not bodies that can hold a code.
+NOT_BODY_RX <- paste0("\\bp\\.? ?o\\.? box\\b|\\bpostal\\b|",
+  "^[a-z]{2,5}[- ]?[a-z]?-?[0-9]{3,6}([- ][a-z0-9]+)?\\)?$|",
+  "\\b(credit|grant|loan) (no|number)\\b")
 ARM_RX <- paste0("\\b(fund|facility|window|association|trust)\\b")
 
 verdict <- character(nrow(p)); note <- character(nrow(p))
@@ -81,6 +87,8 @@ for (i in seq_len(nrow(p))) {
     next
   }
   if (grepl(UNIT_RX, low)) { verdict[i] <- "NOT AN ORGANISATION - part of a project"; next }
+  if (grepl(NOT_BODY_RX, low)) {
+    verdict[i] <- "NOT AN ORGANISATION - an identifier or an address"; next }
   if (grepl(ARM_RX, low)) {
     d <- adist(f, A$f, ignore.case = TRUE)[1, ]
     k <- which.min(d)
@@ -90,6 +98,56 @@ for (i in seq_len(nrow(p))) {
     next
   }
   verdict[i] <- "NEW - needs a code"
+}
+
+# Two things the checks above still miss, both found by hand on the pilot:
+#
+#   the same body proposed twice under different names ("INRAN in Niger" and
+#   "National Agronomic Research Institute of Niger (INRAN)"), which would
+#   spend two codes on one organisation; and
+#
+#   a registry entry under a former or longer name ("Rwanda Agriculture
+#   Board" is RWA1 "Rwanda Agriculture and Animal Resource Development
+#   Board"), which exact and near-exact matching cannot see.
+#
+# Neither can be settled automatically, so both are surfaced for a person
+# rather than decided here.
+STOP <- c("the", "of", "for", "and", "in", "de", "la", "national", "institute",
+          "agency", "ministry", "project", "development", "african", "africa")
+toks <- function(x) { t <- strsplit(fold(x), " ")[[1]]; t[nchar(t) > 3 & !t %in% STOP] }
+acros <- function(name, acro) {
+  a <- unlist(regmatches(name, gregexpr("\\b[A-Z]{3,8}\\b", name)))
+  unique(toupper(trimws(c(a, acro))[nzchar(trimws(c(a, acro)))]))
+}
+overlap <- function(a, b)
+  if (!length(a) || !length(b)) 0 else length(intersect(a, b)) / max(length(a), length(b))
+
+pt <- lapply(p$actor_name, toks)
+pa <- Map(acros, p$actor_name, p$actor_accronym)
+A$t <- lapply(A$name, toks)
+
+for (i in seq_len(nrow(p))) {
+  if (verdict[i] != "NEW - needs a code") next
+  # (a) another proposal for the same body
+  dup <- 0L
+  for (j in seq_len(nrow(p))) {
+    if (j == i || verdict[j] == "EMPTY - drop") next
+    if (tolower(p$actor_name[j]) == tolower(p$actor_name[i])) next
+    if (length(intersect(pa[[i]], pa[[j]])) > 0 || overlap(pt[[i]], pt[[j]]) >= 0.8) { dup <- j; break }
+  }
+  if (dup) {
+    verdict[i] <- "DUPLICATE OF ANOTHER PROPOSAL - one code, not two"
+    note[i] <- paste0("also proposed as: ", p$actor_name[dup])
+    next
+  }
+  # (b) a registry entry under a longer or former name
+  ov <- vapply(A$t, function(x) overlap(x, pt[[i]]), numeric(1))
+  k <- which.max(ov)
+  if (length(k) && ov[k] >= 0.6) {
+    verdict[i] <- "CHECK - a registry entry looks similar"
+    note[i] <- sprintf("%s = %s (%.0f%% of the distinctive words)",
+                       A$code[k], A$name[k], 100 * ov[k])
+  }
 }
 
 out <- cbind(p, audit_verdict = verdict, audit_note = note)
