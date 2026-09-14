@@ -74,10 +74,14 @@ for (i in seq_len(nrow(reg))) {
   if (grepl(",", nm)) add_row(cd, nm, sub(",[^,]*$", "", nm), "registry-rule:comma")
   # "The Gambia Agency" -> "Gambia Agency"
   if (grepl("^[Tt]he ", nm)) add_row(cd, nm, sub("^[Tt]he ", "", nm), "registry-rule:the")
-  # an acronym written as "IPR/IFRA" is two acronyms
+  # A compound acronym is several names: "IPR/IFRA" is two, and "AUDA-NEPAD"
+  # is a merged body that documents still call NEPAD. This is the registry's
+  # own evidence, not a guess about the organisation. 40 acronyms are
+  # hyphenated and only 2 of the 64 parts are claimed by more than one code,
+  # so rule 2 has very little to do here.
   ac <- reg$acro[i]
-  if (grepl("/", ac)) for (part in trimws(strsplit(ac, "/", fixed = TRUE)[[1]]))
-    add_row(cd, nm, part, "registry-rule:acronym-split")
+  if (grepl("[/-]", ac)) for (part in trimws(strsplit(ac, "[/-]")[[1]]))
+    if (nchar(part) >= 3) add_row(cd, nm, part, "registry-rule:acronym-split")
 }
 mech <- if (length(mech)) do.call(rbind, mech) else NULL
 cat("mechanical rows:", if (is.null(mech)) 0 else nrow(mech), "\n")
