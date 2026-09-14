@@ -185,12 +185,30 @@ P <- merge(P, why, by = "version", all.x = TRUE)
 P$measured_effect <- unname(effect[P$version]); P$measured_effect[is.na(P$measured_effect)] <- ""
 P <- P[order(P$script, P$component, P$rank), ]
 
+# one block at a time, versions in the order they happened, so a row's
+# neighbours are the same instruction before and after
+P <- P[order(P$script, P$component, P$rank), ]
+P$step <- ave(seq_len(nrow(P)), paste(P$script, P$component), FUN = seq_along)
+P$delta <- ""
+for (i in seq_len(nrow(P))) {
+  if (P$step[i] == 1) { P$delta[i] <- "-"; next }
+  d <- P$chars[i] - P$chars[i - 1]
+  P$delta[i] <- if (d == 0) "same" else sprintf("%+d", d)
+}
+P$block_label <- paste0(sub("[.]R$", "", P$script), ": ", P$component)
+
 out <- data.frame(
-  Version = P$version, Script = P$script, Date = P$date, `Prompt block` = P$component,
-  `Changed from previous` = P$changed,
+  `Prompt block` = P$block_label,
+  Step = P$step,
+  Version = P$version,
+  Date = P$date,
+  `Changed?` = P$changed,
+  Characters = P$chars,
+  `Change in size` = P$delta,
   `What was going wrong` = P$what_was_going_wrong,
-  `Fixed in` = P$fixed_in, `Measured effect` = P$measured_effect,
-  Characters = P$chars, `The prompt itself` = P$prompt_text,
+  `Fixed in` = P$fixed_in,
+  `Measured effect` = P$measured_effect,
+  `The prompt itself` = P$prompt_text,
   check.names = FALSE, stringsAsFactors = FALSE)
 
 ## ---- the workbook -----------------------------------------------------------
@@ -237,11 +255,22 @@ addStyle(wb, "read me", boldc, rows = c(2, 6, 13, 17, 23), cols = 1, gridExpand 
 
 addWorksheet(wb, "prompt history")
 writeData(wb, "prompt history", out, headerStyle = hdr, withFilter = TRUE)
-setColWidths(wb, "prompt history", 1:10, c(13, 22, 11, 19, 20, 54, 16, 30, 11, 120))
-addStyle(wb, "prompt history", wrap, rows = 2:(nrow(out) + 1), cols = 1:9, gridExpand = TRUE)
-addStyle(wb, "prompt history", small, rows = 2:(nrow(out) + 1), cols = 10, gridExpand = TRUE)
+setColWidths(wb, "prompt history", 1:11, c(34, 6, 13, 11, 16, 11, 13, 54, 16, 30, 120))
+addStyle(wb, "prompt history", wrap, rows = 2:(nrow(out) + 1), cols = 1:10, gridExpand = TRUE)
+addStyle(wb, "prompt history", small, rows = 2:(nrow(out) + 1), cols = 11, gridExpand = TRUE)
 addStyle(wb, "prompt history", boldc, rows = 2:(nrow(out) + 1), cols = 1, gridExpand = TRUE)
-freezePane(wb, "prompt history", firstActiveRow = 2, firstActiveCol = 2)
+# a line above each new block, so the groups are visible without reading
+newblock <- which(out$Step == 1) + 1
+addStyle(wb, "prompt history",
+         createStyle(border = "top", borderColour = "#4472C4", borderStyle = "medium",
+                     wrapText = TRUE, valign = "top"),
+         rows = newblock, cols = 1:11, gridExpand = TRUE, stack = TRUE)
+changed <- which(out[["Changed?"]] == "CHANGED") + 1
+if (length(changed))
+  addStyle(wb, "prompt history",
+           createStyle(fgFill = "#FFF2CC", wrapText = TRUE, valign = "top"),
+           rows = changed, cols = 5:7, gridExpand = TRUE, stack = TRUE)
+freezePane(wb, "prompt history", firstActiveRow = 2, firstActiveCol = 4)
 for (r in 2:(nrow(out) + 1)) setRowHeights(wb, "prompt history", r, 90)
 
 f <- file.path(RESULTS_DIR, "prompt_history.xlsx")
@@ -256,4 +285,4 @@ saveWorkbook(wb, f, overwrite = TRUE)
 cat("written:", f, "\n")
 cat("  versions:", length(unique(out$Version)),
     "| prompt blocks:", nrow(out),
-    "| blocks that changed:", sum(out$`Changed from previous` == "CHANGED"), "\n")
+    "| blocks that changed:", sum(out[["Changed?"]] == "CHANGED"), "\n")
