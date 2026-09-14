@@ -13,14 +13,19 @@
 #              model really saw, not a guess about it
 #   measured   the number of calls per document, and the size of every stored
 #              response
-#   assumed    the price per million tokens, and how many characters make a
-#              token. Both live in the `assumptions` sheet, and every cost in
-#              the workbook is an Excel formula pointing at them - change a
-#              price and the whole workbook re-costs itself.
+#   verified   the prices, checked against developers.openai.com/api/docs/pricing
+#              on 14 Sep 2026. They still live in the `assumptions` sheet and
+#              every cost is an Excel formula pointing at them, so when they
+#              move, one edit re-costs the whole workbook.
+#   assumed    how many characters make a token (4, the usual figure for
+#              English prose), and the share of cost the coding session adds.
 #
-# Prices are the ones understood at the time of writing. They change. Check
-# them against the provider's pricing page and edit the two cells; nothing
-# else needs touching.
+# One consequence worth knowing: the five calls per document all carry the
+# same system prompt and the same document text, differing only in the task
+# line at the end. That is a repeated prefix of tens of thousands of tokens,
+# far over the 1,024-token minimum, so the API's automatic prompt caching
+# should price the document at a tenth for calls two to five. The workbook
+# gives both figures - list price, and with that discount.
 #
 #   Rscript R/reporting/cost_report.R
 ##############################################################################
@@ -91,9 +96,17 @@ readme <- data.frame(
     "actually saw), the number of calls per document, and the size of every reply.",
     "Assumed: the price per million tokens, and how many characters make a token.",
     "",
-    "THE ONE THING TO CHECK FIRST",
-    "Prices move. Verify the two price rows against the provider's pricing page",
-    "before quoting any figure here in a budget.",
+    "PROMPT CACHING - why there are two cost columns",
+    "The five calls for one document send the same system prompt and the same",
+    "document text, differing only in the task line at the end. The API caches a",
+    "repeated prefix over 1,024 tokens automatically and charges a tenth for it,",
+    "so calls two to five should pay the cached rate on the document. The",
+    "'with caching' column is the more likely bill; the plain column is the",
+    "worst case if caching does not engage.",
+    "",
+    "THE ONE THING TO CHECK",
+    "Prices were verified on 14 Sep 2026 against developers.openai.com. They move.",
+    "Re-check before quoting any figure here in a budget.",
     "",
     "SHEETS",
     "assumptions        the editable inputs",
@@ -110,21 +123,25 @@ A <- data.frame(
   input = c("characters per token",
             "gpt-5-mini  price per 1M input tokens (USD)",
             "gpt-5-mini  price per 1M output tokens (USD)",
+            "gpt-5-mini  price per 1M CACHED input tokens (USD)",
             "gpt-5-nano  price per 1M input tokens (USD)",
             "gpt-5-nano  price per 1M output tokens (USD)",
+            "gpt-5-nano  price per 1M CACHED input tokens (USD)",
             "documents in the corpus (PDFs on disk)",
             "documents per project, when all are read",
             "session 1 calls per document - general sheet",
             "session 1 calls per document - location sheet",
             "session 2 (coding) as a share of session 1 cost"),
-  value = c(4, 0.25, 2.00, 0.05, 0.40,
+  value = c(4, 0.25, 2.00, 0.025, 0.05, 0.40, 0.005,
             if (!is.null(corpus)) nrow(corpus) else 628,
             2.4, G_CALLS, L_CALLS, 0.05),
   note = c("rule of thumb for English prose; 4 is the usual figure",
-           "CHECK against the provider's pricing page",
-           "CHECK against the provider's pricing page",
-           "CHECK against the provider's pricing page",
-           "CHECK against the provider's pricing page",
+           "VERIFIED 14 Sep 2026 on developers.openai.com/api/docs/pricing",
+           "VERIFIED 14 Sep 2026 on developers.openai.com/api/docs/pricing",
+           "VERIFIED 14 Sep 2026 - 90% off, applied automatically to a repeated prompt prefix",
+           "VERIFIED 14 Sep 2026 on developers.openai.com/api/docs/pricing",
+           "VERIFIED 14 Sep 2026 on developers.openai.com/api/docs/pricing",
+           "VERIFIED 14 Sep 2026 - 90% off",
            "measured: PDFs found under the six corpus folders",
            "measured: 24 PDFs across the 10 gold project folders",
            "measured: stored responses divided by documents",
@@ -138,8 +155,9 @@ writeData(wb, "assumptions", "the yellow cells are the inputs; everything else i
 addStyle(wb, "assumptions", grey, rows = nrow(A) + 3, cols = 1)
 
 CT <- "assumptions!$B$2"; PI <- "assumptions!$B$3"; PO <- "assumptions!$B$4"
-NCORP <- "assumptions!$B$7"; NPER <- "assumptions!$B$8"
-CG <- "assumptions!$B$9"; CL <- "assumptions!$B$10"; S2 <- "assumptions!$B$11"
+PC <- "assumptions!$B$5"                      # cached input
+NCORP <- "assumptions!$B$9"; NPER <- "assumptions!$B$10"
+CG <- "assumptions!$B$11"; CL <- "assumptions!$B$12"; S2 <- "assumptions!$B$13"
 
 ## sheet: gold set
 n <- nrow(gold)
@@ -157,19 +175,26 @@ G$input_tokens_location  <- sprintf("=F%d*%s/%s", r, CL, CT)
 G$output_tokens_location <- sprintf("=%d/%s", L_OUT_CHARS, CT)
 G$cost_location          <- sprintf("=J%d/1000000*%s+K%d/1000000*%s", r, PI, r, PO)
 G$cost_both              <- sprintf("=(I%d+L%d)*(1+%s)", r, r, S2)
+# the same work, priced with the repeated-prefix discount the API applies
+# automatically: the first call of each document pays full rate for the
+# document text, the rest pay the cached rate for it
+G$cost_both_with_caching <- sprintf(
+  "=((F%d/%s*%s+F%d/%s*(%s-1)*%s)+(F%d/%s*%s+F%d/%s*(%s-1)*%s))/1000000+(H%d+K%d)/1000000*%s",
+  r, CT, PI, r, CT, CG, PC, r, CT, PI, r, CT, CL, PC, r, r, PO)
 for (cc in c("input_tokens_general","output_tokens_general","cost_general",
-             "input_tokens_location","output_tokens_location","cost_location","cost_both"))
+             "input_tokens_location","output_tokens_location","cost_location",
+             "cost_both","cost_both_with_caching"))
   class(G[[cc]]) <- c(class(G[[cc]]), "formula")
-add("gold set", G, widths = c(9, 16, 8, 11, 22, 24, 18, 18, 12, 18, 18, 13, 12))
+add("gold set", G, widths = c(9, 16, 8, 11, 22, 24, 18, 18, 12, 18, 18, 13, 12, 22))
 tr <- n + 2
 writeData(wb, "gold set", "TOTAL, 10 gold documents", startRow = tr, startCol = 1)
-for (col in c(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)) {
+for (col in c(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)) {
   L <- LETTERS[col]
   writeFormula(wb, "gold set", sprintf("=SUM(%s2:%s%d)", L, L, n + 1),
                startRow = tr, startCol = col)
 }
-addStyle(wb, "gold set", bold, rows = tr, cols = 1:13, gridExpand = TRUE)
-addStyle(wb, "gold set", money4, rows = 2:tr, cols = c(9, 12, 13), gridExpand = TRUE)
+addStyle(wb, "gold set", bold, rows = tr, cols = 1:14, gridExpand = TRUE)
+addStyle(wb, "gold set", money4, rows = 2:tr, cols = c(9, 12, 13, 14), gridExpand = TRUE)
 addStyle(wb, "gold set", num, rows = 2:tr, cols = c(3, 4, 5, 6, 7, 8, 10, 11), gridExpand = TRUE)
 writeData(wb, "gold set",
   "P002, P003 and P004 are three projects inside ONE document, so that document is sent three times, once per programme. That is why the totals are higher than the page count suggests.",
@@ -199,12 +224,18 @@ P$output_tokens <- c(sprintf("=B%d*%d/%s", pr[1], G_OUT_CHARS, CT),
                      sprintf("=B%d*%d/%s", pr[3], G_OUT_CHARS, CT),
                      sprintf("=B%d*%d/%s", pr[4], G_OUT_CHARS + L_OUT_CHARS, CT))
 P$cost_usd <- sprintf("=(D%d/1000000*%s+E%d/1000000*%s)*(1+%s)", pr, PI, pr, PO, S2)
+P$cost_with_caching <- c(
+  sprintf("=(B%d*C%d/%s*%s+B%d*C%d/%s*(%s-1)*%s)/1000000+E%d/1000000*%s", pr[1], pr[1], CT, PI, pr[1], pr[1], CT, CG, PC, pr[1], PO),
+  sprintf("=(B%d*C%d/%s*%s+B%d*C%d/%s*(%s+%s-1)*%s)/1000000+E%d/1000000*%s", pr[2], pr[2], CT, PI, pr[2], pr[2], CT, CG, CL, PC, pr[2], PO),
+  sprintf("=(B%d*C%d/%s*%s+B%d*C%d/%s*(%s-1)*%s)/1000000+E%d/1000000*%s", pr[3], pr[3], CT, PI, pr[3], pr[3], CT, CG, PC, pr[3], PO),
+  sprintf("=(B%d*C%d/%s*%s+B%d*C%d/%s*(%s+%s-1)*%s)/1000000+E%d/1000000*%s", pr[4], pr[4], CT, PI, pr[4], pr[4], CT, CG, CL, PC, pr[4], PO))
 P$cost_per_document <- sprintf("=F%d/B%d", pr, pr)
-for (cc in c("documents","input_tokens","output_tokens","cost_usd","cost_per_document"))
+for (cc in c("documents","input_tokens","output_tokens","cost_usd",
+             "cost_with_caching","cost_per_document"))
   class(P[[cc]]) <- c(class(P[[cc]]), "formula")
-add("corpus projection", P, widths = c(56, 12, 22, 16, 16, 12, 18))
-addStyle(wb, "corpus projection", money, rows = 2:5, cols = 6, gridExpand = TRUE)
-addStyle(wb, "corpus projection", money4, rows = 2:5, cols = 7, gridExpand = TRUE)
+add("corpus projection", P, widths = c(56, 12, 22, 16, 16, 12, 20, 18))
+addStyle(wb, "corpus projection", money, rows = 2:5, cols = c(6, 7), gridExpand = TRUE)
+addStyle(wb, "corpus projection", money4, rows = 2:5, cols = 8, gridExpand = TRUE)
 addStyle(wb, "corpus projection", num, rows = 2:5, cols = c(2, 3, 4, 5), gridExpand = TRUE)
 notes <- c(
   sprintf("Mean characters sent per document is measured over %s corpus PDFs that could be read.",
