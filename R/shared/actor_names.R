@@ -17,6 +17,28 @@
 # the checks, which must run without an API key.
 ##############################################################################
 
+## ---- CSV, readable by both R and Excel --------------------------------------
+# The files here are valid UTF-8 and R reads them correctly, but Excel on
+# Windows assumes the local codepage for a CSV with no byte-order mark, which
+# is why "Universite de Mons" appears on screen as mojibake. Writing the mark
+# fixes the display; reading with "UTF-8-BOM" tolerates it either way, so a
+# file written before this change still loads. Without that, the mark would
+# attach itself to the first column name and every d$actor_code would be NULL.
+write_csv_utf8 <- function(x, path) {
+  t1 <- tempfile(fileext = ".csv")
+  utils::write.csv(x, t1, row.names = FALSE, na = "", fileEncoding = "UTF-8")
+  b <- readBin(t1, "raw", file.size(t1))
+  con <- file(path, open = "wb"); on.exit({ close(con); unlink(t1) })
+  writeBin(c(as.raw(c(0xEF, 0xBB, 0xBF)), b), con)
+  invisible(path)
+}
+read_csv_utf8 <- function(path) {
+  d <- utils::read.csv(path, stringsAsFactors = FALSE, colClasses = "character",
+                       fileEncoding = "UTF-8-BOM")
+  d[is.na(d)] <- ""
+  d
+}
+
 ## ---- normalising a name ----------------------------------------------------
 
 # The plain form. Kept character-for-character as harmonize.R's nrm() was,

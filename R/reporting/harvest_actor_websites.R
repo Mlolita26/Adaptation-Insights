@@ -71,8 +71,7 @@ todo <- todo[nzchar(todo$url), , drop = FALSE]
 cat("registry", nrow(reg), "actors |", nrow(todo), "with a site worth asking\n")
 
 done <- if (file.exists(OUT)) {
-  d <- read.csv(OUT, stringsAsFactors = FALSE, colClasses = "character", encoding = "UTF-8")
-  d[is.na(d)] <- ""; d
+  read_csv_utf8(OUT)
 } else NULL
 if (!is.null(done)) {
   todo <- todo[!todo$actor_code %in% done$actor_code, , drop = FALSE]
@@ -133,7 +132,7 @@ for (ci in seq_along(chunks)) {
   got <- do.call(rbind, lapply(k, function(i)
     harvest_one(todo$actor_code[i], todo$actor_name[i], todo$url[i])))
   done <- if (is.null(done)) got else rbind(done[, COLS], got[, COLS])
-  write.csv(done, OUT, row.names = FALSE, na = "", fileEncoding = "UTF-8")
+  write_csv_utf8(done, OUT)
   ok <- sum(grepl("^200", got$status) & nzchar(got$title))
   cat(sprintf("batch %d/%d: %d of %d pages read (%d%% cumulative)\n",
               ci, length(chunks), ok, nrow(got),

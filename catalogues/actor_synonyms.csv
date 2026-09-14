@@ -1,4 +1,4 @@
-"actor_code","actor_name","synonym","tier","source","status","evidence","added"
+﻿"actor_code","actor_name","synonym","tier","source","status","evidence","added"
 "AUS1","Department of Foreign Affairs and Trade, Australia","Department of Foreign Affairs and Trade","trusted","registry-rule:comma","active","","2026-09-14"
 "AUS3","Australian National University","ANU","trusted","website","active","anu.edu.au heading: About ANU","2026-09-14"
 "AUS4","Commonwealth Scientific and Industrial Research","Commonwealth Scientific and Industrial Research Organisation","trusted","website","active","csiro.au title (registry name is missing the last word)","2026-09-14"

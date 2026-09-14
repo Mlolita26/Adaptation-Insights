@@ -28,9 +28,7 @@ source(file.path(REPO, "R", "shared", "actor_names.R"))
 
 SYN_CSV <- file.path(REPO, "catalogues", "actor_synonyms.csv")
 syn <- if (file.exists(SYN_CSV)) {
-  d <- read.csv(SYN_CSV, stringsAsFactors = FALSE, colClasses = "character",
-                encoding = "UTF-8")
-  d[is.na(d)] <- ""
+  d <- read_csv_utf8(SYN_CSV)
   if (nrow(d)) d else NULL
 } else NULL
 

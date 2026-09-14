@@ -186,9 +186,7 @@ areg <- actor_registry(TEMPLATE_XLSX)
 ASYN <- local({
   f <- file.path(REPO, "catalogues", "actor_synonyms.csv")
   if (!file.exists(f)) return(NULL)
-  d <- read.csv(f, stringsAsFactors = FALSE, colClasses = "character",
-                encoding = "UTF-8")
-  d[is.na(d)] <- ""
+  d <- read_csv_utf8(f)
   if (!nrow(d)) NULL else d
 })
 AIDX <- actor_index(areg, ASYN)

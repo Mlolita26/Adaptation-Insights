@@ -48,9 +48,7 @@ cat("registry:", nrow(reg), "actors\n")
 
 read_syn <- function() {
   if (!file.exists(SYN_CSV)) return(NULL)
-  d <- read.csv(SYN_CSV, stringsAsFactors = FALSE, colClasses = "character",
-                encoding = "UTF-8")
-  d[is.na(d)] <- ""
+  d <- read_csv_utf8(SYN_CSV)
   for (cc in COLS) if (!cc %in% names(d)) d[[cc]] <- ""
   d[, COLS, drop = FALSE]
 }
@@ -182,7 +180,7 @@ if (nrow(rej)) print(table(rej$reason))
 if (DRY) { cat("\n--dry: nothing written\n"); quit(save = "no") }
 all_rows <- all_rows[order(all_rows$actor_code, all_rows$synonym), COLS]
 tmp <- paste0(SYN_CSV, ".tmp")
-write.csv(all_rows, tmp, row.names = FALSE, na = "", fileEncoding = "UTF-8")
+write_csv_utf8(all_rows, tmp)
 invisible(file.rename(tmp, SYN_CSV))
 cat("\nwritten:", SYN_CSV, "(", nrow(all_rows), "rows )\n")
 
