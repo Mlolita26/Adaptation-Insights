@@ -70,8 +70,17 @@ add_row <- function(code, name, syn, source, note = "") {
 for (i in seq_len(nrow(reg))) {
   nm <- reg$name[i]; cd <- reg$code[i]
   # "Ministry of Fisheries and Livestock, Zambia" -> "Ministry of Fisheries and
-  # Livestock". Often ambiguous, which is exactly what rule 2 is for.
-  if (grepl(",", nm)) add_row(cd, nm, sub(",[^,]*$", "", nm), "registry-rule:comma")
+  # Livestock". Only when the tail is a place: 17 registry names carry a comma
+  # inside a LIST - "Flanders Research Institute for Agriculture, Fisheries and
+  # Food" - and cutting there invents an organisation that does not exist.
+  if (grepl(",", nm)) {
+    tail <- trimws(sub("^.*,", "", nm))
+    head_ <- trimws(sub(",[^,]*$", "", nm))
+    listish <- grepl(" and | et | & ", tail) ||
+               length(strsplit(tail, " +")[[1]]) > 3 ||
+               length(strsplit(head_, " +")[[1]]) < 2
+    if (!listish) add_row(cd, nm, head_, "registry-rule:comma")
+  }
   # "The Gambia Agency" -> "Gambia Agency"
   if (grepl("^[Tt]he ", nm)) add_row(cd, nm, sub("^[Tt]he ", "", nm), "registry-rule:the")
   # A compound acronym is several names: "IPR/IFRA" is two, and "AUDA-NEPAD"
@@ -81,7 +90,17 @@ for (i in seq_len(nrow(reg))) {
   # so rule 2 has very little to do here.
   ac <- reg$acro[i]
   if (grepl("[/-]", ac)) for (part in trimws(strsplit(ac, "[/-]")[[1]]))
-    if (nchar(part) >= 3) add_row(cd, nm, part, "registry-rule:acronym-split")
+    # only the parts that are actually acronyms. "ISARA-Lyon" is an acronym and
+    # a city, "SAI-Platform" an acronym and a common noun, "AUE La-Toden" an
+    # acronym and a village. Taking those as names for the organisation is how
+    # a document mentioning Lyon or a platform would be filed under it.
+    # ...and not a part that merely repeats a word already in the name.
+    # "ULPK-DIOILA" belongs to the "Union ... de Dioila": DIOILA is the town,
+    # already matched through the name itself, and taking it as a name for the
+    # co-operative would file every mention of the town there.
+    if (nchar(part) >= 3 && part == toupper(part) &&
+        !tolower(part) %in% strsplit(actor_fold(nm), " ", fixed = TRUE)[[1]])
+      add_row(cd, nm, part, "registry-rule:acronym-split")
 }
 mech <- if (length(mech)) do.call(rbind, mech) else NULL
 cat("mechanical rows:", if (is.null(mech)) 0 else nrow(mech), "\n")
@@ -127,6 +146,19 @@ clash_other <- vapply(seq_along(f), function(i) {
 }, logical(1))
 reject(all_rows[clash_other, ], "a different institution already owns this name or acronym")
 all_rows <- all_rows[!clash_other, , drop = FALSE]
+
+# 1b. a place is not an organisation. The location registry already knows 654
+# place names; a synonym equal to one of them would file every mention of the
+# place under the organisation.
+LOC <- tryCatch({
+  L <- openxlsx::read.xlsx(TEMPLATE_XLSX, sheet = "location_codes")
+  L[is.na(L)] <- ""
+  p <- unique(actor_nrm(c(L$location_name, L$location_country)))
+  p[nchar(p) >= 3]
+}, error = function(e) character(0))
+is_place <- actor_nrm(all_rows$synonym) %in% LOC
+reject(all_rows[is_place, ], "is a place name, not an organisation")
+all_rows <- all_rows[!is_place, , drop = FALSE]
 
 # 2. claimed by more than one code -> may still help as a candidate, but may
 # never decide anything
