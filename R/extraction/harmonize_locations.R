@@ -6,9 +6,10 @@
 #   - location codes matched against the template's location_codes registry
 #     (677 entries; codes are reused across projects), unmatched locations
 #     become PROPOSALS in 04_Extraction_Results/review/proposed_new_locations.csv
-#     with a suggested code {project_code}.{next number} and LLM-estimated
-#     coordinates marked for human verification ("pipeline proposes, team
-#     decides", protocol §5)
+#     with a suggested code {project_code}.{next number} and empty
+#     coordinates for the team to fill ("pipeline proposes, team decides",
+#     protocol §5). Nothing here is estimated: a value the document does not
+#     give is left blank.
 #   - subsector type (7 controlled values), result_level (5), and
 #     target_beneficiary (24) — deterministic keyword pass first, then ONE
 #     batched LLM call per field for the leftovers (cost priority)
@@ -350,7 +351,11 @@ llm_choose <- function(items, vocab, defs, what) {
   chat <- chat_openai(model = MODEL, system_prompt = paste(
     "You classify grey-literature extraction snippets into a fixed vocabulary.",
     "Choose EXACTLY one vocabulary value per item, from the list given.",
-    "If no value fits at all, answer 'CANDIDATE: <your suggested new term>'."))
+    "If the snippet does not actually state this field - it counts something",
+    "with no subject, or is about something else entirely - answer exactly",
+    "'NOT STATED'. An empty cell is correct and useful; a plausible-looking",
+    "value the snippet does not support is not. If the snippet DOES state the",
+    "field but no value fits, answer 'CANDIDATE: <your suggested new term>'."))
   prompt <- paste0(
     "VOCABULARY for ", what, ":\n", paste("-", vocab, collapse = "\n"),
     "\n\nDEFINITIONS:\n", defs, "\n\nITEMS:\n",
@@ -405,9 +410,12 @@ apply_vocab <- function(rows, field_out, text_fun, det_fun, vocab, defs, what,
   if (length(todo)) {
     items <- data.frame(idx = todo, text = substr(txts[todo], 1, 300))
     ch <- llm_choose(items, vocab, defs, what)
+    n_unstated <- 0L
     for (k in names(ch)) {
       i <- as.integer(k); v <- ch[k]
-      if (v %in% vocab) rows[[field_out]][i] <- v
+      if (identical(toupper(trimws(v)), "NOT STATED")) {
+        n_unstated <- n_unstated + 1L               # the snippet did not say
+      } else if (v %in% vocab) rows[[field_out]][i] <- v
       else if (startsWith(v, "CANDIDATE")) {
         log_candidate(what, sub("^CANDIDATE:\\s*", "", v), txts[i])
         rows$notes_extra[i] <- paste0(rows$notes_extra[i], "; vocab candidate (",
@@ -418,6 +426,9 @@ apply_vocab <- function(rows, field_out, text_fun, det_fun, vocab, defs, what,
         if (length(hit) == 1) rows[[field_out]][i] <- hit
       }
     }
+    if (n_unstated)
+      cat(sprintf("  %-18s %d left empty - the snippet did not state it\n",
+                  what, n_unstated))
   }
   rows
 }
@@ -519,36 +530,19 @@ rows <- apply_vocab(rows, "result_level",
   function(r) paste(r$result_stated, "|", r$result_value, r$result_unit_stated),
   function(txt) "", RESULT_LEVELS, LEVEL_DEFS, "result_level", only = has_result)
 
-## ── coordinates for proposed locations (one batched call, estimated) ───────
+## ── coordinates: not invented ───────────────────────────────────
+# These used to be filled from the model's world knowledge and marked
+# "verify before use". That is the one place in the pipeline where a value
+# came from nowhere in the document, and the team enters coordinates by hand
+# anyway, so the columns are left empty for them.
 prop <- if (length(proposals)) do.call(rbind, unname(proposals)) else NULL
 if (!is.null(prop)) {
   need <- which(prop$location_name != "Unspecified")
   if (length(need)) {
-    chat <- chat_openai(model = MODEL, system_prompt = paste(
-      "You provide approximate WGS84 coordinates for named places, for later",
-      "human verification. If you do not recognize a place, say so."))
-    res <- tryCatch(chat$chat_structured(paste0(
-      "Approximate coordinates for these places (decimal degrees, 4 decimals):\n",
-      paste0("[", need, "] ", prop$location_name[need], ", ",
-             prop$location_country[need], collapse = "\n")),
-      type = type_array(items = type_object(
-        idx = type_integer("Item id in brackets."),
-        latitude = type_string("Decimal latitude, e.g. '12.3456'. Empty if unknown."),
-        longitude = type_string("Decimal longitude. Empty if unknown."),
-        known = type_boolean("FALSE if you do not actually recognize this place.")))),
-      error = function(e) { warning("coords batch failed: ", conditionMessage(e)); NULL })
-    if (!is.null(res)) {
-      if (is.data.frame(res)) res <- lapply(seq_len(nrow(res)), function(i) as.list(res[i, ]))
-      for (r in res) {
-        i <- as.integer(r$idx)
-        if (!is.na(i) && i %in% need && isTRUE(r$known)) {
-          prop$coordinate_latitude[i]  <- as.character(r$latitude)
-          prop$coordinate_longitude[i] <- as.character(r$longitude)
-        }
-      }
-    }
+    prop$coordinate_latitude[need]  <- ""
+    prop$coordinate_longitude[need] <- ""
     prop$note[need] <- trimws(paste(prop$note[need],
-      "coordinates LLM-estimated - verify before use"))
+      "coordinates to be entered by hand - the document does not give them"))
   }
   # append to the shared review file, dedup by name+country+project
   PROP_CSV <- file.path(REVIEW_DIR, "proposed_new_locations.csv")

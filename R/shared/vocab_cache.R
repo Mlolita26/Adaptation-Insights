@@ -25,10 +25,17 @@ vocab_key <- function(text) {
   substr(k, 1, 300)
 }
 
+# Bump this when the RULES a mapping is made under change, not just the
+# options: decisions taken under the old instructions are then retired the
+# same way a changed vocabulary retires them.
+#   v2-not-stated: a mapper may answer NOT STATED and leave the cell empty
+VOCAB_RULES_VERSION <- "v2-not-stated"
+
 # a short fingerprint of the option list, so a changed vocabulary retires the
 # decisions taken under the old one
 vocab_fingerprint <- function(options) {
-  s <- paste(sort(tolower(trimws(as.character(options)))), collapse = "|")
+  s <- paste(c(VOCAB_RULES_VERSION,
+               sort(tolower(trimws(as.character(options))))), collapse = "|")
   n <- 0
   for (ch in utf8ToInt(s)) n <- (n * 31 + ch) %% 1000000007
   paste0(length(options), "-", n)

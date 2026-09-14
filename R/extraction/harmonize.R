@@ -102,6 +102,9 @@ llm_map <- function(field, texts, options, definitions = "") {
     k <- vocab_key(t); if (k %in% names(cache)) unname(cache[k]) else ""
   }, character(1), USE.NAMES = FALSE)
   if (any(nzchar(hit))) {
+    # a remembered NOT STATED means the cell stays empty, not that the
+    # question is unanswered
+    hit[toupper(hit) == "NOT STATED"] <- ""
     out0[idx[nzchar(hit)]] <- hit[nzchar(hit)]
     cat(sprintf("  %-22s %d of %d from the decision cache\n", field,
                 sum(nzchar(hit)), length(idx)))
@@ -112,9 +115,13 @@ llm_map <- function(field, texts, options, definitions = "") {
   chat <- chat_openai(model = MODEL, system_prompt = paste(
     "You harmonise verbatim extracts from project evaluations into a fixed",
     "controlled vocabulary. You see only the extract, never the document.",
-    "Choose the single best option. If no option genuinely fits, answer",
-    "'CANDIDATE: ' followed by a 2-6 word free-text label. Never invent",
-    "options; never force a bad fit."))
+    "Choose the single best option. If the extract does not actually state",
+    "this field - it is a counting line, a page heading, a figure with no",
+    "subject, or simply about something else - answer exactly 'NOT STATED'.",
+    "An empty cell is correct and useful; a plausible-looking value the",
+    "extract does not support is not. If the extract DOES state the field",
+    "but no option fits, answer 'CANDIDATE: ' followed by a 2-6 word label.",
+    "Never invent options; never force a bad fit."))
   prompt <- paste0(
     "FIELD: ", field, "\nOPTIONS: ", paste(options, collapse = "; "),
     if (nzchar(definitions)) paste0("\nDEFINITIONS: ", definitions) else "",
@@ -128,6 +135,11 @@ llm_map <- function(field, texts, options, definitions = "") {
   res <- tryCatch(chat$chat_structured(prompt, type = spec),
                   error = function(e) { warning(field, ": ", conditionMessage(e)); NULL })
   if (is.null(res)) return(texts)
+  n_unstated <- 0L
+  # what gets written to the sheet, and what gets remembered, differ for a
+  # NOT STATED: the cell is empty, but the decision itself must be recorded
+  # or every rerun pays to ask the same question again
+  remembered <- texts
   m <- res$mapping
   if (is.data.frame(m)) m <- lapply(seq_len(nrow(m)), function(i) as.list(m[i, ]))
   out <- texts
@@ -135,11 +147,21 @@ llm_map <- function(field, texts, options, definitions = "") {
     j <- suppressWarnings(as.integer(mm$i))
     if (is.na(j) || j < 1 || j > length(idx)) next
     ch <- as.character(mm$choice)
+    if (identical(toupper(trimws(ch)), "NOT STATED")) {
+      n_unstated <- n_unstated + 1L
+      out[idx[j]] <- ""                            # the document did not say
+      remembered[idx[j]] <- "NOT STATED"
+      next
+    }
     if (!(ch %in% options) && !startsWith(ch, "CANDIDATE:"))
       ch <- paste0("CANDIDATE: ", texts[idx[j]])   # validation: never off-list
     out[idx[j]] <- ch
+    remembered[idx[j]] <- ch
   }
-  vocab_cache_save(REPO, field, options, texts[idx], out[idx])
+  if (n_unstated)
+    cat(sprintf("  %-22s %d left empty - the extract did not state it\n",
+                field, n_unstated))
+  vocab_cache_save(REPO, field, options, texts[idx], remembered[idx])
   out
 }
 
