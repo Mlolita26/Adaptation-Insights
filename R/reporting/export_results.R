@@ -50,7 +50,7 @@ rd <- function(f) {
 tmpl_cols <- function(sheet) names(read.xlsx(TEMPLATE_XLSX, sheet = sheet))
 
 write_book <- function(rows, sheet_name, extra_cols, out_file, src, review_rule,
-                       extra_sheets = list()) {
+                       extra_sheets = list(), raw_sheets = list()) {
   cols <- tmpl_cols(sheet_name)
   to_template <- function(x) {
     m <- as.data.frame(lapply(cols, function(cn) if (cn %in% names(x)) x[[cn]] else ""),
@@ -71,6 +71,7 @@ write_book <- function(rows, sheet_name, extra_cols, out_file, src, review_rule,
   }
   add(sheet_name, main)
   for (nm in names(extra_sheets)) add(nm, to_template(extra_sheets[[nm]]))
+  for (nm in names(raw_sheets)) add(nm, raw_sheets[[nm]])   # kept as-is
   add("needs_review", review)
   add("about", data.frame(
     what = c("template sheet", "rows", "rows needing review", "source run",
@@ -109,7 +110,20 @@ if (!is.na(f)) {
   # export: it is a separate measurement, never merged with the gold rows
   hf <- newest(file.path(OUT, "holdout"), "^harmonized_.*\\.csv$", exclude = "diagnostics")
   extra <- if (!is.na(hf)) setNames(list(rd(hf)), "holdout") else list()
-  write_book(d, "project_data_general", extra_sheets = extra,
+  # Comparing this workbook against gold_reference.xlsx by eye goes wrong:
+  # a gold cell can hold more than one acceptable answer, so "producer"
+  # looks like a mismatch beside a gold sheet showing "smallholder farmer"
+  # when both are accepted. The scorer already knows; publish its verdict.
+  sf <- newest(OUT, "^score_.*\\.csv$")
+  raw <- if (!is.na(sf)) {
+    s <- rd(sf)
+    if ("gold" %in% names(s))
+      names(s)[names(s) == "gold"] <- "gold_accepts"
+    if ("extracted" %in% names(s))
+      names(s)[names(s) == "extracted"] <- "pipeline_said"
+    setNames(list(s[order(s$verdict != "mismatch", s$project), ]), "vs_gold")
+  } else list()
+  write_book(d, "project_data_general", extra_sheets = extra, raw_sheets = raw,
              extra_cols = c("document", "prompt_version"),
              out_file = file.path(RESULTS_DIR, "extracted_records_latest.xlsx"),
              src = f,
