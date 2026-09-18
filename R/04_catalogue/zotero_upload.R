@@ -2,7 +2,7 @@
 # zotero_upload.R — Sync the corpus catalogue to the shared Zotero library
 #
 # One Zotero "report" item per corpus document, organised in collections
-#   {Institution} / included | to screen | screened out
+#   {Institution} / included | to screen | screened out | duplicates
 # Identifier fields:
 #   Report Number = the document's own number (WB repnb, e.g. ICR4348) —
 #                   only where the source provides one
@@ -31,6 +31,13 @@ suppressPackageStartupMessages({
   library(stringr)
 })
 
+# credentials live in the OneDrive-redirected Documents/.Renviron; a shell
+# whose HOME points elsewhere (Git Bash) would miss them, so look there too
+if (!nzchar(Sys.getenv("ZOTERO_API_KEY")))
+  for (.p in c(file.path(Sys.getenv("OneDrive"), "Documents", ".Renviron"),
+               file.path(Sys.getenv("USERPROFILE"), "Documents", ".Renviron"),
+               file.path(Sys.getenv("USERPROFILE"), ".Renviron")))
+    if (file.exists(.p)) { readRenviron(.p); break }
 API_KEY      <- Sys.getenv("ZOTERO_API_KEY")
 LIBRARY_ID   <- Sys.getenv("ZOTERO_LIBRARY_ID")
 LIBRARY_TYPE <- Sys.getenv("ZOTERO_LIBRARY_TYPE", "groups")
@@ -44,7 +51,11 @@ GL   <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literatur
 DATA <- file.path(GL, "03_Documents")
 
 SOURCES  <- c("World Bank", "GEF", "GCF", "AfDB", "Adaptation Fund", "CIF")
-STATUSES <- c("included", "to screen", "screened out")
+STATUSES <- c("included", "to screen", "screened out", "duplicates")
+# duplicates: aliases the dedup step moved to 03_Documents/duplicates (zotero_duplicates.R)
+.self <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
+.self_dir <- if (length(.self)) dirname(sub("^--file=", "", .self[1])) else file.path("R", "04_catalogue")
+source(file.path(.self_dir, "zotero_duplicates.R"))
 
 zotero_headers <- function() {
   add_headers("Zotero-API-Key" = API_KEY, "Zotero-API-Version" = "3",
@@ -659,6 +670,11 @@ main <- function() {
     existing <- fetch_existing_items()
   }
 
+  # 1b. duplicates taken out of the source folders get their own collection
+  #     and are left out of the status reconciliation below
+  dup_keys <- mark_duplicates(existing, keymap)
+  if (length(dup_keys)) existing <- fetch_existing_items()
+
   # 2. patch collection / report number / call number where changed.
   # Collections are MERGED, not replaced: the sync only manages its own
   # status collections (keymap values); memberships the team adds manually
@@ -668,6 +684,7 @@ main <- function() {
   patches <- list()
   for (i in seq_len(nrow(existing))) {
     e <- existing[i, ]
+    if (e$key %in% dup_keys) next
     if (is.na(e$doctag) || is.null(cat_ix[[e$doctag]])) next
     x <- cat_ix[[e$doctag]]
     want_col <- keymap[[paste(x$source, x$status, sep = "|")]]
