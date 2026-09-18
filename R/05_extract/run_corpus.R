@@ -13,6 +13,7 @@
 #   Rscript R/run_corpus.R                    # everything not yet extracted
 #   Rscript R/run_corpus.R --source=af        # one source only
 #   Rscript R/run_corpus.R --family=afdb_pcr  # one document family only (several: a,b)
+#   Rscript R/run_corpus.R --all               # ignore the screener, extract every in-scope-folder file
 #   Rscript R/run_corpus.R --limit=20         # at most 20 documents this run
 #   Rscript R/run_corpus.R --dry               # show plan + cost, extract nothing
 #
@@ -107,6 +108,20 @@ if (nzchar(FAM)) {
   message("family filter ", FAM, " -> ", nrow(mf), " documents")
 }
 if (nrow(mf)) print(table(family = ifelse(nzchar(mf$family), mf$family, "(not in census)")))
+# only documents the screener judged in scope are extracted (verdict_ruled
+# once screen_rules.R has run); files the screener has not seen still go
+# through; --all ignores the verdicts
+scr <- file.path(dirname(REPO), "04_Extraction_Results", "review", "scope_screen.csv")
+if (file.exists(scr) && !any(args == "--all")) {
+  sv <- read.csv(scr, stringsAsFactors = FALSE, colClasses = "character")
+  v  <- if ("verdict_ruled" %in% names(sv)) sv$verdict_ruled else sv$verdict
+  judged <- paste(sv$source, sv$filename)
+  ok  <- judged[v == "in scope"]
+  key <- paste(sub(":.*$", "", mf$project_code), basename(mf$pdf))
+  keep <- key %in% ok | !(key %in% judged)
+  message(sum(!keep), " documents left out by the screener (out of scope or unsure); --all to include them")
+  mf <- mf[keep, , drop = FALSE]
+}
 
 # resume: skip documents already present in any session1 output here
 done <- character(0)

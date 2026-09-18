@@ -575,6 +575,28 @@ main <- function() {
                  build_af(), build_cif())
   cli_alert_info("{length(catalogue)} documents in the catalogue")
 
+  # 0a. the screener's verdict, when it exists, is the status: in scope ->
+  # included, unsure -> to screen, out of scope -> screened out. The folder
+  # and catalogue rules in the builders only apply to files the screener has
+  # not judged. Uses verdict_ruled (screen_rules.R) when present.
+  scr <- file.path(GL, "04_Extraction_Results", "review", "scope_screen.csv")
+  if (file.exists(scr)) {
+    sv <- read.csv(scr, stringsAsFactors = FALSE, colClasses = "character")
+    v  <- if ("verdict_ruled" %in% names(sv)) sv$verdict_ruled else sv$verdict
+    st <- c("in scope" = "included", "unsure" = "to screen", "out of scope" = "screened out")[v]
+    names(st) <- paste(sv$source, sv$filename)
+    src_key <- c("World Bank" = "worldbank", "GEF" = "gef", "GCF" = "gcf", "AfDB" = "afdb",
+                 "Adaptation Fund" = "af", "CIF" = "cif")
+    n_over <- 0
+    catalogue <- lapply(catalogue, function(x) {
+      if (is.na(x$file) || is.null(src_key[x$source])) return(x)
+      k <- paste(unname(src_key[x$source]), basename(x$file))
+      if (!is.na(st[k]) && !identical(unname(st[k]), x$status)) { x$status <- unname(st[k]); n_over <<- n_over + 1 }
+      x
+    })
+    cli_alert_info("{n_over} statuses taken from the screener's verdicts (scope_screen.csv)")
+  }
+
   new_entries <- Filter(function(x) !(x$doctag %in% existing$doctag), catalogue)
 
   # 0. duplicate adoption: teammates add items by hand (no doc tags). Before
