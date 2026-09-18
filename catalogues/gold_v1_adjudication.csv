@@ -1,0 +1,14 @@
+project_code,field,who_is_right,why
+P001,project_title,gold,"The data sheet on page 6 reads AFCC2/RI -Support to NPCA TerrAfrica Secretariat, with no space after the hyphen. The pipeline added a space."
+P002,start_year,neither,This document gives no start year for RFS. It says only that the project closed in 2020 (page 177). Gold's 2017 is not stated here.
+P002,closure_year,neither,The document says the RFS project closed in 2020 (page 177). Gold said 2024 or 2022 and the pipeline found nothing. Gold now accepts 2020 as well.
+P004,start_year,neither,The document says CFI has been under phased implementation since 2018 (page 191). Gold now accepts 2018 as well as 2017. The pipeline found nothing.
+P004,budget_total,gold,"The table on page 19 gives CFI 37.8 million USD of GEF financing plus 208.0 million of cofinancing, which is the 245.8 million gold accepts. The pipeline missed a figure that is plainly in a table."
+P005,funder,neither,The document names no funder. Oxfam GB commissioned the evaluation and the text refers only to unnamed donor money (page 14). Gold recorded the publisher. This is open question 14.
+P005,implementor,gold,The document names Oxfam GB and its partner UCASN as the bodies delivering the work (page 14). The pipeline left it empty.
+P005,funding_mechanism,neither,The document never says how the programme was financed. Gold recorded grant. This is open question 14.
+P006,project_lead,undecided,The African Development Fund financed the project and the Lake Chad Basin Commission executed it (pages 16 to 17). Both readings are defensible until project lead is defined. This is open question 1.
+P006,budget_total,pipeline,"The document says twice that total project cost was CFAF 1.399 billion or UA 1.56 million (pages 16 and 17). Gold has been corrected to 1,560,000."
+P007,location_count,gold,"The document says four focus groups were held with farmers from the Rwamagana and Ngoma districts (page 5). That is two places. The pipeline counted the focus groups, not the locations."
+P009,location_count,undecided,The project covers three countries and names about seventy four sites. Both counts are in the document. This is open question 2 on which level to count.
+P010,project_lead,undecided,"CCARDESA coordinates the programme, the World Bank finances it, and IIAM is Mozambique's national institute. All three are in the document. This is open question 1."
