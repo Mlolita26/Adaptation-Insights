@@ -87,8 +87,7 @@ write.csv(conf, file.path(REVIEW_DIR, "scope_screen_conflicts.csv"), row.names =
 # that made it unsure, so a person can decide without opening the CSV
 unsure <- sc[sc$verdict_ruled == "unsure", c("source", "folder", "filename", "family", "reason", "rule_applied", "doc_type", "publication_year")]
 write.csv(unsure, file.path(REVIEW_DIR, "scope_screen_unsure.csv"), row.names = FALSE, fileEncoding = "UTF-8")
-cat("unsure queue for a person:", nrow(unsure), "
-")
+cat("unsure queue for a person:", nrow(unsure), "\n")
 
 cat("\nverdicts before and after the rules:\n")
 print(addmargins(table(before = sc$verdict, after = sc$verdict_ruled)))
