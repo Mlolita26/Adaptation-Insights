@@ -54,7 +54,7 @@ if ("verdict_model" %in% names(sc)) {
 set_rule <- function(i, v, why) { verdict[i] <<- v; rule[i] <<- why }
 
 for (i in seq_len(n)) {
-  if (sc$verdict[i] != "in scope") next
+  if (verdict[i] != "in scope") next
   fam <- if (nzchar(sc$family[i])) sc$family[i] else "generic"
   info <- family_info(fam)
   if (sc$adaptation_or_mitigation[i] %in% c("mitigation", "neither")) {
@@ -64,6 +64,24 @@ for (i in seq_len(n)) {
   } else if (sc$covers_several_projects[i] == "yes" && (isTRUE(info$multi) || fam == "programme_evaluation")) {
     set_rule(i, "unsure", "covers several projects: needs a focus project before extraction")
   }
+}
+# 6. a person's decision wins over everything above. review/scope_screen_overrides.csv
+#    holds one row per decided document: source, filename, verdict (in scope /
+#    out of scope / unsure), note, by. This is the accepted / rejected loop
+#    in the workflow diagram.
+OVR <- file.path(REVIEW_DIR, "scope_screen_overrides.csv")
+if (file.exists(OVR)) {
+  ov <- read.csv(OVR, stringsAsFactors = FALSE, colClasses = "character", encoding = "UTF-8")
+  ov <- ov[ov$verdict %in% c("in scope", "out of scope", "unsure"), ]
+  key <- paste(sc$source, sc$filename)
+  hit <- match(paste(ov$source, ov$filename), key)
+  for (j in which(!is.na(hit))) {
+    i <- hit[j]
+    verdict[i] <- ov$verdict[j]
+    rule[i] <- paste0("human (", ov$by[j], "): ", ov$note[j])
+  }
+  cat("overrides applied:", sum(!is.na(hit)), "of", nrow(ov), "
+")
 }
 bare <- nchar(trimws(sc$reason)) < 25
 sc$verdict_ruled <- verdict
