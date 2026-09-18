@@ -3,7 +3,7 @@
 # (reorganised 2026-09-09; see the root README.md).
 #
 # New code should source this file instead of hardcoding locations:
-#   source(file.path(REPO, "R", "shared", "paths.R"))
+#   source(file.path(REPO, "R", "00_shared", "paths.R"))
 # Existing scripts still carry inline constants pointing at the same places;
 # they are kept in sync with this file.
 ##############################################################################
@@ -31,3 +31,17 @@ CORPUS_DIRS <- c(
   afdb      = "afdb/Docs/2015_2026",
   af        = "af/Docs/evaluation_docs",
   cif       = "cif/Docs/evaluation_docs")
+
+# Every folder a document can sit in, in scope or parked. The census, the
+# dedup step and the screener all walk this list, so a file parked for a
+# reason is still known to the pipeline and never re-screened blind.
+SCAN_DIRS <- list(
+  worldbank = c("Worldbank/Docs/2015_2026", "Worldbank/Docs/pre_2015",
+                "Worldbank/Docs/to_screen", "Worldbank/Docs/screened_out"),
+  gef       = c("gef/Docs/evaluation_docs/2015_2026",
+                "gef/Docs/evaluation_docs/pre_2015",
+                "gef/Docs/evaluation_docs/undated"),
+  gcf       = c("gcf/Docs/evaluation_docs"),
+  afdb      = c("afdb/Docs/2015_2026", "afdb/Docs/to_screen", "afdb/Docs/undated"),
+  af        = c("af/Docs/evaluation_docs", "af/Docs/progress_reports"),
+  cif       = c("cif/Docs/evaluation_docs"))
