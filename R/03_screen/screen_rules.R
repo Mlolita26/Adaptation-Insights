@@ -32,7 +32,25 @@ sc[is.na(sc)] <- ""
 n <- nrow(sc)
 cat("judgements:", n, "\n")
 
-verdict <- sc$verdict; rule <- rep("", n)
+# The year window is applied here from the model's own verdict when it was
+# stored (verdict_model, screener v4 onward), so moving the window is a change
+# of two numbers and a rerun of this script: no document is read again. Rows
+# from earlier runs keep the verdict the screener wrote.
+YEAR_MIN <- 2015; YEAR_MAX <- 2025
+verdict <- sc$verdict
+if ("verdict_model" %in% names(sc)) {
+  has <- nzchar(sc$verdict_model)
+  y <- suppressWarnings(as.integer(sc$publication_year))
+  base <- ifelse(has, sc$verdict_model, sc$verdict)
+  out_year <- has & !is.na(y) & (y < YEAR_MIN | y > YEAR_MAX)
+  no_year  <- has & is.na(y) & base == "in scope"
+  verdict <- ifelse(out_year, "out of scope", ifelse(no_year, "unsure", base))
+}
+rule <- rep("", n)
+if ("verdict_model" %in% names(sc)) {
+  rule[out_year] <- sprintf("timeframe: dated %s, outside %d-%d", sc$publication_year[out_year], YEAR_MIN, YEAR_MAX)
+  rule[no_year]  <- "no year stated, so the timeframe cannot be checked"
+}
 set_rule <- function(i, v, why) { verdict[i] <<- v; rule[i] <<- why }
 
 for (i in seq_len(n)) {

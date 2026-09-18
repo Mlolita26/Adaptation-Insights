@@ -289,7 +289,7 @@ cat("to judge:", length(docs), "documents |", length(done), "already done |", MO
 if (!length(docs)) quit(save = "no")
 
 dir.create(REVIEW_DIR, recursive = TRUE, showWarnings = FALSE)
-FIELDS <- c("source", "folder", "filename", "verdict", "reason",
+FIELDS <- c("source", "folder", "filename", "verdict", "verdict_model", "reason",
             "family", "family_rule", "family_agrees",
             "doc_type", "doc_kind_stated", "publication_year", "project_name",
             "language", "countries", "covers_several_projects",
@@ -323,6 +323,7 @@ for (i in seq_along(docs)) {
       next
     } else {
       for (k in names(res)) if (k %in% FIELDS) row[[k]] <- as.character(res[[k]])
+      row$verdict_model <- as.character(res$verdict)   # before any rule touches it
       row$family_agrees <- if (nzchar(guess)) as.character(identical(row$family, guess)) else "no rule"
       row <- apply_verdict(row)
       if (!nzchar(row$reason)) row$reason <- res$reason
