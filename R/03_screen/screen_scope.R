@@ -72,6 +72,7 @@ SRC    <- opt("source")
 LIMIT  <- suppressWarnings(as.integer(opt("limit", "0")))
 OUT    <- file.path(REVIEW_DIR, opt("out", "scope_screen.csv"))   # --out=parts/x.csv for parallel shards
 SHARD  <- opt("shard", "")            # --shard=2/4 : take every 4th document starting at the 2nd
+REASK  <- opt("reask", "")            # --reask=review/scope_screen_reask.csv : judge these again
 dir.create(dirname(OUT), recursive = TRUE, showWarnings = FALSE)
 
 ## ---- the accepted year window ---------------------------------------------
@@ -132,6 +133,16 @@ SYSTEM <- paste(
   "set that is enough to exclude it: padding the list with criteria that did",
   "not really fail makes the reason useless to a reviewer. Saying 'unsure' is",
   "a real answer and is better than a guess.",
+  "Three rules the review found broken: (a) a regional or multi-country",
+  "project implemented in African countries MEETS scope; being multi-country",
+  "is never a reason to exclude. (b) A project spanning several agricultural",
+  "sub-sectors (crops and livestock and irrigation) is STILL the agriculture",
+  "sector. (c) Irrigation, value chains, productivity, food security or",
+  "market access on their own are NOT adaptation: the intervention criterion",
+  "is met only when the document names a climate risk the project responds",
+  "to. If you cannot quote such a risk, the verdict cannot be 'in scope'.",
+  "Emergency relief after a flood or drought responds to a hazard but is not",
+  "adaptation. A safety net or a planning grant is not agriculture delivery.",
   "A climate risk means a hazard or stressor the project responds to: drought,",
   "flood, erratic or declining rainfall, rising temperature, heat, cyclone,",
   "sea-level rise, salinisation, desertification, water scarcity, or climate",
@@ -179,12 +190,15 @@ SPEC <- type_object(
     "evaluation, not a report of implemented action.' Or: 'Out on sector and",
     "intervention: a fiscal consolidation budget support operation, with no",
     "agriculture and no climate risk.' When the verdict is in scope or unsure,",
-    "one plain sentence is enough.")))
+    "one plain sentence is enough. A bare word such as 'sector' is not a",
+    "reason and will be sent back.")))
 
 chat_one <- function(txt, guess = "") {
   ch <- chat_openai(model = MODEL, system_prompt = SYSTEM)
   hint <- if (nzchar(guess)) paste0(" A rule-based check of the cover suggests the",
-    " document family '", guess, "' (", family_info(guess)$label, "); confirm or correct it.")
+    " document family '", guess, "' (", family_info(guess)$label, "); keep it unless the",
+    " document plainly is something else. A title that merely contains another family's",
+    " abbreviation (an ICR headed '(ICRR)') does not change the family.")
     else " No rule matched the cover; choose the document family from the list."
   ch$chat_structured(paste0("DOCUMENT:\n\n", txt,
     "\n\n---\nJudge the five criteria and quote the document for each.", hint),
@@ -198,6 +212,15 @@ apply_verdict <- function(r) {
     r$verdict <- "unsure"
     r$reason  <- paste0("Progress document (", fi$label, "), not an evaluation; whether",
                         " progress reports count is an open protocol question. ", r$reason)
+  }
+  if (r$verdict == "in scope" && r$adaptation_or_mitigation %in% c("mitigation", "neither")) {
+    r$verdict <- "out of scope"
+    r$reason  <- paste("Out on intervention: the project is", r$adaptation_or_mitigation,
+                       "by the document's own account, not adaptation.", r$reason)
+  }
+  if (r$verdict == "in scope" && nchar(trimws(r$climate_risk_quote)) < 12) {
+    r$verdict <- "unsure"
+    r$reason  <- paste("No climate risk quoted, so the intervention criterion is not evidenced.", r$reason)
   }
   y <- suppressWarnings(as.integer(r$publication_year))
   if (is.na(y)) {
@@ -247,6 +270,13 @@ if (file.exists(OUT)) {
                    error = function(e) NULL)
   if (!is.null(prev) && nrow(prev)) done <- paste(prev$source, prev$filename)
 }
+if (nzchar(REASK) && file.exists(REASK)) {
+  ra <- read.csv(REASK, stringsAsFactors = FALSE, colClasses = "character")
+  want <- paste(ra$source, ra$filename)
+  docs <- Filter(function(d) paste(d$source, d$file) %in% want, docs)
+  done <- character(0)                 # a re-ask replaces the earlier judgement
+  cat("re-ask list:", length(docs), "documents\n")
+}
 docs <- Filter(function(d) !(paste(d$source, d$file) %in% done), docs)
 if (nzchar(SHARD)) {                   # parallel runs: disjoint slices of the same ordered list
   k <- as.integer(sub("/.*", "", SHARD)); n <- as.integer(sub(".*/", "", SHARD))
@@ -279,6 +309,11 @@ for (i in seq_along(docs)) {
     guess <- if (length(guess) && !is.na(guess) && guess %in% FAMILY_IDS && guess != "generic") guess else ""
     row$family_rule <- guess
     res <- tryCatch(chat_one(txt, guess), error = function(e) { row$note <<- conditionMessage(e); NULL })
+    if (!is.null(res) && nchar(trimws(as.character(res$reason))) < 25) {
+      cat("           bare reason, asking once more\n")
+      res2 <- tryCatch(chat_one(txt, guess), error = function(e) NULL)
+      if (!is.null(res2) && nchar(trimws(as.character(res2$reason))) >= 25) res <- res2
+    }
     if (is.null(res)) {
       # an API or parsing failure is not a judgement: write nothing, so the
       # next run picks the document up again
