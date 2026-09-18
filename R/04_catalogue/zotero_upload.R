@@ -64,6 +64,7 @@ STATUSES <- c("included", "to screen", "screened out", "duplicates")
 .self_dir <- if (length(.self)) dirname(sub("^--file=", "", .self[1])) else file.path("R", "04_catalogue")
 source(file.path(.self_dir, "zotero_duplicates.R"))
 source(file.path(.self_dir, "zotero_from_screening.R"))
+source(file.path(.self_dir, "zotero_adopt_pulled.R"))
 
 zotero_headers <- function() {
   add_headers("Zotero-API-Key" = API_KEY, "Zotero-API-Version" = "3",
@@ -757,6 +758,11 @@ main <- function() {
     cli_alert_success("attachments uploaded: {n_ok} (failed: {n_fail})")
     if (quota) cli_alert_danger("stopped: storage quota exceeded")
   }
+
+  # 4. files teammates dropped into Zotero by hand: once screened and given a
+  #    record above, the bare attachment is placed under that record
+  existing <- fetch_existing_items()
+  adopt_pulled(existing)
 
   cli_h2("Done")
 }

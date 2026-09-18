@@ -40,8 +40,8 @@ SCAN_DIRS <- list(
                 "Worldbank/Docs/to_screen", "Worldbank/Docs/screened_out"),
   gef       = c("gef/Docs/evaluation_docs/2015_2026",
                 "gef/Docs/evaluation_docs/pre_2015",
-                "gef/Docs/evaluation_docs/undated"),
-  gcf       = c("gcf/Docs/evaluation_docs"),
+                "gef/Docs/evaluation_docs/undated", "gef/Docs/to_screen"),
+  gcf       = c("gcf/Docs/evaluation_docs", "gcf/Docs/to_screen"),
   afdb      = c("afdb/Docs/2015_2026", "afdb/Docs/to_screen", "afdb/Docs/undated"),
-  af        = c("af/Docs/evaluation_docs", "af/Docs/progress_reports"),
-  cif       = c("cif/Docs/evaluation_docs"))
+  af        = c("af/Docs/evaluation_docs", "af/Docs/progress_reports", "af/Docs/to_screen"),
+  cif       = c("cif/Docs/evaluation_docs", "cif/Docs/to_screen"))

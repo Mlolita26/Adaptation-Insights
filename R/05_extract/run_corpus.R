@@ -88,18 +88,25 @@ fam_for <- local({
   } else character(0)
   function(fs) { v <- unname(lk[fs]); ifelse(is.na(v), "", v) }
 })
-mf <- do.call(rbind, lapply(names(CORPUS_DIRS), function(s) {
+# every scanned folder, not only the in-scope ones: a document judged in scope
+# while sitting in to_screen (a hand-added Zotero file, say) must not be
+# stranded there. Unjudged files count only from the in-scope folders.
+source(file.path(REPO, "R", "00_shared", "paths.R"))
+mf <- do.call(rbind, lapply(names(SCAN_DIRS), function(s) {
   if (nzchar(SRC) && s != SRC) return(NULL)
-  d <- file.path(DATA, CORPUS_DIRS[s])
-  fs <- list.files(d, pattern = "\\.(pdf|PDF)$")
-  if (!length(fs)) return(NULL)
-  pid <- vapply(fs, pid_for, character(1), USE.NAMES = FALSE)
-  data.frame(project_code = ifelse(nzchar(pid), paste0(s, ":", pid),
-                                              paste0(s, ":", fs)),
-             pdf = file.path(d, fs), focus = "", family = fam_for(fs),
-             stringsAsFactors = FALSE)
+  do.call(rbind, lapply(SCAN_DIRS[[s]], function(rel) {
+    d <- file.path(DATA, rel)
+    fs <- list.files(d, pattern = "\\.(pdf|PDF)$")
+    if (!length(fs)) return(NULL)
+    pid <- vapply(fs, pid_for, character(1), USE.NAMES = FALSE)
+    data.frame(project_code = ifelse(nzchar(pid), paste0(s, ":", pid),
+                                                paste0(s, ":", fs)),
+               pdf = file.path(d, fs), focus = "", family = fam_for(fs),
+               in_scope_folder = rel %in% unname(CORPUS_DIRS),
+               stringsAsFactors = FALSE)
+  }))
 }))
-cat("corpus files in scope:", nrow(mf), "\n")
+cat("files in the scanned folders:", nrow(mf), "\n")
 # one family at a time: the census family is a column on every row, so a
 # module can be tested on exactly the documents it was written for
 FAM <- opt("family")
@@ -118,8 +125,8 @@ if (file.exists(scr) && !any(args == "--all")) {
   judged <- paste(sv$source, sv$filename)
   ok  <- judged[v == "in scope"]
   key <- paste(sub(":.*$", "", mf$project_code), basename(mf$pdf))
-  keep <- key %in% ok | !(key %in% judged)
-  message(sum(!keep), " documents left out by the screener (out of scope or unsure); --all to include them")
+  keep <- key %in% ok | (!(key %in% judged) & mf$in_scope_folder)
+  message(sum(!keep), " documents left out (judged out of scope or unsure, or unjudged in a parked folder); --all to include them")
   mf <- mf[keep, , drop = FALSE]
 }
 
