@@ -3,6 +3,13 @@
 #
 # One Zotero "report" item per corpus document, organised in collections
 #   {Institution} / included | to screen | screened out | duplicates
+# Since 18 Sep 2026 the SCREENING decides membership and status: every
+# document judged in review/scope_screen.csv is an item, with status from
+# its verdict (in scope -> included, unsure -> to screen, out of scope ->
+# screened out). The six source builders below supply the metadata (title,
+# URL, report number, Call Number, doc tags) as a pool that
+# zotero_from_screening.R joins on filename; unjudged documents keep the
+# builders' folder-based status.
 # Identifier fields:
 #   Report Number = the document's own number (WB repnb, e.g. ICR4348) —
 #                   only where the source provides one
@@ -56,6 +63,7 @@ STATUSES <- c("included", "to screen", "screened out", "duplicates")
 .self <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 .self_dir <- if (length(.self)) dirname(sub("^--file=", "", .self[1])) else file.path("R", "04_catalogue")
 source(file.path(.self_dir, "zotero_duplicates.R"))
+source(file.path(.self_dir, "zotero_from_screening.R"))
 
 zotero_headers <- function() {
   add_headers("Zotero-API-Key" = API_KEY, "Zotero-API-Version" = "3",
@@ -571,31 +579,11 @@ main <- function() {
   existing <- fetch_existing_items()
   cli_alert_info("{nrow(existing)} items in the library")
 
-  catalogue <- c(build_worldbank(), build_gef(), build_afdb(), build_gcf(),
-                 build_af(), build_cif())
-  cli_alert_info("{length(catalogue)} documents in the catalogue")
-
-  # 0a. the screener's verdict, when it exists, is the status: in scope ->
-  # included, unsure -> to screen, out of scope -> screened out. The folder
-  # and catalogue rules in the builders only apply to files the screener has
-  # not judged. Uses verdict_ruled (screen_rules.R) when present.
-  scr <- file.path(GL, "04_Extraction_Results", "review", "scope_screen.csv")
-  if (file.exists(scr)) {
-    sv <- read.csv(scr, stringsAsFactors = FALSE, colClasses = "character")
-    v  <- if ("verdict_ruled" %in% names(sv)) sv$verdict_ruled else sv$verdict
-    st <- c("in scope" = "included", "unsure" = "to screen", "out of scope" = "screened out")[v]
-    names(st) <- paste(sv$source, sv$filename)
-    src_key <- c("World Bank" = "worldbank", "GEF" = "gef", "GCF" = "gcf", "AfDB" = "afdb",
-                 "Adaptation Fund" = "af", "CIF" = "cif")
-    n_over <- 0
-    catalogue <- lapply(catalogue, function(x) {
-      if (is.na(x$file) || is.null(src_key[x$source])) return(x)
-      k <- paste(unname(src_key[x$source]), basename(x$file))
-      if (!is.na(st[k]) && !identical(unname(st[k]), x$status)) { x$status <- unname(st[k]); n_over <<- n_over + 1 }
-      x
-    })
-    cli_alert_info("{n_over} statuses taken from the screener's verdicts (scope_screen.csv)")
-  }
+  pool <- c(build_worldbank(), build_gef(), build_afdb(), build_gcf(),
+            build_af(), build_cif())
+  cli_alert_info("{length(pool)} documents known to the source catalogues")
+  catalogue <- build_from_screening(pool)      # the screening decides membership and status
+  cli_alert_info("{length(catalogue)} documents in the catalogue after the screening join")
 
   new_entries <- Filter(function(x) !(x$doctag %in% existing$doctag), catalogue)
 
@@ -712,15 +700,21 @@ main <- function() {
     want_col <- keymap[[paste(x$source, x$status, sep = "|")]]
     want_rn  <- coalesce(x$item$reportNumber, "")
     want_cn  <- coalesce(x$item$callNumber, "")
+    want_tags <- vapply(x$item$tags, function(t) t$tag, character(1))
+    curr_tags <- strsplit(coalesce(e$all_tags, ""), "|", fixed = TRUE)[[1]]
+    curr_tags <- curr_tags[nzchar(curr_tags)]
+    new_tags  <- unique(c(curr_tags, want_tags))
     curr_cols <- strsplit(e$collections, ",")[[1]]
     curr_cols <- curr_cols[nzchar(curr_cols)]
     new_cols <- unique(c(setdiff(curr_cols, ours), want_col))
     if (!setequal(new_cols, curr_cols) ||
         !identical(e$report_number, want_rn) ||
-        !identical(e$call_number, want_cn)) {
+        !identical(e$call_number, want_cn) ||
+        length(new_tags) != length(curr_tags)) {
       patches[[length(patches) + 1]] <- list(
         key = e$key, version = e$version, collections = as.list(new_cols),
-        reportNumber = want_rn, callNumber = want_cn
+        reportNumber = want_rn, callNumber = want_cn,
+        tags = lapply(new_tags, function(t) list(tag = t))
       )
     }
   }
