@@ -66,11 +66,11 @@ rf_num_starts <- function(body, x_min = -Inf) {
 }
 
 # Ask the header what each column is called.
-rf_assign_roles <- function(hw, starts) {
+rf_assign_roles <- function(hw, starts, anchors = RF_ANCHORS) {
   roles <- rep("", length(starts))
   if (!length(starts)) return(roles)
-  for (nm in names(RF_ANCHORS)) {
-    cand <- hw[grepl(RF_ANCHORS[[nm]], tolower(hw$text)), , drop = FALSE]
+  for (nm in names(anchors)) {
+    cand <- hw[grepl(anchors[[nm]], tolower(hw$text)), , drop = FALSE]
     if (!nrow(cand)) next
     best <- NA_integer_; bestd <- Inf
     for (k in seq_len(nrow(cand))) {
@@ -89,23 +89,36 @@ rf_assign_roles <- function(hw, starts) {
 # One page -> labelled rows. character(0) when the page holds no table this
 # function can vouch for; the caller then falls back to the flattened text and
 # the vision pass exactly as before, which is the honest outcome.
-rf_page_rows <- function(w, page) {
+rf_page_rows <- function(w, page, anchors = RF_ANCHORS) {
   if (is.null(w) || !nrow(w)) return(character(0))
   w$text <- trimws(as.character(w$text))
   w <- w[nzchar(w$text), , drop = FALSE]
   if (!nrow(w)) return(character(0))
 
-  anchor <- which(grepl("^baseline|^r.f.rence|^ligne de base", tolower(w$text)))
-  if (!length(anchor)) return(character(0))
-  hy   <- w$y[anchor[1]]
+  # The header row is the line where the most column roles are named together
+  # (baseline, target, actual...). No single word is required, because some
+  # families have no baseline column (the AfDB output table), but two roles on
+  # one band are: a lone "target" in running text is not a header.
+  low <- tolower(w$text)
+  role_of <- rep("", nrow(w))
+  for (nm in names(anchors)) role_of[!nzchar(role_of) & grepl(anchors[[nm]], low)] <- nm
+  cand <- which(nzchar(role_of))
+  if (!length(cand)) return(character(0))
+  hy <- NA_real_; bestn <- 0
+  for (i in cand) {
+    band <- cand[abs(w$y[cand] - w$y[i]) <= RF_BAND]
+    n <- length(unique(role_of[band]))
+    if (n > bestn || (n == bestn && !is.na(hy) && w$y[i] < hy)) { hy <- w$y[i]; bestn <- n }
+  }
+  if (bestn < 2) return(character(0))
   hw   <- w[abs(w$y - hy) <= RF_BAND, , drop = FALSE]
   body <- w[w$y > max(hw$y) + 2, , drop = FALSE]
   if (!nrow(body)) return(character(0))
 
-  anchor_x <- hw$x[grepl(paste(unlist(RF_ANCHORS), collapse = "|"), tolower(hw$text))]
+  anchor_x <- hw$x[grepl(paste(unlist(anchors), collapse = "|"), tolower(hw$text))]
   starts <- rf_num_starts(body, if (length(anchor_x)) min(anchor_x) - 40 else -Inf)
   if (length(starts) < 2) return(character(0))
-  roles <- rf_assign_roles(hw, starts)
+  roles <- rf_assign_roles(hw, starts, anchors)
   if (!("actual" %in% roles)) return(character(0))
   i_act <- which(roles == "actual")[1]
 
@@ -148,14 +161,16 @@ rf_page_rows <- function(w, page) {
 
 # pages: the RF/annex window to try. A scanned table yields no words, and the
 # vision pass remains the answer for those.
-rf_tables <- function(pdf_path, pages, max_rows = 120) {
+# anchors: the header words of this document family (00_shared default is
+# the World Bank ICR; each family module brings its own).
+rf_tables <- function(pdf_path, pages, max_rows = 120, anchors = RF_ANCHORS) {
   if (!length(pages)) return(character(0))
   dat <- tryCatch(pdftools::pdf_data(pdf_path), error = function(e) NULL)
   if (is.null(dat)) return(character(0))
   pages <- pages[pages >= 1 & pages <= length(dat)]
   out <- character(0)
   for (p in pages) {
-    out <- c(out, tryCatch(rf_page_rows(dat[[p]], p),
+    out <- c(out, tryCatch(rf_page_rows(dat[[p]], p, anchors),
                            error = function(e) character(0)))
     if (length(out) >= max_rows) break
   }

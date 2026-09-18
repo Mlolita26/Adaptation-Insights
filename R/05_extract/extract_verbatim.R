@@ -34,7 +34,12 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "s1-v1.2"   # v1.2 (16 Sep 2026), from adjudicating the gold
+PROMPT_VERSION <- "s1-v2.0"   # v2.0 (18 Sep 2026): one module per document
+# family (R/05_extract/families/*.R). The shared prompt keeps only the rules
+# that hold for every family; each module adds where its fields sit, what its
+# results table's columns are called, its actor roles, its currency and its
+# traps, and the World Bank wording that used to sit in the shared prompt
+# lives in wb_icr.R. v1.2 (16 Sep 2026), from adjudicating the gold
 # disagreements against the documents: title copied character for character;
 # start year accepts "since 2018" prose; location_count never counts the
 # evaluation's own focus groups or interviews; a publisher that delivers the
@@ -56,7 +61,9 @@ GL <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
 GOLD_P001 <- file.path(GL, "03_Documents/pilot/gold_set_P001-P010/P001",
   "P001_World Bank_Implementation Completion and Results Report_2019_worldbank_3A-AFCC2_RI_-Support_to_NPCA_TerrAfrica_Secretariat_--_P149269_Implementation_Completion_and_Results_Report_2019.pdf")
 
-# Input: PDF path(s), or a MANIFEST csv (columns: project_code, pdf, focus).
+# Input: PDF path(s), or a MANIFEST csv (columns: project_code, pdf, focus,
+# and optionally family: the census family from 02_dedup, which skips the
+# cover detection).
 # `focus` handles multi-project documents: it is injected into every prompt
 # so the model extracts only for the named program (e.g. the shared GEF
 # Food Systems evaluation covering RFS + GGP + CFI).
@@ -65,9 +72,11 @@ if (length(args) == 1 && grepl("\\.csv$", args[1])) {
   mf <- read.csv(args[1], stringsAsFactors = FALSE)
   mf[is.na(mf)] <- ""
   PDFS <- mf$pdf; FOCUS <- mf$focus; PCODE <- mf$project_code
+  FAMILY <- if ("family" %in% names(mf)) mf$family else rep("", nrow(mf))
 } else {
   PDFS <- if (length(args)) args else GOLD_P001
   FOCUS <- rep("", length(PDFS)); PCODE <- rep("", length(PDFS))
+  FAMILY <- rep("", length(PDFS))
 }
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
@@ -109,86 +118,74 @@ DOC_INDEX <- local({
   } else NULL
 })
 
-# ------------------------------------------------- section maps (big docs) --
-# For known document families the template fields live in fixed sections, so
-# long documents are cut to those pages BEFORE prompting — this replaces the
-# blind head+tail clip that lost mid-document facts (e.g. program start years
-# on p.191 of the 294-page GEF IEO evaluation). Selected pages keep their
-# ORIGINAL [page N] numbers, so citations and the fact-check stay valid.
-# Unknown families and documents under 100 pages keep every page.
-detect_doc_family <- function(pages) {
-  # the shared detector (00_shared/doc_families.R) is the one place a family
-  # is defined; this maps its answer onto the section maps this script has
-  fam <- detect_family(pages)$family
-  if (fam == "wb_icr") return("wb_icr")
-  head_txt <- tolower(paste(pages[seq_len(min(6, length(pages)))], collapse = " "))
-  if (grepl("independent evaluation office of the gef|evaluation of gef", head_txt)) return("gef_ieo")
-  "generic"
+# ------------------------------------------------ family modules (routing) --
+# A source is not a family. The shared detector (00_shared/doc_families.R)
+# names the family from the cover; each family has a module under
+# R/05_extract/families/ that says which pages to keep, where its results
+# table is and what its columns are called, and what to add to each prompt.
+FAMILIES_DIR <- file.path(REPO, "R", "05_extract", "families")
+load_module <- function(id) {
+  f <- file.path(FAMILIES_DIR, paste0(id, ".R"))
+  if (!file.exists(f)) f <- file.path(FAMILIES_DIR, "generic.R")
+  env <- new.env(parent = globalenv())
+  sys.source(f, envir = env)
+  get("MODULE", envir = env)
+}
+module_for <- function(pages, family_hint = "") {
+  fam <- if (nzchar(family_hint) && family_hint %in% FAMILY_IDS) family_hint
+         else detect_family(pages)$family
+  mod_id <- family_info(fam)$module
+  if (identical(mod_id, "none")) {
+    cat("  note: family", fam, "is a progress document or worksheet; read generically\n")
+    mod_id <- "generic"
+  }
+  m <- load_module(mod_id); m$family <- fam; m
 }
 
-select_pages <- function(pages, family, focus = "") {
+# Long documents are cut to the pages the module names, keeping the original
+# [page N] numbers so citations and the fact-check stay valid. Short documents
+# and modules without a page map keep every page.
+select_pages <- function(pages, module, focus = "") {
   n <- length(pages)
-  if (family == "generic" || n <= 100) return(rep(TRUE, n))
-  low <- tolower(pages)
-  keep <- rep(FALSE, n)
-  keep[seq_len(min(12, n))] <- TRUE            # cover, data sheet, TOC
-  mark <- function(re, span = 0) {
-    for (h in grep(re, low)) keep[h:min(n, h + span)] <<- TRUE
-  }
-  if (family == "wb_icr") {
-    mark("data sheet")
-    mark("context and development objectives|project context", 8)
-    mark("\\boutcome\\b", 2)
-    mark("results framework and key outputs", 28)
-    mark("project cost by component", 2)
-    mark("recipient, co-financier", 4)
-  } else if (family == "gef_ieo") {
-    keep[seq_len(min(30, n))] <- TRUE          # exec summary + program tables
-    mark("annex 15|global environmental benefits", 8)
-    if (nzchar(focus)) {                       # the focus program's own pages
-      acro <- regmatches(focus, regexpr("\\(([A-Z]{2,6})\\)", focus))
-      acro <- tolower(gsub("[()]", "", acro))
-      gid  <- regmatches(focus, regexpr("[0-9]{4}", focus))
-      phrase <- tolower(trimws(sub("^the\\s+", "",
-                sub("[(,].*$", "", tolower(focus)))))
-      pats <- Filter(nzchar, c(
-        if (length(acro)) paste0("\\b", acro, "\\b"),
-        if (length(gid)) gid,
-        if (nchar(phrase) > 8) phrase))
-      if (length(pats)) {
-        hit <- Reduce(`|`, lapply(pats, function(p) grepl(p, low)))
-        keep[hit] <- TRUE
-      }
-    }
-  }
+  limit <- if (is.null(module$long_doc_pages)) 100 else module$long_doc_pages
+  if (is.null(module$keep_pages) || n <= limit) return(rep(TRUE, n))
+  keep <- module$keep_pages(pages, focus)
+  keep[seq_len(min(12, n))] <- TRUE            # cover, identification block, TOC
   keep
 }
 
-# ------------------------------------------ results-framework vision (tier 5) --
-# Results frameworks are TABLES, and pdftools scrambles table layouts - a
-# holdout failure mode (values found on 'other pages', NOT FOUND in tables).
-# When a results-framework/logframe section is detected, its pages are also
-# attached AS IMAGES to the results call so actual values are read from the
-# rendered table. Capped to RF_MAX_IMG pages; ~a cent per document.
+# ------------------------------------------ results-table pages (per family) --
+# The pages handed to rf_table.R and attached as images. Where the table sits
+# differs by family: an annex at the end (World Bank), the body once (AfDB),
+# or wherever the most column roles are named together (evaluator-written).
 RF_MAX_IMG <- 10
-rf_pages <- function(pages) {
-  low <- tolower(pages)
-  hits <- grep(paste0("results framework|key outputs|logical framework|",
-                      "logframe|cadre logique|matrice de r|cadre de r"), low)
+rf_role_count <- function(low) vapply(low, function(t) sum(c(
+  grepl("baseline|r.f.rence|situation de", t),
+  grepl("target|cible|objectif vis", t),
+  grepl("actual|achiev|most recent|level at|midterm level|r.alis|atteint|total actual", t),
+  grepl("indicator|indicateur", t))), integer(1), USE.NAMES = FALSE)
+rf_pages <- function(pages, module) {
+  low <- tolower(pages); rf <- module$rf
+  hits <- grep(rf$patterns, low)
   if (!length(hits)) return(integer(0))
-  # the annex itself sits at the END; earlier hits are the TOC and body
-  # references — prefer an explicit annex-start hit, else the last mention
-  ann <- grep("annex\\s*[0-9ivx]*[.:]?\\s*(results framework|logical framework)", low)
+  roles <- rf_role_count(low)
+  if (identical(rf$prefer, "first")) {
+    start <- hits[1]
+    win <- seq(start, min(length(pages), start + RF_MAX_IMG - 1))
+    return(win[win == start | roles[win] >= 2 | win %in% hits])
+  }
+  if (identical(rf$prefer, "dense")) {
+    cand <- hits[roles[hits] >= 3]
+    if (!length(cand)) cand <- hits
+    return(sort(head(cand[order(-roles[cand], cand)], RF_MAX_IMG)))
+  }
+  ann <- if (!is.null(rf$annex_start)) grep(rf$annex_start, low) else integer(0)
   start <- if (length(ann)) ann[length(ann)] else hits[length(hits)]
-  # A World Bank ICR states its achievements twice: once in the indicator
-  # tables and again, unambiguously, in the "Key Outputs by Component"
-  # narrative at the END of the same annex. In H001 that narrative sits on
-  # p56-58 while the annex starts at p37, so a flat 10-page window never
-  # reached it; P009 is the same. Take the window AND those pages.
   win <- seq(start, min(length(pages), start + RF_MAX_IMG - 1))
-  keyout <- grep("key outputs by component", low)
-  keyout <- keyout[keyout >= start]
-  sort(unique(c(win, head(keyout, 3))))
+  extra <- if (!is.null(rf$extra_pages)) {
+    e <- grep(rf$extra_pages, low); head(e[e >= start], 3)
+  } else integer(0)
+  sort(unique(c(win, extra)))
 }
 
 build_doc_text <- function(pages, sel) {
@@ -212,9 +209,9 @@ SYSTEM <- paste(
   "HARD RULES: (1) Numbers describing the evaluation's own methodology",
   "(sample sizes, respondents, focus-group participants) are never project",
   "results. (2) In tables covering several projects, read only this",
-  "project's row. (3) If two tables contradict each other, use the data",
-  "sheet / basic-data table and mention the contradiction in the nearest",
-  "notes field.")
+  "project's row. (3) If two tables contradict each other, use the",
+  "identification block (data sheet, basic data, project information table)",
+  "and mention the contradiction in the nearest notes field.")
 
 pg <- function() type_array(items = type_integer(),
   description = "Page numbers ([page N]) where this information was found.")
@@ -224,17 +221,17 @@ GROUPS <- list(
 identity = list(
   task = "Extract the project identity and timeline, verbatim from the document.",
   type = type_object(
-    project_title  = type_string("The PROJECT's name, word by word as stated - from the cover ('...Project (P123456)'), the data sheet's 'Project Name' row, or the 'evaluation of the project X' phrasing (extract X). Never the REPORT's own name (e.g. 'PPCR Evaluation Report' is a report title, not a project title). WRITE IT IN NORMAL SENTENCE CASE even when the cover shouts it in capitals. Keep abbreviations as they are (APPSA, RFS, AFCC2/RI) but NEVER include a project or document code: no 'P149269', no '(GEF ID 9072)', no 'ICR00004643', no trailing '-- Pxxxxxx'. Copy the remaining words CHARACTER FOR CHARACTER from the data sheet, including spacing around hyphens and slashes: if it reads 'AFCC2/RI -Support', do not tidy it to 'AFCC2/RI - Support'."),
-    project_id     = type_string("The publisher's project identifier exactly as printed IN THIS DOCUMENT, e.g. 'P149269'. Empty if none printed."),
-    project_lead_name = type_string("NAME of the ORGANISATION leading the project, as the document names it (often the implementing agency or publisher, e.g. 'World Bank'). Never an internal department, global practice, division or regional unit of an organisation — name the organisation itself. An organisation that both commissions and delivers the work is the lead AND an implementor: record it in both places."),
+    project_title  = type_string("The PROJECT's name, word by word as stated - from the cover, from the identification block the family note names (data sheet, basic data, project information table), or from the 'evaluation of the project X' phrasing (extract X). Never the REPORT's own name (e.g. 'PPCR Evaluation Report' is a report title, not a project title). WRITE IT IN NORMAL SENTENCE CASE even when the cover shouts it in capitals. Keep abbreviations as they are (APPSA, RFS, AFCC2/RI) but NEVER include a project or document code (no P-number, no GEF ID, no report number, no trailing code). Copy the remaining words CHARACTER FOR CHARACTER from the identification block, including spacing around hyphens and slashes: if it reads 'X/Y -Support', do not tidy it to 'X/Y - Support'."),
+    project_id     = type_string("The publisher's project identifier exactly as printed IN THIS DOCUMENT, in the form the family note gives. Empty if none printed."),
+    project_lead_name = type_string("NAME of the ORGANISATION leading the project, as the document names it (often the implementing agency or publisher; the family note names the role). Never an internal department, global practice, division or regional unit of an organisation — name the organisation itself. An organisation that both commissions and delivers the work is the lead AND an implementor: record it in both places."),
     publication_year = type_string("Year the source document was published (front page)."),
-    start_year     = type_string("Year the project ACTUALLY started per the document. Look in the Key Dates / basic-data table: 'Approval', 'Effectiveness', 'entry into force', 'signature', 'officially launched', French 'mise en vigueur'. Never design/concept/endorsement years, and NEVER an extension approval or revised-closing decision date. If no formal date is stated but the document gives an explicit implementation period ('implemented between 2017 and 2022'), use its first year. A prose statement of when work began also counts: 'under implementation since 2018', 'running since 2018', 'operational since 2018'. Empty only if none of these is stated."),
+    start_year     = type_string("Year the project ACTUALLY started per the document. Look in the dates block the family note names (Key Dates, Project data, Project Information Table, Relevant Dates): 'Approval', 'Effectiveness', 'entry into force', 'signature', 'officially launched', French 'mise en vigueur'. Never design/concept/endorsement years, and NEVER an extension approval or revised-closing decision date. If no formal date is stated but the document gives an explicit implementation period ('implemented between 2017 and 2022'), use its first year. A prose statement of when work began also counts: 'under implementation since 2018', 'running since 2018', 'operational since 2018'. Empty only if none of these is stated."),
     start_year_evidence = type_string("Short exact quote stating the start (e.g. 'Approval 29-Apr-2014', 'implemented between 2017 and 2022'), with its wording unchanged."),
     closure_year   = type_string("Year the project ACTUALLY closed ('actual closing', 'completed in'; the last year of an explicit implementation period counts if the project is described as finished). Empty if still running ('to date') or not stated."),
     closure_year_evidence = type_string("Short exact quote stating the closing."),
     implementation_period = type_string("The implementation period exactly as the document states it, e.g. '2017-2022' or 'implemented between 2017 and 2022', if any such statement exists. Empty otherwise."),
     document_type_stated = type_string("The document's OWN designation of itself, verbatim (e.g. 'Implementation Completion and Results Report', 'Project Performance Evaluation Report', 'Mid-term evaluation of the project ...')."),
-    resource_id    = type_string("The DOCUMENT's own report/document number as printed, e.g. 'ICR00004643', 'GEF/E/C.70/02'. NEVER a grant, loan or trust-fund account number (TF-..., IDA-..., 2100155...), never internal department/routing codes (RDGW/AHAI), never bare date codes. Empty if none."),
+    resource_id    = type_string("The DOCUMENT's own report/document number as printed, in the form the family note gives. NEVER a grant, loan or trust-fund account number (TF-..., IDA-..., 2100155...), never internal department/routing codes (RDGW/AHAI), never bare date codes. Empty if none."),
     source_pages   = pg())),
 
 geography = list(
@@ -310,7 +307,8 @@ rationale = list(
 results = list(
   task = paste(
     "Extract ALL quantitative project-level ACTUAL results, exhaustively.",
-    "Check the results framework / indicator annex first.",
+    "Check the results table first; the family note says where it is and what",
+    "its columns are called.",
     "SHORTFALLS AND NON-DELIVERY COUNT AS RESULTS AND ARE OFTEN MISSED.",
     "Include every indicator that fell short, delivered nothing, or was",
     "dropped, with its actual figure - including zero. An output reported as",
@@ -350,8 +348,8 @@ results = list(
         value  = type_string("The NUMBER in WHOLE DIGITS, nothing else: 14325, not '14,325'; 4700000, not '4.7 million'; 47, not '47 percent'; 15, not '15.00'. No qualifiers ('over', 'approximately'), no units, no ranges, no sentences - put those in metric_stated or scope. 'N' or 'Y' for a yes/no indicator."),
         metric_stated = type_string("What is counted, in the document's own words (the indicator name or phrase, verbatim) — e.g. wording like 'direct project beneficiaries', 'land area under sustainable management', 'women trained'."),
         unit_stated   = type_string("Counting unit in the document's own words (e.g. 'farmers', 'ha', 'households'). For a percentage write the symbol %, not the word. Empty if none stated."),
-        indicator_level = type_enum(values = c("PDO/outcome", "intermediate", "narrative"),
-          description = "PDO/outcome = development-objective or outcome indicator; intermediate = component/output indicator; narrative = figure in running text only."),
+        indicator_level = type_enum(values = c("outcome", "output", "narrative"),
+          description = "outcome = an indicator at the level of the project's objective (PDO indicators, outcome indicators, core indicators, fund-level indicators); output = a component, output or intermediate indicator; narrative = a figure in running text only. The family note names these levels as this document calls them."),
         status = type_enum(values = c("achieved", "partially achieved", "not achieved", "no target stated"),
           description = "Achievement vs target, as the document rates it."),
         scope  = type_string("Denominator/coverage: which component, geography, whole program or one country, unique or aggregated counts. One short phrase."),
@@ -363,21 +361,17 @@ results = list(
 finance = list(
   task = paste(
     "Extract the project financing verbatim. Read the TITLE PAGE wording and",
-    "the financing/data-sheet table first.",
-    "A document covering SEVERAL programmes usually has no data sheet. Its",
-    "financing sits in a comparison table with one row per programme, with",
-    "columns such as 'Total GEF financing' and 'Total cofinancing'. Read ONLY",
-    "the focus programme's row, and the total budget is that row's own",
-    "financing PLUS its cofinancing."),
+    "the financing table in the identification block first; the family note",
+    "says where it is and in which currency."),
   type = type_object(
-    budget_total = type_string("Total PLANNED budget: the financing-plan / data-sheet TOTAL across ALL sources (lead fund grant/credit + co-financing + government counterpart + beneficiary in-kind). Typical table rows: 'GEF grant', 'IDA credit', 'Government', 'Co-financing', 'TOTAL'. NEVER the amount spent/executed - that is disbursed, a different field. Digits only, EXPANDED to full units: 'UA 1.71 million' -> 1710000."),
-    budget_lead_share = type_string("The lead funder's / main envelope alone (e.g. the GEF, GCF, AF or IDA amount), digits only, expanded to full units. Empty if same as budget_total."),
-    disbursed    = type_string("Total actually SPENT/disbursed: look for 'actual disbursed', 'actual at closing', 'total spent', 'expenditure', execution tables, French 'decaisse'. Sum ALL sources actually spent when several are stated. Not commitments, not the plan. Data sheet wins on contradictions (flag them in finance_notes). Digits only, expanded to full units (1.39 million -> 1390000)."),
+    budget_total = type_string("Total PLANNED budget: the financing-plan or identification-block TOTAL across ALL sources (lead fund grant/credit + co-financing + government counterpart + beneficiary in-kind). Typical table rows: the lead fund's grant or credit, 'Government', 'Co-financing', 'TOTAL'. NEVER the amount spent/executed - that is disbursed, a different field. Digits only, EXPANDED to full units: 'UA 1.71 million' -> 1710000."),
+    budget_lead_share = type_string("The lead funder's / main envelope alone (the lead funder the family note names), digits only, expanded to full units. Empty if same as budget_total."),
+    disbursed    = type_string("Total actually SPENT/disbursed: look for 'actual disbursed', 'actual at closing', 'total spent', 'expenditure', execution tables, French 'decaisse'. Sum ALL sources actually spent when several are stated. Not commitments, not the plan. The identification block wins on contradictions (flag them in finance_notes). Digits only, expanded to full units (1.39 million -> 1390000)."),
     currency     = type_string("ISO currency code, e.g. 'USD', 'EUR', 'UA'."),
-    instrument_stated = type_string("EXACT wording of the financing instrument(s) from the title page or financing table, verbatim (e.g. 'ON A CREDIT ... AND A GRANT', 'SMALL GRANT', 'GEF Trust Fund grants')."),
+    instrument_stated = type_string("EXACT wording of the financing instrument(s) from the title page or financing table, verbatim (the family note says where it is printed)."),
     funding_mechanism_portion = type_string("INSTRUMENT-TYPE mix (grant/loan/investment/other — never fund or account names) WITH PERCENTAGES in parentheses joined by ' + ', per the template format: 'grant (40%) + loan (40%) + other-in-kind contribution (20%)'. Compute percentages from stated amounts when the document gives amounts but no percentages. Empty if the split cannot be established."),
     funder_names      = type_array(items = type_string(), description = "NAMES of all funding ORGANISATIONS incl. named trust funds and co-financiers, as the document names them. Never account/grant numbers like 'TF-17015' or 'IDA-52030', and never financing-table row labels or generic categories in any language ('Borrower/Recipient', 'Local Beneficiaries', 'Bilateral Agencies', 'GOUVERNEMENT/BENEFICIAIRE', 'CONTREPARTIE') - only actual named organisations (a named government like 'Government of Benin' counts)."),
-    implementor_names = type_array(items = type_string(), description = "NAMES of the implementing agencies: those designated by the data sheet PLUS any co-implementing national agencies named in the document body (multi-country projects often have one agency per country while the data sheet names only one). Not private partners, borrowers or buyers. Include delivery partners named only in running text, not just those in a table: 'their partner, UCASN, delivered' names an implementor. When the publisher delivers the work itself, name the publisher here too."),
+    implementor_names = type_array(items = type_string(), description = "NAMES of the implementing agencies: those designated in the identification block PLUS any co-implementing national agencies named in the document body (multi-country projects often have one agency per country while the block names only one). Not private partners, borrowers or buyers. Include delivery partners named only in running text, not just those in a table: 'their partner, UCASN, delivered' names an implementor. When the publisher delivers the work itself, name the publisher here too."),
     finance_notes = type_string("Contradictions between financing tables, counterpart funding that never materialized, or similar. Empty if none."),
     source_pages = pg()))
 )
@@ -411,8 +405,8 @@ rank_results <- function(rl) {
   if (!length(rl)) return(rl)
   score <- vapply(rl, function(r) {
     s <- 0
-    if (identical(r$indicator_level, "PDO/outcome")) s <- s + 100
-    if (identical(r$indicator_level, "intermediate")) s <- s + 50
+    if (identical(r$indicator_level, "outcome")) s <- s + 100
+    if (identical(r$indicator_level, "output")) s <- s + 50
     if (is_reach(r)) s <- s - 5
     s
   }, numeric(1))
@@ -605,20 +599,30 @@ verify_doc <- function(row, raw, pages_txt, doc) {
 }
 
 # -------------------------------------------------------------- extraction --
-extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
+extract_doc <- function(pdf_path, focus = "", pcode = "", family = "", groups = GROUPS) {
   doc_name <- tools::file_path_sans_ext(basename(pdf_path))
   cat("\n==", if (nzchar(pcode)) paste0(pcode, " · "), doc_name, "==\n")
   doc <- read_doc(pdf_path)
-  fam <- detect_doc_family(doc$pages)
-  sel <- select_pages(doc$pages, fam, focus)
+  module <- module_for(doc$pages, family)
+  sel <- select_pages(doc$pages, module, focus)
   doc$text <- build_doc_text(doc$pages, sel)
-  cat("  pages:", doc$n_pages, "| family:", fam, "| pages used:", sum(sel),
+  cat("  pages:", doc$n_pages, "| family:", module$family, "->", module$id,
+      "| pages used:", sum(sel),
       "| chars:", nchar(doc$text),
       if (nzchar(focus)) paste0("| focus: ", focus), "\n")
 
   row <- list(project_code_hint = pcode, document = basename(pdf_path),
+              family = module$family, family_module = module$id,
               model = MODEL, prompt_version = PROMPT_VERSION,
               run_date = format(Sys.Date()))
+  # the family's own rules ride on the shared system prompt, and each group's
+  # task gets the family note saying where its fields sit in this template
+  sys_fam <- paste(SYSTEM, "DOCUMENT FAMILY:", paste0(module$label, "."), module$traps)
+  fam_note <- function(g) {
+    nt <- module$notes[[g]]
+    if (is.null(nt) || !nzchar(nt)) "" else
+      paste0("\n\nTHIS DOCUMENT FAMILY (", module$label, "): ", nt)
+  }
   focus_line <- if (nzchar(focus)) paste0(
     "IMPORTANT — this document covers SEVERAL programs/projects. Extract ",
     "ONLY for ", focus, ". Ignore every other program's rows, results and ",
@@ -627,18 +631,20 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
   for (gname in names(groups)) {
     g <- groups[[gname]]
     prompt <- paste0("DOCUMENT (page-tagged):\n\n", doc$text,
-                     "\n\n---\nTASK: ", focus_line, g$task)
+                     "\n\n---\nTASK: ", focus_line, g$task, fam_note(gname))
     t0 <- Sys.time()
     res <- tryCatch({
-      chat <- chat_openai(model = MODEL, system_prompt = SYSTEM)
+      chat <- chat_openai(model = MODEL, system_prompt = sys_fam)
       imgs <- list()
       if (gname == "results") {
-        rfp <- rf_pages(doc$pages)
+        rfp <- rf_pages(doc$pages, module)
         # Read the indicator tables AS TABLES first and hand the model rows
         # whose columns are already named. This is what stops it taking the
         # baseline for the achievement: in the flattened text a row is a bare
         # run of figures, and the count of figures changes from row to row.
-        tbl <- tryCatch(rf_tables(doc$local_path, rfp), error = function(e) character(0))
+        tbl <- if (is.null(module$rf$anchors)) character(0) else
+          tryCatch(rf_tables(doc$local_path, rfp, anchors = module$rf$anchors),
+                   error = function(e) character(0))
         if (length(tbl)) {
           cat("  rf-table   ", length(tbl), "indicator row(s) with named columns\n")
           prompt <- paste0(prompt,
@@ -649,7 +655,7 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
             "baseline or a target as a result. An ACTUAL ACHIEVED of 0 IS a result ",
             "- report it with status 'not achieved'.")
         }
-        for (p in rfp) {
+        for (p in if (isTRUE(module$rf$vision)) rfp else integer(0)) {
           png <- file.path(tempdir(), paste0("rf_", substr(digest_path(pdf_path), 1, 8),
                                              "_", p, ".png"))
           okp <- tryCatch({ pdftools::pdf_convert(doc$local_path, format = "png",
@@ -815,7 +821,7 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
 
 if (MODE == "probe") GROUPS <- GROUPS["identity"]
 
-out <- Map(extract_doc, PDFS, FOCUS, PCODE)
+out <- Map(extract_doc, PDFS, FOCUS, PCODE, FAMILY)
 rows <- dplyr::bind_rows(lapply(out, `[[`, "row"))
 vers <- do.call(rbind, Filter(Negate(is.null), lapply(out, `[[`, "verify")))
 
