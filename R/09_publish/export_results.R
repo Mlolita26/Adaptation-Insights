@@ -12,14 +12,14 @@
 # Each workbook gets a "needs_review" sheet listing only the rows a human has
 # to look at, and an "about" sheet saying which run it came from.
 #
-#   Rscript R/reporting/export_results.R
+#   Rscript R/09_publish/export_results.R
 ##############################################################################
 
 suppressPackageStartupMessages({ library(openxlsx) })
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
-source(file.path(REPO, "R", "shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "paths.R"))
 OUT <- file.path(REPO, "outputs", "extraction")
 
 newest <- function(dir, pat, exclude = NULL) {
@@ -47,7 +47,11 @@ rd <- function(f) {
 }
 
 # template column order, so the export can be pasted straight into the template
-tmpl_cols <- function(sheet) names(read.xlsx(TEMPLATE_XLSX, sheet = sheet))
+# openxlsx substitutes sep.names (default ".") for spaces in a header even
+# when check.names is FALSE, which is what turned the template's
+# "subsector type" into "subsector.type" in every exported workbook
+tmpl_cols <- function(sheet)
+  names(read.xlsx(TEMPLATE_XLSX, sheet = sheet, sep.names = " "))
 
 write_book <- function(rows, sheet_name, extra_cols, out_file, src, review_rule,
                        extra_sheets = list(), raw_sheets = list()) {
@@ -78,7 +82,7 @@ write_book <- function(rows, sheet_name, extra_cols, out_file, src, review_rule,
              "generated", "regenerate with", "note"),
     value = c(sheet_name, nrow(main), nrow(review), basename(src),
               format(Sys.time(), "%Y-%m-%d %H:%M"),
-              "Rscript 05_Pipeline/R/reporting/export_results.R",
+              "Rscript 05_Pipeline/R/09_publish/export_results.R",
               "columns follow the 27 Aug 2026 template exactly; working files stay in 05_Pipeline/outputs/"),
     stringsAsFactors = FALSE))
   locked <- !writable(out_file)

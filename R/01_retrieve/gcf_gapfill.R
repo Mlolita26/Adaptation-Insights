@@ -17,8 +17,8 @@ Sys.setenv(AF_MODE = "load")
   fa <- grep("^--file=", args, value = TRUE)
   if (length(fa)) dirname(sub("^--file=", "", fa[1])) else "R"
 }, error = function(e) "R")
-for (.p in file.path(.this_dir, c(".", "../shared"), "00_config.R")) if (file.exists(.p)) { source(.p); break }
-for (.p in file.path(.this_dir, c(".", "../shared"), "01_utils.R")) if (file.exists(.p)) { source(.p); break }
+for (.p in file.path(.this_dir, c(".", "../00_shared"), "00_config.R")) if (file.exists(.p)) { source(.p); break }
+for (.p in file.path(.this_dir, c(".", "../00_shared"), "01_utils.R")) if (file.exists(.p)) { source(.p); break }
 source(file.path(.this_dir, "af.R"))
 
 GCF_EXISTING_DIR <- file.path(

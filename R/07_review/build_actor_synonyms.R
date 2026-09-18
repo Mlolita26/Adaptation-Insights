@@ -27,15 +27,15 @@
 # reviewed is never touched, and the file is written to a temp name and moved
 # into place so an interrupted run cannot leave half a file on OneDrive.
 #
-#   Rscript R/reporting/build_actor_synonyms.R [--dry]
+#   Rscript R/07_review/build_actor_synonyms.R [--dry]
 ##############################################################################
 
 suppressPackageStartupMessages({ library(openxlsx) })
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
-source(file.path(REPO, "R", "shared", "paths.R"))
-source(file.path(REPO, "R", "shared", "actor_names.R"))
+source(file.path(REPO, "R", "00_shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "actor_names.R"))
 args <- commandArgs(trailingOnly = TRUE)
 DRY  <- any(args == "--dry")
 

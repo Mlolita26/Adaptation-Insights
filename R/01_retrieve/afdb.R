@@ -45,14 +45,14 @@
     if (length(fa)) return(normalizePath(dirname(sub("^--file=", "", fa[1])), mustWork = FALSE))
   }, error = function(e) NULL)
   wd <- getwd()
-  if (file.exists(file.path(wd, "R", "00_config.R"))) return(file.path(wd, "R"))
+  if (file.exists(file.path(wd, "R", "00_shared", "00_config.R"))) return(file.path(wd, "R", "00_shared"))
   if (file.exists(file.path(wd, "00_config.R"))) return(wd)
   return(wd)
 }
 if (!exists("PATHS")) {
   .r_dir <- .find_r_dir()
-  for (.p in file.path(.r_dir, c(".", "..", "../shared", "shared", "R/shared"), "00_config.R")) if (file.exists(.p)) { source(.p); break }
-  for (.p in file.path(.r_dir, c(".", "..", "../shared", "shared", "R/shared"), "01_utils.R")) if (file.exists(.p)) { source(.p); break }
+  for (.p in file.path(.r_dir, c(".", "..", "../00_shared", "00_shared", "R/00_shared"), "00_config.R")) if (file.exists(.p)) { source(.p); break }
+  for (.p in file.path(.r_dir, c(".", "..", "../00_shared", "00_shared", "R/00_shared"), "01_utils.R")) if (file.exists(.p)) { source(.p); break }
 }
 
 DOWNLOAD_DIR <- file.path(PATHS$downloads, "afdb")

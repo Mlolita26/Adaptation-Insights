@@ -27,14 +27,14 @@
 # should price the document at a tenth for calls two to five. The workbook
 # gives both figures - list price, and with that discount.
 #
-#   Rscript R/reporting/cost_report.R
+#   Rscript R/09_publish/cost_report.R
 ##############################################################################
 
 suppressPackageStartupMessages({ library(openxlsx) })
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
-source(file.path(REPO, "R", "shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "paths.R"))
 OUT <- file.path(REPO, "outputs", "extraction")
 
 rd <- function(f) {

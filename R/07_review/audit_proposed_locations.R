@@ -13,14 +13,14 @@
 # proposal, the best registry candidates, and whether the current run still
 # uses it. Nothing is deleted; the team decides from the audit sheet.
 #
-#   Rscript R/reporting/audit_proposed_locations.R
+#   Rscript R/07_review/audit_proposed_locations.R
 ##############################################################################
 
 suppressPackageStartupMessages({ library(openxlsx) })
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
-source(file.path(REPO, "R", "shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "paths.R"))
 
 rd <- function(f) { d <- read.csv(f, stringsAsFactors = FALSE, colClasses = "character",
                                   check.names = FALSE); d[is.na(d)] <- ""; d }
@@ -178,7 +178,7 @@ add("new_by_country", newc, c(34, 22))
 add("about", data.frame(what = c("generated", "registry rows", "proposals audited",
                                  "regenerate with", "note"),
   value = c(format(Sys.time(), "%Y-%m-%d %H:%M"), nrow(REG), nrow(A),
-            "Rscript 05_Pipeline/R/reporting/audit_proposed_locations.R",
+            "Rscript 05_Pipeline/R/07_review/audit_proposed_locations.R",
             "verdicts are suggestions - only ALREADY IN REGISTRY is decided by an exact or alias match"),
   stringsAsFactors = FALSE), c(20, 90))
 f <- file.path(REVIEW_DIR, "proposed_new_locations_AUDIT.xlsx")

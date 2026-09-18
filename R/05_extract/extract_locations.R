@@ -6,7 +6,7 @@
 # evaluation PDF, plus an enumeration of every named intervention location.
 # NO controlled-vocabulary choices here: subsector type, result_level,
 # target_beneficiary category, location codes and the project_lead actor code
-# are assigned afterwards in R/extraction/harmonize_locations.R.
+# are assigned afterwards in R/06_harmonise/harmonize_locations.R.
 #
 # Carried over from extract_verbatim.R (v1.0 robustness):
 #   page-tagged whole document, doc-first prompts (provider caching),
@@ -15,8 +15,8 @@
 #   mechanical fact-check of values/names against cited pages, junk gates.
 #
 # Usage:
-#   Rscript R/extraction/extract_locations.R manifest.csv   # project_code,pdf,focus
-#   Rscript R/extraction/extract_locations.R doc.pdf
+#   Rscript R/05_extract/extract_locations.R manifest.csv   # project_code,pdf,focus
+#   Rscript R/05_extract/extract_locations.R doc.pdf
 #   EXTRACT_MODE=probe    -> locations group only (plumbing test)
 #   EXTRACT_MODEL=...     -> model override (default gpt-5-mini)
 #   EXTRACT_OUT_DIR=...   -> output folder (default outputs/extraction/locations)
@@ -52,7 +52,7 @@ if (length(args) == 1 && grepl("\\.csv$", args[1])) {
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..")) else getwd()
 OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "outputs", "extraction", "locations"))
-source(file.path(REPO, "R", "shared", "clean_fields.R"))
+source(file.path(REPO, "R", "00_shared", "clean_fields.R"))
 RAW_DIR <- file.path(OUT_DIR, "raw")
 dir.create(RAW_DIR, recursive = TRUE, showWarnings = FALSE)
 
@@ -325,7 +325,7 @@ fold_rows <- function(res, meta) {
   # A row survives on its location + intervention alone. A result that breaks
   # the typology rules is scrubbed and flagged, NOT used to drop the row —
   # dropping cost us location coverage in v1.1.
-  # one shared gate (R/shared/clean_fields.R) so both sheets reject the same
+  # one shared gate (R/00_shared/clean_fields.R) so both sheets reject the same
   # things: money, durations, compensation, admin counts, ratings, and place
   # counts that say where the project worked rather than what changed
   bad_result <- function(r)

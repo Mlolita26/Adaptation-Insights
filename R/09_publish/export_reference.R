@@ -17,14 +17,14 @@
 # scores\location_extraction_comparison_2026-09-09.md. They are targets to
 # measure against, not truth.
 #
-#   Rscript R/reporting/export_reference.R
+#   Rscript R/09_publish/export_reference.R
 ##############################################################################
 
 suppressPackageStartupMessages({ library(openxlsx) })
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
-source(file.path(REPO, "R", "shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "paths.R"))
 
 rd <- function(f) {
   d <- read.csv(f, stringsAsFactors = FALSE, colClasses = "character",
@@ -99,11 +99,11 @@ about <- data.frame(
   what = c(
     "The ten gold PDFs read end to end and extracted by hand-equivalent reading, not by the pipeline. 308 location rows. This is the human-analog benchmark: it shows what a careful reader finds, which is what the pipeline is trying to match. qc_flag marks rows the reader was unsure about.",
     "Lucy's manual extraction, working database v02. 60 location rows. The original gold standard.",
-    "Lucy's manual extraction of the general sheet, v02. One row per project. NOTE: this sheet is the scorer's answer key, not a template-shaped extraction, so its columns differ from extracted_records_latest.xlsx. 'results_set' holds every acceptable result value for the project in one cell instead of result1/2/3, because the order of a project's results is arbitrary and scoring them position by position would mark a correct extraction wrong for listing them in a different order; the scorer counts a value as right if it matches any in the set. 'document' says which PDF the row came from. The prose fields (location_notes, rationale_project, GESI_project, result_notes) and the reference links are absent because they cannot be scored by string comparison - they are checked instead by the fact-check pass, which matches each quote back to the page it cites.",
+    "Lucy's manual extraction of the general sheet, v02. One row per project. NOTE: this sheet is the scorer's answer key, not a template-shaped extraction, so its columns differ from extracted_records_latest.xlsx. 'results_set' holds every acceptable result value for the project in one cell instead of result1/2/3, because the order of a project's results is arbitrary and scoring them position by position would mark a correct extraction wrong for listing them in a different order; the scorer counts a value as right if it matches any in the set. 'document' says which PDF the row came from. GESI_project was added on 14 September 2026, recorded by reading the ten gold documents; because it is prose it is compared by reading the two summaries side by side, not by string match. Result values the document does not state as a plain number are kept in the document's own form (for example >1000). The remaining prose fields (location_notes, rationale_project, result_notes) and the reference links are absent because they cannot be scored by string comparison - they are checked instead by the fact-check pass, which matches each quote back to the page it cites.",
     "Cells where more than one answer is accepted as correct (a project's short and long title, a figure quoted two ways). The sheets above show the first answer; this lists the others. The scorer counts any of them as a match.",
     "The template's separator for several values in one cell is a SEMICOLON, as the readme sheet says for funder, implementor and location ('GLO18; CON3; FRA33'). The pipeline follows it. The '||' marker in the underlying reference CSVs means 'either answer is acceptable', not 'both values apply', which is why it is split out here rather than shown in a cell.",
     format(Sys.time(), "%Y-%m-%d %H:%M"),
-    "Rscript 05_Pipeline/R/reporting/export_reference.R",
+    "Rscript 05_Pipeline/R/09_publish/export_reference.R",
     "Neither reference is truth. Both have verified errors, listed in scores/location_extraction_comparison_2026-09-09.md (sections C and D). Read that before treating a disagreement as a pipeline mistake."),
   stringsAsFactors = FALSE)
 addWorksheet(wb, "about")

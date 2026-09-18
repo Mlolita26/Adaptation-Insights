@@ -115,6 +115,22 @@ clean_number <- function(x) {
   low <- tolower(s)
   # a whole sentence is not a value
   if (lengths(gregexpr("\\S+", low)) > 12) { out$note <- "VALUE WAS A SENTENCE"; return(out) }
+  # "42 270" and "301 183" are thousands separated by a space, the French
+  # convention and common in the AfDB and GEF documents. Without this the
+  # first group alone became the value, so 42 270 was silently stored as 42.
+  low <- gsub("(?<=[0-9]) (?=[0-9]{3}\\b)", "", low, perl = TRUE)
+  # a result written as a word ("Three extension agents") still has to reach
+  # the sheet as a bare digit
+  WORDNUM <- c(one = 1, two = 2, three = 3, four = 4, five = 5, six = 6,
+               seven = 7, eight = 8, nine = 9, ten = 10, eleven = 11,
+               twelve = 12, fifteen = 15, twenty = 20, thirty = 30,
+               forty = 40, fifty = 50, hundred = 100)
+  w <- gsub("[^a-z]", "", low)
+  if (nzchar(w) && w %in% names(WORDNUM) && !grepl("[0-9]", low)) {
+    out$value <- as.character(WORDNUM[[w]])
+    out$note  <- paste0("NUMBER WORD IN SOURCE: ", s)
+    return(out)
+  }
   nums <- regmatches(low, gregexpr("[0-9]+(?:[.,][0-9]+)*", low))[[1]]
   if (!length(nums)) { out$note <- "NO NUMBER IN VALUE"; return(out) }
   is_range <- length(nums) >= 2 &&
@@ -139,6 +155,11 @@ clean_number <- function(x) {
   if (is_range) out$note <- paste0("RANGE IN SOURCE: ", s)
   else if (grepl("\\b(over|more than|fewer than|less than|about|approx|around|up to|at least|nearly|almost)\\b", low))
     out$note <- paste0("QUALIFIER IN SOURCE: ", s)
+  # a nil result may be a genuine failed indicator (which IS a finding) or a
+  # placeholder the report never filled in - only a person can tell, so flag it
+  # without discarding whatever note is already there
+  if (v == 0) out$note <- trimws(paste(out$note,
+    paste0("ZERO VALUE - confirm real nil, not placeholder: ", s)))
   out
 }
 
@@ -275,12 +296,24 @@ is_coverage_not_result <- function(value, unit, stated = "") {
   !identical(nums[1], v)
 }
 
+## A result value that is nothing but a date. Month names in English and
+## French, because a good part of the AfDB corpus is French.
+DATE_VALUE_RE <- paste0(
+  "^\\s*(\\d{1,2}\\s+)?(january|february|march|april|may|june|july|august|",
+  "september|october|november|december|janvier|f.vrier|mars|avril|mai|juin|",
+  "juillet|ao.t|septembre|octobre|novembre|d.cembre)\\s+(19|20)\\d{2}\\s*$|",
+  "^\\s*(19|20)\\d{2}[-/]\\d{1,2}[-/]\\d{1,2}\\s*$|",
+  "^\\s*\\d{1,2}[-/]\\d{1,2}[-/](19|20)?\\d{2}\\s*$")
+
 ## ---- one gate for "is this actually a result?" -------------------------------
 # Returns "" when the value is a real result, otherwise the reason to reject it.
 # Used by both pipelines so the two sheets apply the same test.
-result_reject_reason <- function(value, unit, stated = "") {
+result_reject_reason <- function(value, unit, stated = "", metric = "") {
   v <- tolower(trimws(as.character(value %||% "")))
-  m <- tolower(paste(unit %||% "", stated %||% ""))
+  # the harmonised metric is evidence too: "project duration" and
+  # "time to reach beneficiaries" announce themselves there, not in the
+  # verbatim wording the gate used to see on its own
+  m <- tolower(paste(unit %||% "", stated %||% "", metric %||% ""))
   if (!nzchar(v) && !nzchar(trimws(m))) return("")
   if (grepl(paste0("\\b(rating|ratings|score|scored|scoring|scale of|likert|",
                    "out of (5|4|6|10)|satisfactor|unsatisfactor|",
@@ -291,8 +324,17 @@ result_reject_reason <- function(value, unit, stated = "") {
                    "grant amount|expenditure|cost of"), m) &&
       !grepl("income|revenue|price|saving|profit", m))
     return("MONEY NOT A RESULT")
+  # A bare "extension" also names extension agents, extension workers and
+  # extension services, which ARE results ("extension agents trained" is one
+  # of the template's own metrics), so only time-extension wording counts.
+  # A value that is only a date is rejected too: a closing date is not an
+  # achievement.
   if (grepl("[0-9]\\s*-?\\s*(month|week|year)s?\\b", v) ||
-      grepl("duration|extension|closing date", m))
+      grepl(DATE_VALUE_RE, v) ||
+      grepl(paste0("duration|closing date|completion date|elapsed|",
+                   "\\btime to (reach|complete|deliver|first)|",
+                   "(no[- ]cost|time|period|deadline|month)\\s*extension|",
+                   "extension (of|to) the (closing|completion|project)"), m))
     return("DURATION NOT A RESULT")
   if (grepl("compensat|resettl|expropriat|displaced person", m))
     return("COMPENSATION NOT A RESULT")
@@ -308,6 +350,74 @@ result_reject_reason <- function(value, unit, stated = "") {
     return("COVERAGE NOT A RESULT - says where, not what changed")
   ""
 }
+
+## ---- funding mechanism portion ----------------------------------------------
+# The template allows only five instrument types, and its own example shows how
+# an unlisted one is written: "grant (40%) + loan (40%) + other-in-kind
+# contribution (20%)". So anything outside the five keeps its wording behind the
+# "other-" prefix rather than being invented as a new category. Entries are NOT
+# merged: two grants from different funders stay listed separately, which is
+# what the sheet is for.
+FUNDING_OPTIONS <- c("blended", "grant", "investment", "loan", "other")
+map_portion_label <- function(lbl) {
+  l <- tolower(trimws(lbl))
+  if (!nzchar(l)) return("")
+  if (grepl("blend", l)) return("blended")
+  if (grepl("\\bloans?\\b|\\bcredits?\\b|cr.dit|pr.t|borrow|concessional lend", l)) return("loan")
+  if (grepl("\\bgrants?\\b|subvention|\\bdons?\\b|non-repayable", l)) return("grant")
+  if (grepl("investment|equity|\\bbonds?\\b|capital injection", l)) return("investment")
+  paste0("other-", sub("^other[- ]+", "", l))
+}
+clean_funding_portion <- function(x) {
+  out <- list(value = "", note = "")
+  s <- trimws(as.character(x %||% ""))
+  if (!nzchar(s)) return(out)
+  parts <- trimws(strsplit(s, "+", fixed = TRUE)[[1]])
+  parts <- parts[nzchar(parts)]
+  if (!length(parts)) return(out)
+  changed <- character(0)
+  new <- vapply(parts, function(pt) {
+    pct <- regmatches(pt, regexpr("\\([^)]*\\)$", pt))
+    lbl <- trimws(sub("\\([^)]*\\)$", "", pt))
+    mapped <- map_portion_label(lbl)
+    if (!nzchar(mapped)) return("")
+    if (tolower(lbl) != mapped) changed <<- c(changed, paste0(lbl, " -> ", mapped))
+    trimws(paste0(mapped, if (length(pct)) paste0(" ", pct) else ""))
+  }, character(1), USE.NAMES = FALSE)
+  new <- new[nzchar(new)]
+  out$value <- paste(new, collapse = " + ")
+  if (length(changed))
+    out$note <- paste0("funding_mechanism_portion recoded: ",
+                       paste(changed, collapse = "; "))
+  out
+}
+
+
+## ---- a result must say what it counts -------------------------------------
+# A unit on its own is not information: "100 / percentage" tells a reader
+# nothing. Session 1 sometimes puts a unit word where the metric belongs
+# (P005 answered "Percent"), and Session 2 sometimes answers NOT STATED for a
+# metric the extract does state but the 27-option list has no home for. Either
+# way the cell arrives empty, so the floor below guarantees that a value always
+# carries a label a person can read - as a CANDIDATE, which is what the review
+# queue is for, never as an invented controlled value.
+UNIT_WORDS <- paste0("^(percent|percentage|%|number|numbers|count|counts|",
+                     "quantity|total|totals|value|values|unit|units|no[.]?|",
+                     "nb|ratio|rate|index|score|amount)$")
+is_unit_word <- function(x) grepl(UNIT_WORDS, tolower(trimws(as.character(x))))
+
+metric_floor <- function(metric, metric_stated, scope = "") {
+  m <- trimws(as.character(metric %||% ""))
+  if (nzchar(m)) return(m)
+  lab <- trimws(as.character(metric_stated %||% ""))
+  if (!nzchar(lab) || is_unit_word(lab)) lab <- trimws(as.character(scope %||% ""))
+  if (!nzchar(lab)) return("CANDIDATE: unlabelled result")
+  w <- strsplit(trimws(gsub("[^A-Za-z0-9 %/-]", " ", lab)), " +")[[1]]
+  w <- w[nzchar(w)]
+  if (!length(w)) return("CANDIDATE: unlabelled result")
+  paste0("CANDIDATE: ", paste(utils::head(w, 6), collapse = " "))
+}
+
 
 ## ---- text fields -----------------------------------------------------------
 # Control characters occasionally arrive in prose fields where a dash was in

@@ -1,194 +1,49 @@
-# Adaptation Insights — Grey Literature Pipeline
+# Adaptation Insights grey-literature pipeline
 
-Systematic retrieval, filtering, and cataloguing pipeline for grey literature
-(project evaluations and completion reports) from institutional sources,
-supporting the CGIAR **WP2 evidence synthesis on climate adaptation in
-Africa's food and agriculture sector** and the **Adaptation Insights** data
-platform.
+R code for the CGIAR WP2 grey-literature workstream: evaluation documents
+about climate adaptation in African agriculture are retrieved from six
+funders (World Bank, GEF, GCF, AfDB, Adaptation Fund, CIF), de-duplicated,
+screened against the WP3 protocol, catalogued in Zotero, extracted into the
+WP2 template by a two-session AI pipeline, harmonised, reviewed, scored
+against a gold set and published.
 
-The pipeline answers: *which adaptation actions have actually been implemented
-across Africa, and with what results?* — by building a screened corpus of
-project **evaluation documents** (not proposals) that downstream AI-assisted
-extraction turns into a structured database.
+This repo holds code and the reference data the code reads at run time.
+Everything else lives next to it on OneDrive:
 
-> **This repo contains code and metadata only.** The documents themselves
-> (~1.4 GB of PDFs) live on the team OneDrive under
-> `WP2_Evidence Synthesis\Grey Literature\03_Documents\` and are never
-> committed to git.
->
-> **Project-wide context** (what Adaptation Insights is, sources, corpus,
-> extraction design, QC) lives in the knowledge base on OneDrive:
-> `WP2_Evidence Synthesis\Grey Literature\00_Knowledge\README.md`.
+| What | Where |
+|---|---|
+| How and why, current state, open questions | `../00_Knowledge/` (start with its README) |
+| Protocol, QC checklist, workflow diagram | `../01_Protocol/` |
+| The template | `../02_Template/` |
+| The document corpus | `../03_Documents/` (not in git) |
+| Team-facing outputs and review queues | `../04_Extraction_Results/` |
+| Rules and gotchas for AI sessions | `CLAUDE.md` |
 
-## Pipeline overview
-
-```
-1. SCRAPE      R/scraping/{worldbank,...}.R query each source, filter for
-                                            Africa + agriculture/adaptation,
-                                            download documents, log everything
-2. FILTER      (folder organisation)        keep evaluation-type documents,
-                                            park proposals; keep 2015–2025,
-                                            park older documents
-3. DATE        R/scraping/gef_doc_dates.R   recover document dates from the
-                                            files themselves where the source
-                                            website publishes none (GEF)
-4. CATALOGUE   R/zotero/zotero_upload.R     push metadata to the shared Zotero
-                                            group library via the web API
-                                            (RIS files under catalogues/ for
-                                            manual import as fallback)
-5. EXTRACT     R/extraction/                two-session AI extraction into the
-                                            WP2 template (Session 1 verbatim +
-                                            fact-check, Session 2 controlled
-                                            vocabularies), scored against the
-                                            gold set; see docs/AI_Extraction_Protocol.md
-```
-
-## Corpus status (as of 2026-07-23)
-
-| Source | In scope (evaluation docs, 2015–2025) | Parked | Notes |
-|---|---|---|---|
-| World Bank | **276** files ≈ 275 projects (evidence-verified) | 48 to_screen, 43 screened_out, 115 pre-2015 | WB topic classification + title keywords |
-| GEF | **142** TEs / MTRs / PIRs / completion reports | 15 pre-2015, 36 undated, 615 proposal-stage | dates recovered from documents |
-| GCF | **8** evaluation / completion reports (incl. 1 from the CPR-API gap-fill; 3 more were md5-duplicates) | 11 funding proposals | small; grows as projects reach evaluation |
-| AfDB | **123** PCRs / PPERs / IDEV evaluations | 46 to_screen, 4 undated | scraped with WAF session handling |
-| Adaptation Fund | **~34** final/mid-term evaluations, completion reports | 4 progress reports, 92 proposal-stage (catalogued), 208 non-African | via Climate Project Explorer / CPR API |
-| CIF | **72** evaluations (19 African + 53 program-level) | 20 non-African, 13 pre-2015 | via cif.org sitemap (CPE corpus empty) |
-| **Total** | **~655** | | |
-
-Scope rules (team decision, 2026-07-17): evaluation-type documents only —
-proposals are excluded because they do not reflect what was actually
-implemented; time frame 2015–2025 to align with GCA data; excluded documents
-are parked in clearly named folders, never deleted.
-
-## Repository layout
+## Folders follow the workflow
 
 ```
-├── R/                           scripts, classified by function
-│   ├── scraping/                document retrieval from the source websites
-│   │   ├── worldbank.R          World Bank Documents & Reports API ✅
-│   │   ├── gcf.R                Green Climate Fund (Drupal AJAX) ✅
-│   │   ├── gef.R                Global Environment Facility (HTML) ✅
-│   │   ├── afdb.R               AfDB (PCRs, PCR reviews, PPERs, IDEV) ✅
-│   │   ├── af.R / cif.R         Adaptation Fund (CPR API) / CIF sitemap ✅
-│   │   ├── ifad.R               stub — to build 🔲
-│   │   ├── gcf_gapfill.R        GCF gap-fill via the CPR API
-│   │   ├── worldbank_project_info.R  project-level metadata from WB pages
-│   │   ├── gef_doc_dates.R      document date recovery (see below)
-│   │   └── run_all.R            master runner for the scrapers
-│   ├── extraction/              AI-assisted extraction pipeline
-│   │   ├── extract_verbatim.R   Session 1: verbatim extraction + fact-check
-│   │   ├── harmonize.R          Session 2: map to controlled vocabularies
-│   │   ├── score_pilot.R        score a run against a reference CSV
-│   │   ├── screen_corpus.R      cheap sweep: is each file really an evaluation?
-│   │   ├── run_corpus.R         resumable full-corpus runner
-│   │   └── build_doc_index.R    join corpus files to catalogue metadata
-│   ├── zotero/
-│   │   ├── zotero_upload.R      push catalogue to Zotero group library (API)
-│   │   └── zotero_dedup_report.R  duplicate report incl. standalone attachments
-│   └── shared/
-│       ├── 00_config.R          paths, HTTP settings, country/keyword lists
-│       ├── 01_utils.R           shared HTTP, download, logging helpers
-│       ├── paths.R              canonical OneDrive folder constants
-│       ├── sync_metadata.R      refresh catalogues/ from the OneDrive corpus
-│       └── install_packages.R   dependency installer
-├── catalogues/                    per-source catalogues — the git-tracked mirror
-│   ├── worldbank/               metadata CSV (354 docs), download log,
-│   │                            RIS file, filename-rename map, project info
-│   ├── gef/                     document list, recovered dates (+ method
-│   │                            per file), RIS file
-│   └── gcf/                     (no metadata CSV yet — see Known issues)
-├── docs/
-│   └── AI_Extraction_Protocol.md   THE extraction protocol (canonical;
-│                                   Word export lives next to the WP3
-│                                   protocol on OneDrive)
-├── outputs/                     pipeline scratch (gitignored)
-├── downloads/                   scraper output inbox (gitignored)
-└── .claude/                     Claude Code agents & skills for this repo
+R/00_shared   R/01_retrieve   R/02_dedup   R/03_screen   R/04_catalogue
+R/05_extract  R/06_harmonise  R/07_review  R/08_quality  R/09_publish
+catalogues/   run-time reference data + git mirrors of each source's List folder
+docs/         AI_Extraction_Protocol.md (canonical protocol text)
+outputs/      gitignored scratch
 ```
+The full map, script by script, is `../00_Knowledge/05_folder_architecture.md`.
 
-## Setup
+## Running it
 
-1. Install R (≥ 4.4) and dependencies:
-   ```
-   Rscript R/shared/install_packages.R
-   ```
-   (`pdftools` additionally required for `R/scraping/gef_doc_dates.R`.)
+Once: `Rscript R/00_shared/install_packages.R`, and API keys in `.Renviron`.
+Then, from this folder, one script per step:
 
-2. For Zotero upload, create `~/.Renviron` with:
-   ```
-   ZOTERO_API_KEY=...     # zotero.org/settings/keys — write access to the group
-   ZOTERO_LIBRARY_ID=...  # number in the group's URL
-   ```
-   Never commit the key (`.Renviron` is gitignored).
-
-## Usage
-
-```bash
-Rscript R/scraping/worldbank.R        # scrape one source
-Rscript R/scraping/run_all.R          # scrape all working sources
-Rscript R/scraping/gef_doc_dates.R    # recover GEF document dates
-Rscript R/zotero/zotero_upload.R    # push new items to the Zotero group library
-Rscript R/shared/sync_metadata.R    # refresh catalogues/ from OneDrive, then commit
 ```
-
-Scrapers download into `downloads/{source}/` and write catalogues to `data/`.
-Vetted documents are then promoted to the OneDrive corpus
-(`03_Documents\{source}\Docs\...`) and the catalogue CSVs to
-`...\{source}\List\` — `sync_metadata.R` mirrors those back into this repo.
-
-## Cataloguing in Zotero
-
-Two routes:
-
-- **Automated (preferred):** `R/zotero/zotero_upload.R` pushes items to the shared
-  Zotero group library. Each item is tagged `wbdoc:{id}` (or source
-  equivalent), and the script checks existing tags first — it is idempotent
-  and safe to re-run; only new documents upload.
-- **Manual fallback:** import `catalogues/{source}/{source}_2015_2026.ris` in
-  Zotero via File → Import → *"Link to files in original location"*. The RIS
-  links attachments to the OneDrive paths, so this works only on a machine
-  with the same OneDrive layout.
-
-## Hard-won lessons & known issues
-
-- **World Bank 403s:** `documents.worldbank.org` PDF links return
-  `403 Forbidden` to non-browser clients. Fix: fetch from
-  `documents1.worldbank.org` with a browser User-Agent (not yet patched into
-  `worldbank.R`).
-- **Windows 260-char path limit:** long WB report titles + deep OneDrive paths
-  broke downloads *and* Zotero imports. 124 files were renamed to compact
-  names (`worldbank_{Pcodes}_{docid}_ICR_{year}.pdf`); the old→new map is
-  `catalogues/worldbank/renamed_long_paths.csv`. New code should keep filenames
-  short.
-- **GEF publishes no document dates** — not in page HTML, no API. Dates are
-  recovered from the files: month-name dates (EN/FR/PT/ES) on the first pages,
-  filename year hints, and OOXML/OLE creation metadata, in that order of
-  trust. Numeric dates (06/2026) are deliberately ignored — evaluation
-  fact-sheets list *planned* closing dates that would win otherwise. PDF
-  creation metadata is untrustworthy (the GEF CDN regenerated files in 2025).
-  See `catalogues/gef/gef_evaluation_dates.csv` for per-file method + year.
-- **GEF xls/xlsx "Terminal Evaluations"** are often rating-sheet templates;
-  their file-creation dates can predate the project itself and were voided
-  where implausible.
-- **No GCF metadata CSV exists yet** — the GCF scraper logs downloads but
-  never wrote a document catalogue. Worth adding on the next scraper run.
-- **Relevance filtering is keyword-based** and lets through some off-topic
-  projects (budget-support DPOs, non-agriculture GEF enabling activities).
-  A screening pass is planned before extraction.
-
-## Roadmap
-
-- [ ] Patch `worldbank.R`: documents1 host + browser UA; min-year 2015; drop PADs
-- [ ] Align `gef.R` / `gcf.R` to scope (evaluation doc types only)
-- [ ] Write GCF document catalogue CSV + RIS
-- [ ] Relevance screening (rules first, LLM for the ambiguous remainder)
-- [x] AfDB scraper (category listings + IDEV faceted search, WAF session handling, evaluation-only scope 2015–2025)
-- [ ] Remaining scrapers: IFAD, Adaptation Fund, FAO, UNDP
-- [ ] Automate the full flow for newly published documents
-
-## Contributing
-
-1. Branch: `git checkout -b feat/{source-name}`
-2. Build the scraper following the pattern in `worldbank.R`
-   (see `.claude/skills/new-scraper/` for the checklist)
-3. Test, commit (`feat: add {source} scraper`), push, open a PR
+Rscript R/01_retrieve/run_all.R                  # scrape all working sources
+Rscript R/02_dedup/doc_census.R                  # family, ids, hash per file
+Rscript R/02_dedup/dedup_corpus.R                # aliases + project clusters
+Rscript R/03_screen/screen_scope.R --source=af   # protocol screening, resumable
+Rscript R/04_catalogue/build_doc_index.R         # then zotero_upload.R
+Rscript R/05_extract/run_corpus.R --dry          # plan and cost; drop --dry to run
+Rscript R/06_harmonise/harmonize.R
+Rscript R/08_quality/score_pilot.R               # accuracy vs gold, with a why column
+Rscript R/09_publish/export_results.R
+```
+Each script's header says what it does, what it reads and what it writes.

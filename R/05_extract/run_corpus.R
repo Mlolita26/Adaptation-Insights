@@ -32,7 +32,7 @@ REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", fu
 OUT  <- file.path(REPO, "outputs", "extraction", "corpus")
 dir.create(OUT, recursive = TRUE, showWarnings = FALSE)
 RSCRIPT <- file.path(R.home("bin"), "Rscript.exe")
-EXTRACT <- file.path(REPO, "R", "extraction", "extract_verbatim.R")
+EXTRACT <- file.path(REPO, "R", "05_extract", "extract_verbatim.R")
 CHUNK <- 8
 
 CORPUS_DIRS <- c(
@@ -52,14 +52,50 @@ SRC   <- opt("source")
 LIMIT <- suppressWarnings(as.integer(opt("limit", "0")))
 DRY   <- any(args == "--dry")
 
+# project_code from the catalogue, not the filename.
+# The analytical unit is the PROJECT, not the document (team decision,
+# 17 Jul 2026), so two evaluations of the same project must carry the same
+# code. doc_index.csv already joins every corpus filename to its catalogue
+# row: 551 of 656 files resolve to a project id, and 35 of those share an id
+# with another document - exactly the rows that must not be split. The
+# remaining 105 (all 72 CIF files, 32 AfDB, 1 World Bank) keep source:filename,
+# which is still unique and still a usable key.
+pid_for <- local({
+  f <- file.path(REPO, "catalogues", "doc_index.csv")
+  idx <- if (file.exists(f))
+    tryCatch(read.csv(f, stringsAsFactors = FALSE, colClasses = "character"),
+             error = function(e) NULL) else NULL
+  if (is.null(idx) || !all(c("filename", "project_id") %in% names(idx))) {
+    cat("NOTE: doc_index.csv unusable; project_code falls back to filenames\n")
+    function(fn) ""
+  } else {
+    key <- setNames(trimws(idx$project_id), trimws(idx$filename))
+    function(fn) { v <- unname(key[fn]); if (is.na(v)) "" else v }
+  }
+})
+
+
 # manifest of the whole corpus
+# the document family from the census (02_dedup/doc_census.R): what the
+# extractor routes on. Empty when the census has not seen the file.
+fam_for <- local({
+  f <- file.path(dirname(REPO), "04_Extraction_Results", "review", "family_census.csv")
+  lk <- if (file.exists(f)) {
+    cen <- read.csv(f, stringsAsFactors = FALSE, colClasses = "character")
+    setNames(cen$family, cen$filename)
+  } else character(0)
+  function(fs) { v <- unname(lk[fs]); ifelse(is.na(v), "", v) }
+})
 mf <- do.call(rbind, lapply(names(CORPUS_DIRS), function(s) {
   if (nzchar(SRC) && s != SRC) return(NULL)
   d <- file.path(DATA, CORPUS_DIRS[s])
   fs <- list.files(d, pattern = "\\.(pdf|PDF)$")
   if (!length(fs)) return(NULL)
-  data.frame(project_code = paste0(s, ":", fs),
-             pdf = file.path(d, fs), focus = "", stringsAsFactors = FALSE)
+  pid <- vapply(fs, pid_for, character(1), USE.NAMES = FALSE)
+  data.frame(project_code = ifelse(nzchar(pid), paste0(s, ":", pid),
+                                              paste0(s, ":", fs)),
+             pdf = file.path(d, fs), focus = "", family = fam_for(fs),
+             stringsAsFactors = FALSE)
 }))
 cat("corpus files in scope:", nrow(mf), "\n")
 

@@ -2,7 +2,7 @@
 # actor_names.R - the one way to compare two organisation names.
 #
 # Three copies of this logic had grown up independently: nrm() and nrm_actor()
-# in R/extraction/harmonize.R and fold() in R/reporting/audit_proposed_actors.R,
+# in R/06_harmonise/harmonize.R and fold() in R/07_review/audit_proposed_actors.R,
 # which stripped "the/of/for/and" that the other two kept. So the audit that
 # checks the matcher's proposals disagreed with the matcher about whether two
 # names were the same, and a synonym list keyed on one would have been invisible

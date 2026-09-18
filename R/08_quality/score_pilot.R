@@ -56,13 +56,59 @@ num_one <- function(x) {
 num <- function(x) vapply(as.character(x), num_one, character(1), USE.NAMES = FALSE)
 alts <- function(cell) trimws(strsplit(as.character(cell), "\\|\\|")[[1]])
 
+## Metric and unit reference: one row per accepted gold value saying what that
+## figure counts and in what unit, read from the documents (16 Sep 2026). The
+## results_set alone is a bag of numbers, so before this there was nothing to
+## compare a metric or a unit against and neither could be scored at all.
+RESFILE <- file.path(dirname(gfile), "gold_v1_results.csv")
+RES <- if (file.exists(RESFILE)) {
+  r <- read.csv(RESFILE, stringsAsFactors = FALSE, colClasses = "character")
+  r[is.na(r)] <- ""; r
+} else NULL
+if (!is.null(RES)) cat("metric/unit reference:", RESFILE, "-", nrow(RES), "rows
+")
+
+# a CANDIDATE label means "outside the controlled list"; two different
+# CANDIDATE wordings still agree on that much, which is a partial not a miss
+mu_norm <- function(x) trimws(tolower(gsub("[^a-z0-9 ]", " ", tolower(x))))
+mu_cmp <- function(gold, got) {
+  g <- mu_norm(gold); e <- mu_norm(got)
+  if (!nzchar(g) || !nzchar(e)) return(NA)
+  if (g == e) return(TRUE)
+  if (startsWith(g, "candidate") && startsWith(e, "candidate")) return(NA_character_)
+  FALSE
+}
+
 NUMERIC <- c("publication_year", "start_year", "closure_year", "budget_total",
              "disbursed", "location_count", "evidence_depth")
+## An actor CELL holds CODES ("GLO62; GLO27"); a reference may hold the NAMES
+## those codes stand for. Compared as plain strings that marked twelve correct
+## holdout answers wrong - GLO62 against "Adaptation Fund", GLO16 against
+## "World Food Programme". Expand codes to their registered name and acronym
+## before the containment test so a coded answer is scored on what it means.
+source(file.path(REPO, "R", "00_shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "actor_names.R"))
+AREG <- tryCatch(actor_registry(TEMPLATE_XLSX), error = function(e) NULL)
+if (is.null(AREG)) cat("NOTE: actor registry unreadable; codes compared as text
+")
+actor_expand <- function(e) {
+  if (is.null(AREG) || !nzchar(e)) return(character(0))
+  codes <- regmatches(e, gregexpr("\\b[A-Z]{2,6}[0-9]{1,4}\\b", e))[[1]]
+  if (!length(codes)) return(character(0))
+  k <- match(codes, AREG$code); k <- k[!is.na(k)]
+  if (!length(k)) return(character(0))
+  unique(c(AREG$name[k], AREG$acro[k]))
+}
+## Report numbers are written both padded and unpadded (ICR00004849 = ICR4849).
+id_nrm <- function(x) gsub("(?<=[A-Za-z])0+(?=[0-9])", "", x, perl = TRUE)
+
+
 CONTAINS <- c("project_lead", "funder", "implementor")
 
 match_field <- function(field, gold_cell, extracted) {
   a <- alts(gold_cell); e <- as.character(extracted)
   if (field == "resource_id") e <- sub("^\\s*report\\s+no[.:]?\\s*", "", e, ignore.case = TRUE)
+  if (field == "resource_id") { a <- id_nrm(a); e <- id_nrm(e) }
   if (all(!nzchar(a)) && !nzchar(e)) return("both_empty")
   # titles: tolerate appended identifiers/acronyms — containment either way
   if (field == "project_title") {
@@ -76,8 +122,9 @@ match_field <- function(field, gold_cell, extracted) {
     if (field %in% NUMERIC) {
       if (nzchar(num(av)) && num(av) == num(e)) return("match")
     } else if (field %in% CONTAINS) {
-      if (nzchar(e) && (grepl(nrm(av), nrm(e), fixed = TRUE) ||
-                        grepl(nrm(e), nrm(av), fixed = TRUE))) return("match")
+      hits <- c(e, actor_expand(e))
+      for (hv in hits) if (nzchar(hv) && (grepl(nrm(av), nrm(hv), fixed = TRUE) ||
+                                          grepl(nrm(hv), nrm(av), fixed = TRUE))) return("match")
     } else {
       if (identical(av, "CANDIDATE") && grepl("^candidate", nrm(e))) return("match")
       if (nzchar(e) && nrm(av) == nrm(e)) return("match")
@@ -117,8 +164,115 @@ for (i in seq_len(nrow(g))) {
               if (hits == length(slots)) "match" else
               if (hits > 0) "partial" else "mismatch",
     stringsAsFactors = FALSE)
+
+  # metric and unit, for the slots whose value the reference recognises
+  if (!is.null(RES)) {
+    ref <- RES[RES$project_code == pc, , drop = FALSE]
+    for (fld in c("metric", "unit")) {
+      ok <- bad <- soft <- 0
+      for (k in 1:3) {
+        v <- as.character(hr[[paste0("result", k)]])
+        if (!nzchar(trimws(v))) next
+        j <- which(nzchar(num(ref$value)) & num(ref$value) == num(v))
+        if (!length(j)) next
+        gold_v <- ref[[fld]][j[1]]
+        if (!nzchar(gold_v)) next
+        got_v <- as.character(hr[[paste0("result", k, "_", fld)]])
+        r <- mu_cmp(gold_v, got_v)
+        if (is.na(r)) soft <- soft + 1 else if (isTRUE(r)) ok <- ok + 1 else bad <- bad + 1
+      }
+      if (ok + bad + soft == 0) next          # nothing comparable: no check
+      rows[[length(rows) + 1]] <- data.frame(project = pc,
+        field = paste0("result_", fld), gold = "(see gold_v1_results.csv)",
+        extracted = paste(vapply(1:3, function(k)
+          as.character(hr[[paste0("result", k, "_", fld)]]), character(1)), collapse = " | "),
+        verdict = if (bad == 0 && soft == 0) "match" else
+                  if (ok + soft > 0) "partial" else "mismatch",
+        stringsAsFactors = FALSE)
+    }
+  }
 }
+## A ruling beats a description. Where someone has read the document and
+## decided who is right, that sentence is used instead of the generic
+## diagnosis. The file is a plain CSV anyone can add a row to.
+ADJFILE <- file.path(dirname(gfile), "gold_v1_adjudication.csv")
+ADJ <- if (file.exists(ADJFILE)) {
+  a <- read.csv(ADJFILE, stringsAsFactors = FALSE, colClasses = "character")
+  a[is.na(a)] <- ""; a
+} else NULL
+if (!is.null(ADJ)) cat("adjudications:", ADJFILE, "-", nrow(ADJ), "rulings
+")
+adj_why <- function(project, field) {
+  if (is.null(ADJ)) return("")
+  k <- which(ADJ$project_code == project & ADJ$field == field)
+  if (!length(k)) return("")
+  w <- ADJ$who_is_right[k[1]]
+  lab <- switch(w, gold = "Gold is right.", pipeline = "Pipeline is right.",
+                neither = "Neither is right.", "Not decided yet.")
+  paste(lab, ADJ$why[k[1]])
+}
+
+## Why a check did not agree, in one short plain sentence. A verdict on its own
+## tells a reviewer that something is wrong but not what to look at, and the
+## same four or five causes come round again and again: the pipeline found
+## nothing, the two sides picked different organisations, the counting level
+## differs, or the text is identical apart from a space.
+actor_name_of <- function(x) {
+  n <- actor_expand(x)
+  if (length(n)) paste(utils::head(n[nzchar(n)], 2), collapse = " / ") else x
+}
+strip_all <- function(x) gsub("[^a-z0-9]", "", tolower(x))
+fmt <- function(v) format(v, scientific = FALSE, trim = TRUE, big.mark = ",")
+
+why_fail <- function(field, gold, got, verdict) {
+  if (verdict %in% c("match", "both_empty")) return("")
+  g <- trimws(as.character(gold)); e <- trimws(as.character(got))
+  ga <- alts(g); ga <- ga[nzchar(ga)]
+  if (!nzchar(e) && length(ga))  return("Pipeline found nothing. Gold has a value.")
+  if (nzchar(e) && !length(ga))  return("Gold is empty. Pipeline found a value.")
+  if (grepl("^candidate", tolower(e)))
+    return("No option in the list fitted. Pipeline flagged it for review.")
+  if (any(vapply(ga, function(a) strip_all(a) == strip_all(e), logical(1))))
+    return("Same text. Only spacing or punctuation differs.")
+
+  if (field == "results_set")
+    return(if (verdict == "partial") "Some result values match gold, some do not."
+           else "None of the result values match gold.")
+  if (field %in% c("result_metric", "result_unit"))
+    return(if (verdict == "partial")
+             "Both say the term is outside the list, but word it differently."
+           else "Pipeline named something different from gold.")
+
+  if (field %in% CONTAINS)
+    return(paste0("Different organisation. Gold wants ", actor_name_of(ga[1]),
+                  ", pipeline gave ", actor_name_of(e), "."))
+
+  if (field %in% NUMERIC) {
+    gn <- suppressWarnings(as.numeric(num(ga))); gn <- gn[!is.na(gn)]
+    en <- suppressWarnings(as.numeric(num(e)))
+    if (length(gn) && !is.na(en) && en > 0) {
+      if (field == "location_count")
+        return(if (en > max(gn))
+                 "Counted smaller places than gold. Gold counted countries or regions."
+               else "Counted larger areas than gold. Gold counted sites.")
+      if (field %in% c("budget_total", "disbursed"))
+        return(paste0("Different amount. Gold ", fmt(max(gn)), ", pipeline ", fmt(en),
+                      ". Check the currency and whether co-financing is included."))
+      if (field %in% c("start_year", "closure_year", "publication_year"))
+        return(paste0("Different year. Gold ", fmt(gn[1]), ", pipeline ", fmt(en),
+                      ". Check which date the document means."))
+      return(paste0("Different number. Gold ", fmt(gn[1]), ", pipeline ", fmt(en), "."))
+    }
+  }
+  if (field == "project_title") return("Different title. Check the project name, not the report name.")
+  paste0("Different value. Gold accepts ", substr(ga[1], 1, 40), ".")
+}
+
 sc <- bind_rows(rows)
+sc$why <- mapply(why_fail, sc$field, sc$gold, sc$extracted, sc$verdict,
+                 USE.NAMES = FALSE)
+ruled <- mapply(adj_why, sc$project, sc$field, USE.NAMES = FALSE)
+sc$why <- ifelse(nzchar(ruled), ruled, sc$why)
 
 stamp <- sub("^harmonized_diagnostics_", "", sub("\\.csv$", "", basename(hfile)))
 out <- file.path(OUT_DIR, paste0("score_", stamp, ".csv"))

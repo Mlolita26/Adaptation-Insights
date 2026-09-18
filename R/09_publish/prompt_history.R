@@ -13,14 +13,14 @@
 # what actually ran. The notes on what went wrong are curated, from the commit
 # log and the score files.
 #
-#   Rscript R/reporting/prompt_history.R
+#   Rscript R/09_publish/prompt_history.R
 ##############################################################################
 
 suppressPackageStartupMessages({ library(openxlsx) })
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
-source(file.path(REPO, "R", "shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "paths.R"))
 
 ## ---- read the prompts out of git -------------------------------------------
 git <- function(...) {
@@ -106,10 +106,13 @@ prompt_blocks <- function(src) {
   res
 }
 
-FILES <- c("R/extraction/extract_verbatim.R", "R/extract_verbatim.R",
-           "R/extraction/extract_locations.R", "R/extract_locations.R",
-           "R/extraction/extract_general.R",
-           "R/extraction/harmonize.R", "R/extraction/harmonize_locations.R")
+FILES <- c("R/05_extract/extract_verbatim.R", "R/extraction/extract_verbatim.R",
+           "R/extract_verbatim.R",
+           "R/05_extract/extract_locations.R", "R/extraction/extract_locations.R",
+           "R/extract_locations.R",
+           "R/archive/extract_general.R", "R/extraction/extract_general.R",
+           "R/06_harmonise/harmonize.R", "R/extraction/harmonize.R",
+           "R/06_harmonise/harmonize_locations.R", "R/extraction/harmonize_locations.R")
 
 rows <- list(); seen <- character(0)
 for (path in FILES) {
@@ -239,7 +242,7 @@ readme <- data.frame(` ` = c(
  "not say what the right answer is. Those became questions for the template",
  "owner. They are tracked in QC_Common_Mistakes.docx, not here.",
  "",
- "Rebuilt with: Rscript 05_Pipeline/R/reporting/prompt_history.R"),
+ "Rebuilt with: Rscript 05_Pipeline/R/09_publish/prompt_history.R"),
  check.names = FALSE, stringsAsFactors = FALSE)
 
 wb <- createWorkbook()

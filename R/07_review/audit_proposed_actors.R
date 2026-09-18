@@ -18,15 +18,15 @@
 #                   code or fold into the parent is the team's call, but it
 #                   is a different question from "is this a new organisation".
 #
-#   Rscript R/reporting/audit_proposed_actors.R
+#   Rscript R/07_review/audit_proposed_actors.R
 ##############################################################################
 
 suppressPackageStartupMessages({ library(openxlsx) })
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
-source(file.path(REPO, "R", "shared", "paths.R"))
-source(file.path(REPO, "R", "shared", "actor_names.R"))
+source(file.path(REPO, "R", "00_shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "actor_names.R"))
 
 rd <- function(f) {
   d <- read.csv(f, stringsAsFactors = FALSE, colClasses = "character")

@@ -34,7 +34,15 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "s1-v1.1"   # v1.1: team field rules - no shouty titles, no codes in titles, numeric-only location_count, location_notes always filled, GESI stated when absent, whole-digit results, % for percentages
+PROMPT_VERSION <- "s1-v1.2"   # v1.2 (16 Sep 2026), from adjudicating the gold
+# disagreements against the documents: title copied character for character;
+# start year accepts "since 2018" prose; location_count never counts the
+# evaluation's own focus groups or interviews; a publisher that delivers the
+# work is also an implementor and partners named in running text count;
+# financing read from the focus programme's row in a multi-programme table.
+# v1.1: team field rules - no shouty titles, no codes in titles, numeric-only
+# location_count, location_notes always filled, GESI stated when absent,
+# whole-digit results, % for percentages
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))   # for output file names
 # .Renviron lives in the OneDrive-redirected Documents folder; a shell that
 # overrides HOME (e.g. Git Bash) makes R miss it, so load it explicitly
@@ -65,7 +73,9 @@ if (length(args) == 1 && grepl("\\.csv$", args[1])) {
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..")) else getwd()
 OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "outputs", "extraction"))
-source(file.path(REPO, "R", "shared", "clean_fields.R"))
+source(file.path(REPO, "R", "00_shared", "clean_fields.R"))
+source(file.path(REPO, "R", "00_shared", "rf_table.R"))
+source(file.path(REPO, "R", "00_shared", "doc_families.R"))
 RAW_DIR <- file.path(OUT_DIR, "raw")
 dir.create(RAW_DIR, recursive = TRUE, showWarnings = FALSE)
 
@@ -107,8 +117,11 @@ DOC_INDEX <- local({
 # ORIGINAL [page N] numbers, so citations and the fact-check stay valid.
 # Unknown families and documents under 100 pages keep every page.
 detect_doc_family <- function(pages) {
+  # the shared detector (00_shared/doc_families.R) is the one place a family
+  # is defined; this maps its answer onto the section maps this script has
+  fam <- detect_family(pages)$family
+  if (fam == "wb_icr") return("wb_icr")
   head_txt <- tolower(paste(pages[seq_len(min(6, length(pages)))], collapse = " "))
-  if (grepl("implementation completion and results report", head_txt)) return("wb_icr")
   if (grepl("independent evaluation office of the gef|evaluation of gef", head_txt)) return("gef_ieo")
   "generic"
 }
@@ -167,7 +180,15 @@ rf_pages <- function(pages) {
   # references — prefer an explicit annex-start hit, else the last mention
   ann <- grep("annex\\s*[0-9ivx]*[.:]?\\s*(results framework|logical framework)", low)
   start <- if (length(ann)) ann[length(ann)] else hits[length(hits)]
-  seq(start, min(length(pages), start + RF_MAX_IMG - 1))
+  # A World Bank ICR states its achievements twice: once in the indicator
+  # tables and again, unambiguously, in the "Key Outputs by Component"
+  # narrative at the END of the same annex. In H001 that narrative sits on
+  # p56-58 while the annex starts at p37, so a flat 10-page window never
+  # reached it; P009 is the same. Take the window AND those pages.
+  win <- seq(start, min(length(pages), start + RF_MAX_IMG - 1))
+  keyout <- grep("key outputs by component", low)
+  keyout <- keyout[keyout >= start]
+  sort(unique(c(win, head(keyout, 3))))
 }
 
 build_doc_text <- function(pages, sel) {
@@ -203,11 +224,11 @@ GROUPS <- list(
 identity = list(
   task = "Extract the project identity and timeline, verbatim from the document.",
   type = type_object(
-    project_title  = type_string("The PROJECT's name, word by word as stated - from the cover ('...Project (P123456)'), the data sheet's 'Project Name' row, or the 'evaluation of the project X' phrasing (extract X). Never the REPORT's own name (e.g. 'PPCR Evaluation Report' is a report title, not a project title). WRITE IT IN NORMAL SENTENCE CASE even when the cover shouts it in capitals. Keep abbreviations as they are (APPSA, RFS, AFCC2/RI) but NEVER include a project or document code: no 'P149269', no '(GEF ID 9072)', no 'ICR00004643', no trailing '-- Pxxxxxx'."),
+    project_title  = type_string("The PROJECT's name, word by word as stated - from the cover ('...Project (P123456)'), the data sheet's 'Project Name' row, or the 'evaluation of the project X' phrasing (extract X). Never the REPORT's own name (e.g. 'PPCR Evaluation Report' is a report title, not a project title). WRITE IT IN NORMAL SENTENCE CASE even when the cover shouts it in capitals. Keep abbreviations as they are (APPSA, RFS, AFCC2/RI) but NEVER include a project or document code: no 'P149269', no '(GEF ID 9072)', no 'ICR00004643', no trailing '-- Pxxxxxx'. Copy the remaining words CHARACTER FOR CHARACTER from the data sheet, including spacing around hyphens and slashes: if it reads 'AFCC2/RI -Support', do not tidy it to 'AFCC2/RI - Support'."),
     project_id     = type_string("The publisher's project identifier exactly as printed IN THIS DOCUMENT, e.g. 'P149269'. Empty if none printed."),
-    project_lead_name = type_string("NAME of the ORGANISATION leading the project, as the document names it (often the implementing agency or publisher, e.g. 'World Bank'). Never an internal department, global practice, division or regional unit of an organisation — name the organisation itself."),
+    project_lead_name = type_string("NAME of the ORGANISATION leading the project, as the document names it (often the implementing agency or publisher, e.g. 'World Bank'). Never an internal department, global practice, division or regional unit of an organisation — name the organisation itself. An organisation that both commissions and delivers the work is the lead AND an implementor: record it in both places."),
     publication_year = type_string("Year the source document was published (front page)."),
-    start_year     = type_string("Year the project ACTUALLY started per the document. Look in the Key Dates / basic-data table: 'Approval', 'Effectiveness', 'entry into force', 'signature', 'officially launched', French 'mise en vigueur'. Never design/concept/endorsement years, and NEVER an extension approval or revised-closing decision date. If no formal date is stated but the document gives an explicit implementation period ('implemented between 2017 and 2022'), use its first year. Empty only if neither is stated."),
+    start_year     = type_string("Year the project ACTUALLY started per the document. Look in the Key Dates / basic-data table: 'Approval', 'Effectiveness', 'entry into force', 'signature', 'officially launched', French 'mise en vigueur'. Never design/concept/endorsement years, and NEVER an extension approval or revised-closing decision date. If no formal date is stated but the document gives an explicit implementation period ('implemented between 2017 and 2022'), use its first year. A prose statement of when work began also counts: 'under implementation since 2018', 'running since 2018', 'operational since 2018'. Empty only if none of these is stated."),
     start_year_evidence = type_string("Short exact quote stating the start (e.g. 'Approval 29-Apr-2014', 'implemented between 2017 and 2022'), with its wording unchanged."),
     closure_year   = type_string("Year the project ACTUALLY closed ('actual closing', 'completed in'; the last year of an explicit implementation period counts if the project is described as finished). Empty if still running ('to date') or not stated."),
     closure_year_evidence = type_string("Short exact quote stating the closing."),
@@ -222,7 +243,7 @@ geography = list(
     "aggregate location lists that appear in different sections."),
   type = type_object(
     scope_stated   = type_string("Exact quote of the document's own statement of geographic scope/coverage (e.g. 'The study's geographical scope was nationwide' or the countries list)."),
-    location_count = type_string("A BARE NUMBER and nothing else - digits only, no words, no '~', no 'N/A', no unit. It is the count of DISTINCT African locations named anywhere as receiving interventions, at the MOST PRECISE level the document supports: if specific villages, sites or districts are enumerated, count those (20 pilot villages beats 4 countries); fall back to counting countries only when nothing finer is enumerated. Aggregate across the whole document; count each location once. Leave empty only when the document truly never says."),
+    location_count = type_string("A BARE NUMBER and nothing else - digits only, no words, no '~', no 'N/A', no unit. It is the count of DISTINCT African locations named anywhere as receiving interventions, at the MOST PRECISE level the document supports: if specific villages, sites or districts are enumerated, count those (20 pilot villages beats 4 countries); fall back to counting countries only when nothing finer is enumerated. Aggregate across the whole document; count each location once. NEVER count the evaluation's own fieldwork: focus groups, interviews, survey rounds, sampling units and respondent groups are not places. If a sentence says four focus groups were held with farmers from two districts, the count is two. Leave empty only when the document truly never says."),
     location_count_basis = type_string("One sentence saying exactly what was counted, at which level (villages/districts/countries) and where the lists are (pages), so the count can be checked."),
     location_notes = type_string(paste(
       "ALWAYS fill this, and it MUST account for the number in location_count.",
@@ -289,9 +310,16 @@ rationale = list(
 results = list(
   task = paste(
     "Extract ALL quantitative project-level ACTUAL results, exhaustively.",
-    "Check the results framework / indicator annex first. Include results",
-    "whose target was NOT achieved and failed yes/no indicators (a failure",
-    "is a finding). Report metric and unit AS THE DOCUMENT WORDS THEM — do",
+    "Check the results framework / indicator annex first.",
+    "SHORTFALLS AND NON-DELIVERY COUNT AS RESULTS AND ARE OFTEN MISSED.",
+    "Include every indicator that fell short, delivered nothing, or was",
+    "dropped, with its actual figure - including zero. An output reported as",
+    "'0 of 2 collection centres built', '10 of 17 warehouses (59%)' or",
+    "'0.00' against a target is a FINDING, not an empty cell: give the actual",
+    "(0, 10) and set status 'not achieved' or 'partially achieved'. Read the",
+    "effectiveness/achievement narrative as well as the annex - completion",
+    "rates per output are usually stated there and not in the table.",
+    "Report metric and unit AS THE DOCUMENT WORDS THEM — do",
     "not translate into any external category.",
     "A RESULT IS A QUANTITY OF SOMETHING THE PROJECT CHANGED OR DELIVERED:",
     "people (beneficiaries reached, farmers/women/youth trained, households",
@@ -335,7 +363,12 @@ results = list(
 finance = list(
   task = paste(
     "Extract the project financing verbatim. Read the TITLE PAGE wording and",
-    "the financing/data-sheet table first."),
+    "the financing/data-sheet table first.",
+    "A document covering SEVERAL programmes usually has no data sheet. Its",
+    "financing sits in a comparison table with one row per programme, with",
+    "columns such as 'Total GEF financing' and 'Total cofinancing'. Read ONLY",
+    "the focus programme's row, and the total budget is that row's own",
+    "financing PLUS its cofinancing."),
   type = type_object(
     budget_total = type_string("Total PLANNED budget: the financing-plan / data-sheet TOTAL across ALL sources (lead fund grant/credit + co-financing + government counterpart + beneficiary in-kind). Typical table rows: 'GEF grant', 'IDA credit', 'Government', 'Co-financing', 'TOTAL'. NEVER the amount spent/executed - that is disbursed, a different field. Digits only, EXPANDED to full units: 'UA 1.71 million' -> 1710000."),
     budget_lead_share = type_string("The lead funder's / main envelope alone (e.g. the GEF, GCF, AF or IDA amount), digits only, expanded to full units. Empty if same as budget_total."),
@@ -344,22 +377,66 @@ finance = list(
     instrument_stated = type_string("EXACT wording of the financing instrument(s) from the title page or financing table, verbatim (e.g. 'ON A CREDIT ... AND A GRANT', 'SMALL GRANT', 'GEF Trust Fund grants')."),
     funding_mechanism_portion = type_string("INSTRUMENT-TYPE mix (grant/loan/investment/other — never fund or account names) WITH PERCENTAGES in parentheses joined by ' + ', per the template format: 'grant (40%) + loan (40%) + other-in-kind contribution (20%)'. Compute percentages from stated amounts when the document gives amounts but no percentages. Empty if the split cannot be established."),
     funder_names      = type_array(items = type_string(), description = "NAMES of all funding ORGANISATIONS incl. named trust funds and co-financiers, as the document names them. Never account/grant numbers like 'TF-17015' or 'IDA-52030', and never financing-table row labels or generic categories in any language ('Borrower/Recipient', 'Local Beneficiaries', 'Bilateral Agencies', 'GOUVERNEMENT/BENEFICIAIRE', 'CONTREPARTIE') - only actual named organisations (a named government like 'Government of Benin' counts)."),
-    implementor_names = type_array(items = type_string(), description = "NAMES of the implementing agencies: those designated by the data sheet PLUS any co-implementing national agencies named in the document body (multi-country projects often have one agency per country while the data sheet names only one). Not private partners, borrowers or buyers."),
+    implementor_names = type_array(items = type_string(), description = "NAMES of the implementing agencies: those designated by the data sheet PLUS any co-implementing national agencies named in the document body (multi-country projects often have one agency per country while the data sheet names only one). Not private partners, borrowers or buyers. Include delivery partners named only in running text, not just those in a table: 'their partner, UCASN, delivered' names an implementor. When the publisher delivers the work itself, name the publisher here too."),
     finance_notes = type_string("Contradictions between financing tables, counterpart funding that never materialized, or similar. Empty if none."),
     source_pages = pg()))
 )
 
 # ---------------------------------------------------- result ranking (code) --
+# A headcount tells you how big a project was; an outcome tells you whether it
+# worked. The synthesis exists to answer the second, so reach must not outrank
+# the project's own objective indicator. The old +10 for "beneficiar" did
+# exactly that: on holdout H002 it recorded 313,981 beneficiaries and dropped
+# the project's two PDO indicators, coffee productivity (1.20) and quality
+# share (65.93%), which are what the project was for.
+is_reach <- function(r) grepl(
+  paste0("beneficiar|people reached|persons reached|farmers reached|",
+         "households reached|reached with|participants"),
+  tolower(paste(r$metric_stated, r$unit_stated)))
+
+# Two slots must not describe one indicator. H009 spent all three on 438,291
+# total / 214,763 male / 223,528 female; P010 on the programme total plus
+# Malawi's share of it. That is one result with a breakdown, not three results.
+metric_key <- function(r) {
+  k <- tolower(paste(r$metric_stated, collapse = " "))
+  k <- gsub("[(][^)]*[)]", " ", k)
+  k <- gsub(paste0("- *(of which|male|female|men|women|total|regional|national|",
+                   "overall|cumulative|disaggregated).*$"), " ", k)
+  k <- gsub("[^a-z ]", " ", k)
+  k <- trimws(gsub(" +", " ", k))
+  substr(k, 1, 42)
+}
+
 rank_results <- function(rl) {
   if (!length(rl)) return(rl)
   score <- vapply(rl, function(r) {
     s <- 0
     if (identical(r$indicator_level, "PDO/outcome")) s <- s + 100
     if (identical(r$indicator_level, "intermediate")) s <- s + 50
-    if (grepl("beneficiar", tolower(paste(r$metric_stated, r$unit_stated)))) s <- s + 10
+    if (is_reach(r)) s <- s - 5
     s
   }, numeric(1))
   rl[order(-score, seq_along(rl))]
+}
+
+# Fill the three slots: best first, never the same indicator twice, and at
+# least one outcome that is not a headcount whenever the document offers one.
+choose_three <- function(top) {
+  pick <- list(); seen <- character(0); spare <- list()
+  for (r in top) {
+    k <- metric_key(r)
+    if (nzchar(k) && k %in% seen) { spare[[length(spare) + 1L]] <- r; next }
+    pick[[length(pick) + 1L]] <- r; seen <- c(seen, k)
+    if (length(pick) == 3L) break
+  }
+  if (length(pick) && all(vapply(pick, is_reach, logical(1)))) {
+    alt <- Filter(function(r) !is_reach(r), c(top, spare))
+    if (length(alt)) pick[[length(pick)]] <- alt[[1]]
+  }
+  while (length(pick) < 3L && length(spare)) {
+    pick[[length(pick) + 1L]] <- spare[[1]]; spare <- spare[-1]
+  }
+  pick
 }
 
 fold_results <- function(res, row) {
@@ -393,7 +470,8 @@ fold_results <- function(res, row) {
   rl <- rl[!is_junk]
   achieved <- Filter(function(r) !identical(r$status, "not achieved"), rl)
   failed   <- Filter(function(r) identical(r$status, "not achieved"), rl)
-  top <- rank_results(achieved)
+  ranked <- rank_results(achieved)
+  top    <- choose_three(ranked)
   for (i in 1:3) {
     r <- if (length(top) >= i) top[[i]] else NULL
     row[[paste0("result", i)]] <- if (is.null(r)) "" else as.character(r$value)
@@ -402,8 +480,11 @@ fold_results <- function(res, row) {
     row[[paste0("result", i, "_scope")]] <- if (is.null(r)) "" else as.character(r$scope)
     row[[paste0("result", i, "_page")]]  <- if (is.null(r)) "" else as.character(r$page)
   }
-  extra <- if (length(top) > 3)
-    paste0("further results: ", paste(vapply(top[4:length(top)], function(r)
+  # everything the three slots could not hold - including an indicator dropped
+  # because another slot already describes it - still belongs in the notes
+  rest <- Filter(function(r) !any(vapply(top, identical, logical(1), r)), ranked)
+  extra <- if (length(rest))
+    paste0("further results: ", paste(vapply(rest, function(r)
       paste0(r$value, " ", r$metric_stated, " (", r$scope, ", p", r$page, ")"),
       character(1)), collapse = "; ")) else ""
   fails <- if (length(failed))
@@ -553,6 +634,21 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
       imgs <- list()
       if (gname == "results") {
         rfp <- rf_pages(doc$pages)
+        # Read the indicator tables AS TABLES first and hand the model rows
+        # whose columns are already named. This is what stops it taking the
+        # baseline for the achievement: in the flattened text a row is a bare
+        # run of figures, and the count of figures changes from row to row.
+        tbl <- tryCatch(rf_tables(doc$local_path, rfp), error = function(e) character(0))
+        if (length(tbl)) {
+          cat("  rf-table   ", length(tbl), "indicator row(s) with named columns\n")
+          prompt <- paste0(prompt,
+            "\n\nINDICATOR TABLE, COLUMNS ALREADY RESOLVED (authoritative for these ",
+            "rows - the page text flattens these tables and loses which figure is ",
+            "which):\n", paste(tbl, collapse = "\n"),
+            "\n\nUse the value marked ACTUAL ACHIEVED as the result. Never use a ",
+            "baseline or a target as a result. An ACTUAL ACHIEVED of 0 IS a result ",
+            "- report it with status 'not achieved'.")
+        }
         for (p in rfp) {
           png <- file.path(tempdir(), paste0("rf_", substr(digest_path(pdf_path), 1, 8),
                                              "_", p, ".png"))

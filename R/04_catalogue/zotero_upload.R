@@ -288,8 +288,11 @@ build_afdb <- function() {
   # disk lookup: reconstruct the EXACT filename the scraper generated
   # (same logic as afdb.R download_results, incl. the shared safe_filename)
   if (!exists("safe_filename")) {
-    source(file.path(GL, "Script/AI_grey_litterature/R/00_config.R"))
-    source(file.path(GL, "Script/AI_grey_litterature/R/01_utils.R"))
+    .here <- { fa <- grep("^--file=", commandArgs(FALSE), value = TRUE)
+               if (length(fa)) dirname(sub("^--file=", "", fa[1]))
+               else file.path(getwd(), "R", "04_catalogue") }
+    source(file.path(.here, "..", "00_shared", "00_config.R"))
+    source(file.path(.here, "..", "00_shared", "01_utils.R"))
   }
   dirs <- file.path(DATA, "afdb/Docs", c("2015_2026", "to_screen", "undated"))
   files <- unlist(lapply(dirs, list.files, full.names = TRUE))

@@ -1,7 +1,7 @@
 ##############################################################################
 # figure_workflow.R - the one-page picture of the pipeline for the protocol.
 #
-# Draws docs/workflow.png: where documents come from, what runs, the accuracy
+# Draws 01_Protocol/workflow.png (next to the Word diagram): where documents come from, what runs, the accuracy
 # gate that decides whether we tune again or go to the full corpus, and every
 # file the run leaves behind. Base graphics only, so it regenerates anywhere
 # R runs and needs no diagram tool.
@@ -10,12 +10,13 @@
 # changes, change it here and re-run - the figure is generated, not drawn by
 # hand, so it cannot quietly fall out of date.
 #
-#   Rscript R/reporting/figure_workflow.R
+#   Rscript R/09_publish/figure_workflow.R
 ##############################################################################
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
-OUT  <- file.path(REPO, "docs", "workflow.png")
+source(file.path(REPO, "R", "00_shared", "paths.R"))
+OUT  <- file.path(PROTOCOL_DIR, "workflow.png")
 
 BLUE <- "#1B75BC"; BLUE_D <- "#125A91"; GREY <- "#6B6B6B"; INK <- "#222222"
 

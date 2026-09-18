@@ -16,15 +16,15 @@
 # Runs offline: no API key, no network, no model. Safe to run after every
 # review batch, which is the point.
 #
-#   Rscript R/reporting/check_actor_synonyms.R
+#   Rscript R/07_review/check_actor_synonyms.R
 ##############################################################################
 
 suppressPackageStartupMessages({ library(openxlsx) })
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
-source(file.path(REPO, "R", "shared", "paths.R"))
-source(file.path(REPO, "R", "shared", "actor_names.R"))
+source(file.path(REPO, "R", "00_shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "actor_names.R"))
 
 SYN_CSV <- file.path(REPO, "catalogues", "actor_synonyms.csv")
 syn <- if (file.exists(SYN_CSV)) {
@@ -140,7 +140,7 @@ add("about", data.frame(
             sprintf("%d/%d", sum(pos$ok), nrow(pos)),
             sprintf("%d/%d", sum(neg$ok), nrow(neg)),
             format(Sys.time(), "%Y-%m-%d %H:%M"),
-            "Rscript 05_Pipeline/R/reporting/check_actor_synonyms.R"),
+            "Rscript 05_Pipeline/R/07_review/check_actor_synonyms.R"),
   stringsAsFactors = FALSE), c(20, 70))
 saveWorkbook(wb, f, overwrite = TRUE)
 cat("\nwritten:", f, "\n")

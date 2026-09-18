@@ -17,7 +17,7 @@
 #     harmonized GENERAL extraction for the same project codes
 #
 # Usage:
-#   Rscript R/extraction/harmonize_locations.R [s1loc_rows_....csv]
+#   Rscript R/06_harmonise/harmonize_locations.R [s1loc_rows_....csv]
 #   (default: the newest s1loc_rows CSV in outputs/extraction/locations)
 ##############################################################################
 
@@ -36,7 +36,7 @@ stopifnot("OPENAI_API_KEY not set" = nzchar(Sys.getenv("OPENAI_API_KEY")))
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..")) else getwd()
-source(file.path(REPO, "R", "shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "paths.R"))
 OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "outputs", "extraction", "locations"))
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -88,8 +88,8 @@ split_multivalue <- function(d) {
 rows <- split_multivalue(rows)
 
 # ---- team field rules: whole-digit values, % for percentages -----------------
-source(file.path(REPO, "R", "shared", "clean_fields.R"))
-source(file.path(REPO, "R", "shared", "vocab_cache.R"))
+source(file.path(REPO, "R", "00_shared", "clean_fields.R"))
+source(file.path(REPO, "R", "00_shared", "vocab_cache.R"))
 if (nrow(rows)) {
   n_fix <- 0
   for (i in seq_len(nrow(rows))) {
@@ -334,7 +334,7 @@ LEVEL_DEFS <- paste(
 # one batched structured call: items {idx, choice}
 llm_choose <- function(items, vocab, defs, what) {
   if (!nrow(items)) return(character(0))
-  # reuse the decision this snippet already got (see R/shared/vocab_cache.R)
+  # reuse the decision this snippet already got (see R/00_shared/vocab_cache.R)
   cache <- vocab_cache_load(REPO, what, vocab)
   cached <- setNames(rep("", nrow(items)), items$idx)
   if (length(cache)) {

@@ -40,8 +40,8 @@ REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", fu
 OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "outputs", "extraction"))
 # paths live in one place; this script used to carry its own copy of the
 # template location, which is how it drifted from the audits that check it
-source(file.path(REPO, "R", "shared", "paths.R"))
-source(file.path(REPO, "R", "shared", "vocab_cache.R"))
+source(file.path(REPO, "R", "00_shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "vocab_cache.R"))
 
 args <- commandArgs(trailingOnly = TRUE)
 s1_csv <- if (length(args)) args[1] else {
@@ -92,7 +92,7 @@ DEFS <- list(
   doc_type = "Note: an independent ex-post evaluation that reviews/re-rates a completion report (AfDB PPER, IEG review) = terminal evaluation; an independent evaluation office's multi-program evaluation = portfolio performance review; a completion report written by the financier at project close = implementation completion report.")
 
 # --------------------------------------------------------- LLM batch helper --
-llm_map <- function(field, texts, options, definitions = "") {
+llm_map <- function(field, texts, options, definitions = "", na_rule = "") {
   idx <- which(nzchar(texts) & !texts %in% options)   # skip already-valid/empty
   if (!length(idx)) return(texts)
   # reuse the decision this extract already got, so a rerun is comparable
@@ -115,12 +115,14 @@ llm_map <- function(field, texts, options, definitions = "") {
   chat <- chat_openai(model = MODEL, system_prompt = paste(
     "You harmonise verbatim extracts from project evaluations into a fixed",
     "controlled vocabulary. You see only the extract, never the document.",
-    "Choose the single best option. If the extract does not actually state",
-    "this field - it is a counting line, a page heading, a figure with no",
-    "subject, or simply about something else - answer exactly 'NOT STATED'.",
-    "An empty cell is correct and useful; a plausible-looking value the",
-    "extract does not support is not. If the extract DOES state the field",
-    "but no option fits, answer 'CANDIDATE: ' followed by a 2-6 word label.",
+    "Choose the single best option.",
+    if (nzchar(na_rule)) na_rule else paste(
+      "If the extract does not actually state this field - it is a counting",
+      "line, a page heading, a figure with no subject, or simply about",
+      "something else - answer exactly 'NOT STATED'. An empty cell is correct",
+      "and useful; a plausible-looking value the extract does not support is",
+      "not. If the extract DOES state the field but no option fits, answer",
+      "'CANDIDATE: ' followed by a 2-6 word label."),
     "Never invent options; never force a bad fit."))
   prompt <- paste0(
     "FIELD: ", field, "\nOPTIONS: ", paste(options, collapse = "; "),
@@ -178,10 +180,10 @@ log_candidates <- function(df_doc, field, stated, chosen) {
 
 # -------------------------------------------------------- actor registry -----
 # The registry, the name comparison and the matching tiers all live in
-# R/shared/actor_names.R now, so that the audit which checks this script's
+# R/00_shared/actor_names.R now, so that the audit which checks this script's
 # proposals uses the same definition of "same organisation" as the matcher
 # that made them, and so that the checks can run without an API key.
-source(file.path(REPO, "R", "shared", "actor_names.R"))
+source(file.path(REPO, "R", "00_shared", "actor_names.R"))
 areg <- actor_registry(TEMPLATE_XLSX)
 ASYN <- local({
   f <- file.path(REPO, "catalogues", "actor_synonyms.csv")
@@ -468,8 +470,21 @@ h$document_type <- llm_map("document_type", dt, OPT$doc_type, DEFS$doc_type)
 for (i in 1:3) {
   ms <- gc_chr(paste0("result", i, "_metric_stated"))
   us <- vapply(gc_chr(paste0("result", i, "_unit_stated")), map_unit_det, character(1))
+  # The metric names the SUBJECT of the number, so the two escapes collapse
+  # into one another unless they are told apart: "New knowledge and advocacy
+  # products disseminated" plainly states what was counted, it simply is not
+  # one of the 27 options. Judged under the generic rule the model answered
+  # CANDIDATE once and NOT STATED the next time, and NOT STATED blanks the
+  # cell - which is how a value ended up with a unit and no metric.
   h[[paste0("result", i, "_metric")]] <- llm_map(
-    paste0("result_metric (what a project result counts)"), ms, OPT$metric)
+    paste0("result_metric (what a project result counts)"), ms, OPT$metric,
+    na_rule = paste(
+      "Answer 'NOT STATED' ONLY when the extract names no countable subject at",
+      "all - a bare figure, a date, a duration, an administrative count, or a",
+      "pure unit word such as 'Percent' or 'Number'. In every other case the",
+      "extract DOES state the field: if no option fits, answer 'CANDIDATE: '",
+      "followed by a 2-6 word label naming what was counted. Not being in the",
+      "list is never a reason to answer NOT STATED."))
   h[[paste0("result", i, "_unit")]] <- llm_map("result_unit", us, OPT$unit)
 }
 
@@ -510,7 +525,7 @@ for (i in 1:3) {
 # Session 1 already applies these, but a harmonise of an older run must not
 # publish rows that predate a rule, and the location sheet joins on
 # project_code, which only exists here as the session's code hint.
-source(file.path(REPO, "R", "shared", "clean_fields.R"))
+source(file.path(REPO, "R", "00_shared", "clean_fields.R"))
 h$project_code <- gc_chr("project_code_hint")
 
 # A beneficiary must be a group of people. When the passage the extraction
@@ -569,6 +584,8 @@ for (fld in c("rationale_project", "location_notes", "result_notes",
               paste0("result", 1:3, "_unit_stated"))) {
   v <- gc_chr(fld); v[is.na(v)] <- ""; h[[fld]] <- v
 }
+# columns that travel with a result when the slots are closed up
+RESULT_SIDECARS <- c("_metric_stated", "_unit_stated", "_scope", "_page")
 rule_notes <- rep("", nrow(h))
 add_note <- function(i, msg) if (nzchar(msg))
   rule_notes[i] <<- trimws(paste(rule_notes[i], msg, sep = if (nzchar(rule_notes[i])) "; " else ""))
@@ -578,6 +595,14 @@ for (i in seq_len(nrow(h))) {
     if (nzchar(ct$note)) add_note(i, paste0(fld, ": ", ct$note))
   }
   add_note(i, check_count_vs_notes(h$location_count[i], h$location_notes[i]))
+  # decision 21 (15 Sep 2026): portions use only the template's five
+  # instrument types; anything else keeps its wording behind "other-".
+  # Entries are not merged, so two grants stay listed separately.
+  if ("funding_mechanism_portion" %in% names(h)) {
+    fp <- clean_funding_portion(h$funding_mechanism_portion[i])
+    h$funding_mechanism_portion[i] <- fp$value
+    add_note(i, fp$note)
+  }
   # drop anything the shared gate says is not a result, then close the gap so
   # result1 is always the first real one
   keep <- list()
@@ -587,19 +612,36 @@ for (i in seq_len(nrow(h))) {
     s <- paste(h[[paste0("result", k, "_metric_stated")]][i],
                h[[paste0("result", k, "_unit_stated")]][i])
     if (!nzchar(trimws(v)) && !nzchar(trimws(h[[paste0("result", k, "_metric")]][i]))) next
-    why <- result_reject_reason(v, u, s)
+    why <- result_reject_reason(v, u, s, h[[paste0("result", k, "_metric")]][i])
     if (nzchar(why)) { add_note(i, paste0("result", k, " dropped: ", why)); next }
     cn <- clean_number(v)
     if (nzchar(cn$note)) add_note(i, paste0("result", k, ": ", cn$note))
-    keep[[length(keep) + 1L]] <- list(
-      v = if (nzchar(cn$value)) cn$value else v,
-      m = h[[paste0("result", k, "_metric")]][i], u = u)
+    # Carry the WHOLE result, not three of its columns. Dropping a result
+    # shifts the survivors up, and moving only value/metric/unit left
+    # metric_stated, unit_stated, scope and page describing a different
+    # indicator: P001 ended up with the value 15 beside the wording "An SLWM
+    # Knowledge Platform...", and a page number pointing at the wrong place,
+    # which silently breaks the fact-check trail.
+    got <- list(v = if (nzchar(cn$value)) cn$value else v,
+                m = h[[paste0("result", k, "_metric")]][i], u = u)
+    for (sfx in RESULT_SIDECARS) {
+      cn2 <- paste0("result", k, sfx)
+      got[[sfx]] <- if (cn2 %in% names(h)) h[[cn2]][i] else ""
+    }
+    keep[[length(keep) + 1L]] <- got
   }
   for (k in 1:3) {
-    got <- if (k <= length(keep)) keep[[k]] else list(v = "", m = "", u = "")
+    got <- if (k <= length(keep)) keep[[k]] else
+           c(list(v = "", m = "", u = ""), setNames(as.list(rep("", length(RESULT_SIDECARS))), RESULT_SIDECARS))
     h[[paste0("result", k)]][i] <- got$v
-    h[[paste0("result", k, "_metric")]][i] <- got$m
     h[[paste0("result", k, "_unit")]][i] <- got$u
+    for (sfx in RESULT_SIDECARS) {
+      cn2 <- paste0("result", k, sfx)
+      if (cn2 %in% names(h)) h[[cn2]][i] <- got[[sfx]]
+    }
+    # a value must always say what it counts; an empty metric is not a finding
+    h[[paste0("result", k, "_metric")]][i] <- if (!nzchar(trimws(got$v))) got$m else
+      metric_floor(got$m, got[["_metric_stated"]], got[["_scope"]])
   }
 }
 h$result_notes <- trimws(ifelse(nzchar(rule_notes),

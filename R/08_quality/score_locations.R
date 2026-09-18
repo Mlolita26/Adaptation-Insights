@@ -10,14 +10,14 @@
 #      pairs. An alignment CSV is written for human review.
 #
 # Usage:
-#   Rscript R/extraction/score_locations.R [harmonized.csv] [gold.csv]
+#   Rscript R/08_quality/score_locations.R [harmonized.csv] [gold.csv]
 ##############################################################################
 
 suppressPackageStartupMessages({ library(openxlsx) })
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..")) else getwd()
-source(file.path(REPO, "R", "shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "paths.R"))
 OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "outputs", "extraction", "locations"))
 
 args <- commandArgs(trailingOnly = TRUE)

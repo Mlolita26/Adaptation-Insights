@@ -1,109 +1,59 @@
-# Africa Adaptation Grey Literature Review — Scraper Pipeline
+# Working in 05_Pipeline
 
-## What this project does
-Systematic retrieval of grey literature (project evaluations, completion reports, funding proposals) from 20+ institutional sources for an evidence synthesis on climate adaptation in Africa's food and agriculture sector. Covers 2000–2025.
+This repo is the code of the CGIAR WP2 grey-literature workstream (retrieve,
+dedup, screen, catalogue, extract, harmonise, review, score, publish). It
+holds code and run-time reference data only. Read `../00_Knowledge/README.md`
+first: that folder is the shared memory of the workstream and explains the
+what and why; `05_folder_architecture.md` there is the script-by-script map,
+`04_data_sources.md` the status of each source, `01_current_state.md` the
+live numbers. Nothing in this file should repeat them.
 
-## Architecture
-- One R script per institutional source (`worldbank.R`, `gcf.R`, `gef.R`, `afdb.R`, etc.)
-- Shared config in `R/00_config.R` — paths, HTTP settings, African country lists, keyword lists
-- Shared utilities in `R/01_utils.R` — HTTP helpers, download/log functions, relevance filters
-- Each scraper follows the same pattern: **query → parse to tibble → filter → save metadata CSV → download PDFs → log**
-- PDFs go to `downloads/{source_name}/`, metadata CSVs to `data/`, logs to `data/download_log.csv`
-- Master runner: `R/run_all.R` (runs all scrapers sequentially with error isolation)
-
-## Project structure
-```
-AI_grey_litterature/
-├── CLAUDE.md
-├── README.md
-├── .gitignore
-├── R/
-│   ├── 00_config.R       # Paths, HTTP config, country lists, keyword lists
-│   ├── 01_utils.R        # Shared helpers
-│   ├── worldbank.R       # ✅ Working
-│   ├── gcf.R             # ✅ Working
-│   ├── gef.R             # ✅ Working
-│   ├── afdb.R            # ✅ Working
-│   ├── ifad.R            # 🔲 To build
-│   └── run_all.R         # Master runner
-├── data/                 # Metadata CSVs + download_log.csv
-├── downloads/            # PDFs by source name
-├── logs/
-├── docs/                 # Protocol, notes
-└── tests/
-```
-
+## Rules this pipeline lives by
+- Deterministic first, model second. If a regex, a table read or a lookup
+  can decide, do not spend a model call; when a model is needed, batch and
+  cache (vocab_decisions.csv is never re-asked for the same text and options).
+- Everything a model extracts carries a page number and is string-matched
+  back to that page. A value that fails the match is dropped, not kept.
+- Results tables are read as tables (rf_table.R): figures define columns,
+  header words name roles. Never choose by x-coordinate or value rules.
+- One document, one record. A source is not a family: route by
+  00_shared/doc_families.R, not by folder, and add a family there, nowhere else.
+- The gold set P001-P010 may be tuned against; the holdout H001-H010 is
+  never looked at while tuning.
+- Extraction never writes into `../03_Documents`; only the catalogue step
+  moves or files documents.
+- Every script derives the repo root from its own `--file=` path two levels
+  up, so scripts stay two levels below the repo root.
+- Team documents: plain language, short sentences, no em dashes. Never
+  overwrite a deck or document the user has edited; add to it.
 
 ## The knowledge folder is part of the deliverable
+Keep `../00_Knowledge/` current in the same change: a new script, output,
+moved score, enforced rule, decision or open question each has a home there
+(the trigger table in its README says which file). `01_current_state.md` is
+the only file with live numbers; move the `Last verified` date on anything
+you touch.
 
-`..\00_Knowledge\` is the shared memory of this workstream: twelve short
-markdown files that let a person or an AI session start from where we are
-now instead of reverse-engineering it from code.
+## Gotchas
+- OneDrive paths exceed 260 characters: copy to a short temp path with the
+  `\\?\` prefix before opening (screen_scope.R `read_all`, doc_census.R
+  `short_path`); in Python, cd into the folder and open by basename.
+- Rscript on this machine: `C:\Program Files\R\R-4.4.2\bin\Rscript.exe`.
+  Excel locks: write a dated copy if the target is open, regenerate later.
+- pdftools orders cover text differently from PyMuPDF; detector regexes must
+  not assume the running header comes first.
+- The tool layer eats backslashes in shell heredocs: use the Write tool or
+  `chr(92)` for anything with a backslash.
 
-**Keep it current in the same commit as the change.** A new script, a new
-output file, a score that moved, a rule the pipeline now enforces, a
-decision taken or a question raised: each has a home there, and the trigger
-table in `00_Knowledge\README.md` says which file. `01_current_state.md` is
-the only file allowed to carry live numbers, so update it there and nowhere
-else. Move the `Last verified` date on anything you touch.
-
-This is not documentation for its own sake. The folder is what makes the
-work handoverable, and it rots in about a week if it is treated as a
-separate chore.
-
-## Git conventions
+## Git
 - Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`
-- One feature branch per new scraper: `feat/{source-name}`
-- Commit to branch, push, then merge to main after testing
+- Commit only when asked; branch before committing on main.
 - Remote: https://github.com/Mlolita26/AI_grey_litterature
 
-## Coding conventions
-- Every scraper file starts with a header block (##########) documenting: source, URL, strategy, document types targeted, quirks
-- All HTTP via `polite_get()` — never raw `httr::GET()`
-- All requests use `HTTP_CONFIG$user_agent` and delays from `HTTP_CONFIG$delay_min/max`
-- Never crash the pipeline — wrap everything in `tryCatch`, log failures, keep going
-- Deduplication before downloading (by document ID or URL)
-- PDF validation: check magic bytes `%PDF-` and file size > `HTTP_CONFIG$min_pdf_bytes`
-- Metadata tibble minimum columns: `id`, `title`, `pdf_url`, `doc_date`, `doc_type`, `country`, `project_id`, `web_url`
-
-## Key shared functions (R/01_utils.R)
-| Function | Purpose |
-|----------|---------|
-| `safe_get_json(url)` | GET + JSON parse with retry |
-| `polite_get(url)` | GET with delay + user-agent + exponential backoff |
-| `safe_read_html(url)` | GET + HTML parse with JS-page detection |
-| `download_pdf(url, dest)` | Download + validate PDF (magic bytes + size) |
-| `log_download(source, project_code, doc_type, title, url, filepath, status, notes)` | Append to CSV log |
-| `passes_relevance_fast(text, require_africa, require_sector)` | Keyword relevance check using pre-compiled regex |
-| `safe_filename(x)` | Sanitize strings for filenames |
-| `print_source_summary(source_name)` | Print log summary for a source |
-
-## Source status
-| Source | Script | Status | Strategy |
-|--------|--------|--------|---------|
-| World Bank | `worldbank.R` | ✅ Working | REST API (search.worldbank.org/api/v3/wds) |
-| GCF | `gcf.R` | ✅ Working | Drupal AJAX scraping |
-| GEF | `gef.R` | ✅ Working | HTML table scraping |
-| AfDB | `afdb.R` | ✅ Working | Category listings on www.afdb.org (PCR/PCREN/PPER/agri evaluations) + IDEV faceted search (taxonomy discovered at runtime); per-host session cookies + browser headers defeat the WAF; modes: AFDB_MODE=probe/capped/load/full |
-| IFAD | `ifad.R` | ✅ Built | IATI XML (registry API) → D-Portal fallback; www.ifad.org blocks scrapers (403) |
-| Adaptation Fund | `af.R` | 🔲 Not started | TBD |
-| FAO | `fao.R` | 🔲 Not started | TBD |
-| UNDP | `undp.R` | 🔲 Not started | TBD |
-| UNEP | `unep.R` | 🔲 Not started | TBD |
-| WFP | `wfp.R` | 🔲 Not started | TBD |
-| IFPRI | `ifpri.R` | 🔲 Not started | TBD |
-
-## Reference
-- Full protocol: `docs/AIs_WP3_EvidenceSynthesis_GreyLit.pdf`
-- Target document types: ICRs, PPARs, PADs, funding proposals, terminal evaluations, mid-term evaluations, impact evaluations, project completion reports
-- Geographic scope: All 54 African countries
-- Sector: Agriculture, livestock, fisheries, agroforestry, food systems
-- Timeframe: 2000–2025
-- Keywords: see `AGRICULTURE_KEYWORDS`, `ADAPTATION_KEYWORDS`, `DOC_TYPE_KEYWORDS` in `00_config.R`
-
-## Building a new scraper — checklist
-1. Research the source website (API?, pagination, filters, doc types) — document in script header
-2. Create `R/{source}.R` following the worldbank.R/gcf.R pattern
-3. Test: run the scraper, check metadata CSV, verify PDF downloads
-4. Update the source status table in this CLAUDE.md
-5. Commit on branch `feat/{source-name}`, push, merge to main
+## Scrapers (R/01_retrieve)
+Header block (source, URL, strategy, document types, quirks); all HTTP via
+`polite_get()` with `HTTP_CONFIG` delays; `tryCatch` everything and keep
+going; validate PDFs (`%PDF-` magic bytes, size above
+`HTTP_CONFIG$min_pdf_bytes`); metadata columns at minimum `id`, `title`,
+`pdf_url`, `doc_date`, `doc_type`, `country`, `project_id`, `web_url`.
+New source: follow `.claude/skills/new-scraper`.

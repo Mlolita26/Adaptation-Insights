@@ -20,16 +20,16 @@
 #   status        so a failure is a recorded fact rather than a gap
 #
 # One page per site. Nothing is crawled. Fetching reuses polite_get() and
-# safe_read_html() from R/shared/01_utils.R, which already carry the project's
+# safe_read_html() from R/00_shared/01_utils.R, which already carry the project's
 # user agent, a 1 to 2.5 second delay, a 60 second timeout, three retries with
 # backoff and 429 handling.
 #
 # Resumable: a site already in the harvest is skipped, and the file is written
 # after every batch, so stopping it costs nothing.
 #
-#   Rscript R/reporting/harvest_actor_websites.R --limit=50
-#   Rscript R/reporting/harvest_actor_websites.R            # the rest
-#   Rscript R/reporting/harvest_actor_websites.R --dry
+#   Rscript R/07_review/harvest_actor_websites.R --limit=50
+#   Rscript R/07_review/harvest_actor_websites.R            # the rest
+#   Rscript R/07_review/harvest_actor_websites.R --dry
 ##############################################################################
 
 suppressPackageStartupMessages({
@@ -38,10 +38,10 @@ suppressPackageStartupMessages({
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
-source(file.path(REPO, "R", "shared", "paths.R"))
-source(file.path(REPO, "R", "shared", "actor_names.R"))
-source(file.path(REPO, "R", "shared", "00_config.R"))
-source(file.path(REPO, "R", "shared", "01_utils.R"))
+source(file.path(REPO, "R", "00_shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "actor_names.R"))
+source(file.path(REPO, "R", "00_shared", "00_config.R"))
+source(file.path(REPO, "R", "00_shared", "01_utils.R"))
 
 args  <- commandArgs(trailingOnly = TRUE)
 opt   <- function(n, d = "") { h <- grep(paste0("^--", n, "="), args, value = TRUE)
