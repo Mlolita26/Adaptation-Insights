@@ -12,6 +12,7 @@
 # Usage:
 #   Rscript R/run_corpus.R                    # everything not yet extracted
 #   Rscript R/run_corpus.R --source=af        # one source only
+#   Rscript R/run_corpus.R --family=afdb_pcr  # one document family only (several: a,b)
 #   Rscript R/run_corpus.R --limit=20         # at most 20 documents this run
 #   Rscript R/run_corpus.R --dry               # show plan + cost, extract nothing
 #
@@ -98,6 +99,14 @@ mf <- do.call(rbind, lapply(names(CORPUS_DIRS), function(s) {
              stringsAsFactors = FALSE)
 }))
 cat("corpus files in scope:", nrow(mf), "\n")
+# one family at a time: the census family is a column on every row, so a
+# module can be tested on exactly the documents it was written for
+FAM <- opt("family")
+if (nzchar(FAM)) {
+  mf <- mf[mf$family %in% strsplit(FAM, ",")[[1]], , drop = FALSE]
+  message("family filter ", FAM, " -> ", nrow(mf), " documents")
+}
+if (nrow(mf)) print(table(family = ifelse(nzchar(mf$family), mf$family, "(not in census)")))
 
 # resume: skip documents already present in any session1 output here
 done <- character(0)
