@@ -23,6 +23,15 @@ required_packages <- c(
   # Utilities
   "glue",         # String interpolation
   "cli",          # Coloured console output and progress
+  # added September 2026: the pipeline beyond the scrapers
+  "pdftools",     # PDF text and page rendering (census, extraction)
+  "qpdf",         # PDF page splitting behind pdftools
+  "openxlsx",     # Excel workbooks for the team (results, registers)
+  "readxl",       # Reading the template and gold workbooks
+  "lubridate",    # Dates in metadata lists
+  "ellmer",       # Model calls (screening, extraction, harmonisation)
+  "fs",           # File system helpers
+  "curl",         # Downloads behind httr
   "tools"         # File path utilities (built-in, listed for clarity)
 )
 

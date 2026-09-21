@@ -48,7 +48,8 @@ you touch.
 ## Git
 - Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`
 - Commit only when asked; branch before committing on main.
-- Remote: https://github.com/Mlolita26/AI_grey_litterature
+- Remote: https://github.com/Mlolita26/Adaptation-Insights (public; the
+  README is written for people outside the team, keep it that way)
 
 ## Scrapers (R/01_retrieve)
 Header block (source, URL, strategy, document types, quirks); all HTTP via
