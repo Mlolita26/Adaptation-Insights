@@ -7,7 +7,10 @@
 # the sync creates a record for it, tagged <src>doc:file:<filename>. This
 # step then re-parents the bare attachment under that record, so the
 # collection shows one titled row instead of a blank one, and nothing is
-# deleted. A pulled file that dedup moved to 03_Documents/duplicates is
+# deleted. Attachments whose bytes were already in the corpus (status
+# in_corpus in the register) go under the record of that corpus file.
+# Zotero copies a re-parented attachment's collection onto the parent, so
+# this runs BEFORE the sync's collection patch, which puts it right. A pulled file that dedup moved to 03_Documents/duplicates is
 # attached to the KEPT copy's record instead (duplicates_register / the dedup
 # report say which). Sourced by zotero_upload.R after items exist.
 
@@ -15,7 +18,7 @@ adopt_pulled <- function(existing) {
   reg_p <- file.path(GL, "04_Extraction_Results", "review", "zotero_pulled.csv")
   if (!file.exists(reg_p)) return(invisible(0))
   reg <- read.csv(reg_p, stringsAsFactors = FALSE, colClasses = "character")
-  reg <- reg[reg$status == "pulled", ]
+  reg <- reg[reg$status %in% c("pulled", "in_corpus"), ]   # in_corpus: bytes already in the corpus, filename = that corpus file
   if (!nrow(reg)) return(invisible(0))
 
   # a dropped duplicate points at the kept copy

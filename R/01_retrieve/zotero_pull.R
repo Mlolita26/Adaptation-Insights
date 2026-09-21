@@ -71,7 +71,9 @@ cat("library:", length(top), "top-level items,", length(atts), "attachments\n")
 
 # what the corpus already holds, by content
 cen_p <- file.path(REVIEW_DIR, "family_census.csv")
-have_md5 <- if (file.exists(cen_p)) unique(read.csv(cen_p, stringsAsFactors = FALSE, colClasses = "character")$md5) else character(0)
+cen <- if (file.exists(cen_p)) read.csv(cen_p, stringsAsFactors = FALSE, colClasses = "character") else data.frame(md5 = character(0), filename = character(0))
+have_md5 <- unique(cen$md5)
+file_of_md5 <- setNames(cen$filename, cen$md5)      # first corpus file with these bytes
 
 cand <- list()
 for (a in atts) {
@@ -99,10 +101,26 @@ if (nrow(cand)) {
 }
 todo <- cand[nrow(cand) > 0 & nzchar(cand$institution) & !cand$already_in_corpus, , drop = FALSE]
 cat("to pull:", nrow(todo), "\n")
-if (DRY || !nrow(todo)) quit(save = "no")
+# bytes already in the corpus: nothing to download, but the attachment is
+# still a blank row in Zotero. Register it against the corpus file that has
+# the same bytes so the sync (zotero_adopt_pulled.R) places it under that
+# file's record.
+have <- cand[nrow(cand) > 0 & nzchar(cand$institution) & cand$already_in_corpus, , drop = FALSE]
+cat("already in the corpus (to adopt under the existing record):", nrow(have), "\n")
+if (DRY || (!nrow(todo) && !nrow(have))) quit(save = "no")
+REG <- file.path(REVIEW_DIR, "zotero_pulled.csv")
+old <- if (file.exists(REG)) read.csv(REG, stringsAsFactors = FALSE, colClasses = "character") else NULL
+have <- have[!(have$key %in% old$zotero_key), , drop = FALSE]      # registered on an earlier run
+todo <- todo[!(todo$key %in% old$zotero_key), , drop = FALSE]
+reg <- list()
+for (i in seq_len(nrow(have))) {
+  r <- have[i, ]
+  reg[[length(reg) + 1]] <- data.frame(date = format(Sys.Date()), zotero_key = r$key, institution = r$institution,
+                                       source = SRC[[r$institution]], filename = unname(file_of_md5[r$md5]), zotero_filename = r$filename,
+                                       md5 = r$md5, saved_to = "", status = "in_corpus", stringsAsFactors = FALSE)
+}
 
 safe <- function(x) { x <- gsub("[^A-Za-z0-9._-]+", "_", x); substr(x, 1, 90) }
-reg <- list()
 for (i in seq_len(nrow(todo))) {
   r <- todo[i, ]
   dir <- file.path(DOCS_ROOT, SRC[[r$institution]], "Docs", "to_screen")
@@ -118,9 +136,8 @@ for (i in seq_len(nrow(todo))) {
                                        stringsAsFactors = FALSE)
   cat(sprintf("  %3d/%d %-8s %s %s\n", i, nrow(todo), if (ok) "pulled" else "FAILED", r$institution, substr(r$filename, 1, 60)))
 }
-reg <- do.call(rbind, reg)
-REG <- file.path(REVIEW_DIR, "zotero_pulled.csv")
-if (file.exists(REG)) reg <- rbind(read.csv(REG, stringsAsFactors = FALSE, colClasses = "character"), reg)
+new <- do.call(rbind, reg)
+reg <- rbind(old, new)
 write.csv(reg, REG, row.names = FALSE)
-cat("\npulled", sum(reg$status == "pulled"), "files; register:", REG, "\n",
+cat("\nthis run:", sum(new$status == "pulled"), "pulled,", sum(new$status == "in_corpus"), "already in the corpus (registered for adoption); register:", REG, "\n",
     "next: doc_census.R, dedup_corpus.R, screen_scope.R, then zotero_upload.R\n")

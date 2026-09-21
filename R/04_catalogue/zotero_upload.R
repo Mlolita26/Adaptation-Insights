@@ -681,6 +681,13 @@ main <- function() {
     existing <- fetch_existing_items()
   }
 
+  # 1a. files teammates dropped into Zotero by hand: once screened and given a
+  #     record above, the bare attachment is placed under that record. Done
+  #     before the collection patch (re-parenting copies the attachment's
+  #     collection onto the parent) and before the upload (the record now has
+  #     its file, so nothing is uploaded twice).
+  if (adopt_pulled(existing) > 0) existing <- fetch_existing_items()
+
   # 1b. duplicates taken out of the source folders get their own collection
   #     and are left out of the status reconciliation below
   dup_keys <- mark_duplicates(existing, keymap)
@@ -758,11 +765,6 @@ main <- function() {
     cli_alert_success("attachments uploaded: {n_ok} (failed: {n_fail})")
     if (quota) cli_alert_danger("stopped: storage quota exceeded")
   }
-
-  # 4. files teammates dropped into Zotero by hand: once screened and given a
-  #    record above, the bare attachment is placed under that record
-  existing <- fetch_existing_items()
-  adopt_pulled(existing)
 
   cli_h2("Done")
 }
