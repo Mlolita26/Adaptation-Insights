@@ -1,757 +1,951 @@
 # AI-Assisted Data Extraction from Project Evaluation Documents
 
-**Protocol for corpus construction, structured extraction, and validation**
+**Protocol for corpus construction, structured extraction and validation**
 
-Adaptation Insights | WP2 Evidence Synthesis — Grey Literature
-**Draft v0.1 — July 2026**
+Adaptation Insights, WP2 Evidence Synthesis, Grey Literature
 
-> Canonical version: GitHub `Mlolita26/Adaptation-Insights` →
-> `docs/AI_Extraction_Protocol.md`.
+**Draft v0.2, 21 September 2026**
+
+> Canonical version: GitHub `Mlolita26/Adaptation-Insights`, file
+> `docs/AI_Extraction_Protocol.md`. The code this protocol describes is in
+> the same repository, and its README explains every script.
 
 ---
 
 ## 1. Background and rationale
 
-Evidence on what climate adaptation has been implemented in Africa's food
-and agriculture sector — and with what results — sits scattered across the
+Evidence on what climate adaptation has actually been carried out in
+Africa's food and agriculture sector, and with what results, sits in the
 grey literature of development institutions: implementation completion
-reports, terminal evaluations, performance evaluations, or other grey
-literature documents. Existing syntheses rely almost exclusively on
-peer-reviewed literature, leaving a recognised evidence gap (see the
-review-methods protocol, `AIs_WP3_EvidenceSynthesis_GreyLit.docx`, and
-*Beyond Academia — A Case for Reviews of Gray Literature*, in `Resources\`).
+reports, terminal evaluations, performance evaluations and similar
+documents. Existing syntheses rely almost only on peer reviewed papers, so
+this evidence is missing from them (see the review protocol
+`AIs_WP3_EvidenceSynthesis_GreyLit.docx`).
 
-The WP2 grey-literature evidence synthesis answers this by building a
-structured database — *a stocktake of what has been implemented, by whom,
-where, and with what effects* — from project evaluation documents. Manual
-extraction across hundreds of documents is too slow; a living LLM-assisted
-pipeline operationalises the extraction template at scale, under the
-validation and quality regime this protocol defines.
+The WP2 grey literature synthesis fills this gap by building a structured
+database from project evaluation documents: a stocktake of what was
+implemented, by whom, where, and with what effects. Reading hundreds of
+documents by hand is too slow. A pipeline assisted by language models
+applies the extraction template at scale, under the checks this protocol
+defines. The pipeline is written in R, and the code is public.
 
 ## 2. Objectives
 
-1. **Build the project document library.** Assemble a screened corpus of
-   project evaluation documents from institutional sources: retrieve
-   documents programmatically (scrapers per source website) or manually
-   where a source cannot be scraped; then **screen** every document against
-   the scope rules and **classify** it into a corpus state
-   (`in_scope` / `to_screen` / `screened_out` — Section 3). The library is
-   stored on OneDrive, catalogued in Zotero, and documented per source.
-2. **Populate the working database.** For every in-scope document, produce
-   validated records in the extraction template: one project-level record
-   plus location-specific records in long format (one row per
-   location × intervention × result).
-3. **Record what could not be extracted.** Fields with no supporting
-   evidence in the document are recorded as explicit no-extraction values
-   with a reason — never guessed. The pattern of gaps (e.g. results reported
-   without baselines, missing locations) is itself a deliverable that feeds
-   the evidence-gap analysis.
-4. **Stress-test the template.** Every extraction run is also a test of the
-   template: values that do not fit any controlled-vocabulary option, fields
-   that are systematically empty, and vocabulary ambiguities are logged as
-   candidate template revisions for the template owner.
+1. **Build the document library.** Retrieve evaluation documents from
+   institutional sources, by scraper where a source allows it and by hand
+   where it does not. Remove duplicates. Screen every document against the
+   scope rules and record the decision (in scope, out of scope, unsure).
+   Store the documents on OneDrive and catalogue every one of them in
+   Zotero, where the collection a document sits in shows the decision.
+2. **Fill the working database.** For every in scope document, produce
+   checked records in the extraction template: one project level record and
+   location specific records in long format (one row per location,
+   intervention and result).
+3. **Record what could not be extracted.** A field with no supporting
+   evidence in the document stays empty, with a reason. It is never
+   guessed. The pattern of gaps (results without baselines, missing
+   locations) is itself a finding for the evidence gap analysis.
+4. **Test the template.** Every run is also a test of the template. Values
+   that fit no option, fields that stay empty across documents and
+   definitions that prove ambiguous are logged as questions for the template
+   owner.
 
 ## 3. Inputs and corpus
 
-### 3.1 Pilot corpus (as of now)
+### 3.1 Sources and retrieval
 
-The current corpus is a **pilot**: four sources chosen because their document
-repositories are programmatically retrievable, providing volume quickly while
-the method is validated. Corpus construction is fully documented per source
-in `metadata/{source}/{source}_filters.md` (query filters, post-filters,
-screening rules, known limitations).
+Six funders are in the corpus: the World Bank, the Global Environment
+Facility (GEF), the Green Climate Fund (GCF), the African Development Bank
+(AfDB), the Adaptation Fund and the Climate Investment Funds (CIF). They
+were chosen because their document repositories can be read by a program,
+which gave volume quickly while the method was being validated. Annex D
+records, per source, which classification systems the site offers, which
+categories were selected and which filters run in code.
 
-Scope rules applied to all sources:
-**evaluation-type documents only** (completion reports, terminal/mid-term
-evaluations, performance evaluations — proposals excluded because they do
-not describe what was actually implemented); **document date 2015–2025**
-(GCA alignment); African agriculture/adaptation relevance. The strict
-agriculture × adaptation intersection is deliberately **not** enforced by
-the coarse filters — documents with evidence on either angle are kept
-(recall-first: stricter query-time filters were tested and silently lose
-in-scope projects), and the final relevance decision falls to screening and
-to extraction itself.
+Retrieval is deliberately generous. The scrapers take every evaluation type
+document for African agriculture or adaptation projects that the source's
+own filters can identify, and keep documents with evidence on either
+angle. Stricter filters at query time were tested and silently lost in
+scope projects. The scope decision is taken later, by the screener, on the
+full text of each document (section 3.4).
 
-The master table on the following page summarises, per source: what is in
-scope, which filters run on the source's website/API versus in our code,
-what was screened out and why, and why the remaining `to_screen` documents
-cannot be decided automatically.
+Two more routes bring documents in:
 
-**Eligibility for extraction:** `in_scope` documents only. `to_screen`
-documents must first pass the screening step (Section 7, Phase 1):
-deterministic rules first (e.g. WB sector codes from the projects API, GEF
-adaptation-fund membership), one batched LLM screen for the remainder, human
-adjudication of disagreements — verdicts recorded per source; nothing is
-silently discarded. `screened_out` and `pre_2015` documents are parked,
-never deleted.
+- **By hand.** A team member can drop a PDF into the funder's collection in
+  the Zotero group library. A script (`zotero_pull.R`) lists files in the
+  library that have no record behind them, downloads them into that
+  funder's `to_screen` folder, and registers them. From there they follow
+  the same steps as every other file. The first run of this route brought
+  in 71 GCF evaluations a teammate had added, 34 of them distinct.
+- **Reserve.** The recall first sweeps also listed candidate documents with
+  weak evidence that were catalogued but not downloaded (for the World Bank,
+  428 documents). If the team widens the thematic scope, this reserve is
+  the first pool to revisit.
 
-```{=openxml}
-<w:p><w:pPr><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/><w:cols w:space="708"/></w:sectPr></w:pPr></w:p>
-```
+### 3.2 What the corpus holds
 
-**Master corpus and filter table (pilot sources, as of now)**
+As of 21 September 2026 the screener has judged 928 documents. Every file in
+every folder was screened, including folders earlier labelled screened out
+or pre 2015, so that no earlier folder decision stands unexamined. Only
+proposal stage documents were left out, because a proposal describes an
+intention, not what was implemented.
 
-| Source | In scope | Filters on the website / API (query time) | Filters in code (after retrieval) | Screened out — count and reasons | To screen — count and why uncertain |
-|:-----|:------|:------------------------|:------------------------|:-----------------------|:-----------------------|
-| World Bank | 276 files (≈275 projects) | Evaluation doc types only (ICR, ICR Report, PPAR); each African country + regional groupings ("Africa", "Eastern Africa", "World") | Date ≥ 2015; country field must be African; keep if WB's own topic classification includes *Agriculture* OR title carries agriculture/adaptation keywords; budget-support instruments excluded | 43 excluded: 17 budget-support DPOs/PRSCs (policy lending — nothing implemented), 4 non-African (Yemen/Lebanon, had entered via abstract mentions of "Africa"), ~22 with no agriculture/adaptation signal in topics, title, or abstract (statistics, disease surveillance, education, public-sector ICRs). +115 pre-2015 parked | 48 on disk: **abstract-only evidence** — not WB-classified as Agriculture, no title keywords; mixes genuine borderline projects (watershed, land administration, rural infrastructure) with false positives whose abstracts mention "resilience"/"drought" in passing. Content check needed |
-| GEF | 142 | Climate Change focal area (adaptation-side selection, but includes mitigation); African countries; projects approved ≥ 2000 | Evaluation-type docs kept, proposal-stage parked; document year recovered from the files (site publishes no dates), 2015–2025 kept. **No agriculture filter yet** — planned via LDCF/SCCF adaptation-fund membership + content screen | 615 proposal-stage (CEO endorsements, project documents, PIFs, review sheets — describe intentions, not implementation); 15 pre-2015 parked | 36 undated: uncertainty is the **date**, not the theme — no publication year recoverable (legacy Word/Excel formats, scanned annexes), so the 2015–2025 rule cannot be applied yet |
-| GCF | 7 | Adaptation theme + Africa region + approved/completed status | Evaluation/completion documents kept, funding proposals parked | 11 approved funding proposals (proposal-stage) | — |
-| AfDB | 123 | Evaluation-only document categories (completion reports, completion report reviews, PPERs, agriculture evaluation reports) + IDEV evaluation search facets | Cross-host dedupe; date 2015–2025 (listing date → filename → title); **agriculture** via title keywords OR the sector letter embedded in AfDB project codes (P-XX-**A**xx-…); appraisal (PAR), ESIA and progress reports excluded; one best document per project | Appraisal/progress types and administrative noise excluded at scraper level (4,401 raw → 174 kept); 4 undated parked | 46 untyped: titles carry **no document-type marker** — cannot tell from metadata whether they are genuine evaluation reports (several French-titled completion reports) or noise (procurement notices, feasibility studies); sampling confirmed a mixture |
-| Adaptation Fund | ~34 | Public CPR API behind Climate Project Explorer (the MCFs' joint platform): country-targeted search + per-project family fetch; Guidance corpus skipped (Annex D.6) | Geography: family countries ∩ Africa; document type from TITLE (final/mid-term/terminal evaluations, completion reports kept; proposals/project documents parked; **(annual) performance reports parked as progress documents**); family-era floor | 92 proposal-stage parked (catalogued only); 4 progress reports; 208 non-African project documents | Document-level dates unknown (only project-approval year) — needs the PDF date-recovery pass before the strict 2015–2025 cut |
-| CIF | 72 | cif.org directly (its corpus on Climate Project Explorer is empty): sitemap enumeration → evaluation-slug document pages; E&L-Initiative admin papers excluded upfront | Document type from page title; geography three-way: African-named kept (19), non-African pilot country → out of scope (20), **no country named → kept_global (57)** — CIF evaluations are typically program/portfolio-level and cover Africa within global scope; known pre-2015 parked | 20 non-African; 13 pre-2015; 1 untyped | kept_global docs need a screening look — Africa content varies from substantial to incidental; mostly multi-project syntheses (same extraction question as AfDB cluster evaluations) |
-| **Total** | **~655** | | | | **~94 on disk** |
+| Source | Screened | In scope | Out of scope | Unsure | Parked without screening |
+|---|---|---|---|---|---|
+| World Bank | 482 | 139 | 337 | 6 | 428 catalogue only entries not downloaded |
+| GEF | 122 | 26 | 90 | 6 | 615 proposal stage documents; 28 files in Word or Excel format not yet readable by the pipeline |
+| GCF | 42 | 17 | 25 | 0 | 11 approved funding proposals |
+| AfDB | 172 | 58 | 104 | 10 | none |
+| Adaptation Fund | 38 | 19 | 15 | 4 | 92 proposal stage documents, 208 non African project documents (catalogued only) |
+| CIF | 72 | 0 | 70 | 2 | administrative papers of the Evaluation and Learning Initiative, excluded at retrieval |
+| **Total** | **928** | **259** | **641** | **28** | |
 
-```{=openxml}
-<w:p><w:pPr><w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720" w:header="708" w:footer="708" w:gutter="0"/><w:cols w:space="708"/></w:sectPr></w:pPr></w:p>
-```
+The 259 in scope documents by document family (section 6): 138 World Bank
+ICRs, 53 AfDB project completion reports, 43 evaluator written terminal or
+mid term evaluations, 9 GEF Portal evaluation forms, 8 completion reports
+that are not forms, 3 World Bank IEG reviews, 3 GCF completion documents and
+2 programme evaluations. By year, the count rises from 9 documents published
+in 2015 to 45 in 2025. Seven documents are in French, one is bilingual, the
+rest are in English.
 
-### 3.2 Source extension roadmap
+### 3.3 One document, one record
 
-The pilot does not bound the review. The WP3 protocol's source universe
-(multilateral development banks, UN agencies — IFAD, FAO, UNDP —, the
-Adaptation Fund, African government agencies, INGOs and consortia, knowledge
-portals, IEO/IEG evaluation portals) remains the identification strategy for
-extension. Next candidates per the pipeline roadmap: IFAD, Adaptation Fund,
-FAO, UNDP. Sources that cannot be scraped join through **manual download**
-into the same folder structure and the same screening states. The
-recall-first sweeps also surfaced a reserve of low-evidence candidate
-documents (recorded in the source catalogues, not downloaded); should the
-team broaden the thematic scope, that reserve is the first pool to revisit —
-it implies no screening work under the current scope.
+Before screening, every file gets a census row: its family, its kind
+(terminal evaluation, mid term review, completion report and so on), the
+project and report identifiers printed on its first pages, and a checksum.
+The dedup step then finds identical files and the same document filed twice
+(same family, same kind, same identifier). The extra copies are moved out of
+the source folders into `03_Documents/duplicates/`, renamed with their source
+as prefix, and an Excel register there says which copy was kept, why, and
+where the other went. The kept copy is the funder's own version, then the
+copy in an in scope folder, then the longer file. Nothing is deleted.
 
-### 3.3 Source onboarding procedure
+So far 57 files have been moved: 13 World Bank ICRs re hosted in the GEF
+folder, 3 AfDB reports, an Adaptation Fund evaluation re hosted by the GEF,
+one English and French pair of the same AfDB report (English kept), two
+byte identical pairs, and 37 GCF evaluations a teammate had uploaded two or
+three times.
 
-Every new source joins by the same path (so the extraction stage never needs
-redesign):
+A project with several distinct documents (a mid term review and a terminal
+evaluation, say) is not a duplicate. Such clusters are reported in
+`project_clusters.csv` for a protocol decision (section 12), not moved.
 
-1. **Retrieval** — scraper following the repo pattern (`R/{source}.R`; see
-   the `new-scraper` checklist), or manual download where scraping is not
-   feasible — with filters as close to the scope as the source allows.
-2. **Filters documentation** — `{source}_filters.md`: query filters,
-   post-filters, screening rule, known limitations.
-3. **Screening states** — documents land as
-   `in_scope` / `to_screen` / `screened_out` with recorded evidence.
-4. **Catalogue** — metadata CSV in `List\`, mirrored to GitHub
-   (`R/sync_metadata.R`), records pushed to Zotero.
-5. **Field-applicability profile** — a row per document type in the
-   Section 6 table, based on a structure scan of sample documents.
-6. **Capped extraction validation** — a small extraction batch reviewed
-   against Section 8 metrics before the source is scaled.
+### 3.4 Screening
 
-### 3.4 Other inputs
+The screener (`screen_scope.R`, model gpt-5-nano) reads each document in
+full, up to the first 60 pages, and returns a verdict with its evidence:
 
-- **Template**: the refined extraction template
+- the verdict: in scope, out of scope or unsure;
+- the reason, one sentence naming the criterion that failed;
+- a quote naming the climate risk the project responds to, and a quote
+  describing the adaptation action, when present;
+- the document kind as the document states it, the publication year, the
+  language, the countries, whether the document covers several projects,
+  and whether the project is adaptation, mitigation or neither;
+- the document family, confirmed or corrected against the census rule.
+
+The five criteria, applied in this order:
+
+| Criterion | In scope when |
+|---|---|
+| Source type | The document evaluates what was done: a completion report, a terminal or mid term evaluation, a performance evaluation. Proposals, appraisals and progress reports are out. |
+| Timeframe | The document is dated 2015 to 2025. |
+| Scope | The project is in Africa. Regional and multi country projects count if African countries are among them. |
+| Sector | Agriculture and food systems are the project's primary subject: crops, livestock, fisheries, agroforestry, food security, rural livelihoods built on farming. A project in another sector (transport, energy, water supply, forest conservation, health, governance) is out even if farmers benefit. |
+| Intervention | The project acts on a climate risk it names. Irrigation, value chains or productivity alone are not adaptation; a climate risk must be quoted. Mitigation only projects and emergency relief after a disaster are out. |
+
+A second pass in code (`screen_rules.R`) checks the model's answer without
+paying for another read. The year window is applied here from the model's
+stored verdict, so moving the window is a two number change and a rerun. A
+verdict of in scope with no climate risk quoted becomes unsure. A project
+the model itself calls mitigation goes out. A programme evaluation that
+covers several projects becomes unsure, because extraction needs one project
+to focus on. Bare one word reasons are re asked. Documents of one project
+with conflicting verdicts are listed.
+
+A person's decision wins over all of this. The file
+`scope_screen_overrides.csv` holds one row per decided document (source,
+filename, verdict, note, who decided). The rules script applies it last.
+This is the accepted or rejected loop in the workflow diagram: an unsure
+document goes to a person, the decision is recorded there, and the next run
+of the rules and of the Zotero sync carries it through.
+
+Measured on a review of 200 judgements read against the documents (100 in,
+100 out), the first pass was right on about 85 percent of in scope verdicts
+and 96 percent of out of scope verdicts. The misses clustered: irrigation or
+productivity read as adaptation with no climate risk named, mitigation
+projects, and multi project syntheses. The rules above were written from
+those misses, and 115 documents with weak reasons were re asked with a
+tightened prompt; 22 moved into scope and 6 were parked as unsure for the
+protocol lead. Screening the whole corpus costs about one US dollar.
+
+The screener's verdicts are not stable on borderline documents: the same
+document can be judged differently on two reads. That is why the rules live
+in code, quotes are required, unsure cases go to a person, and human
+decisions are recorded in a file rather than in the model's output.
+
+### 3.5 Why documents were excluded
+
+Of the 641 documents out of scope, 160 are dated before 2015 and 24 are dated
+2026 (GEF Portal forms generated this year, and one ICR); whether the window
+should apply to the document's date or the project's years is an open
+question (section 12). Among the rest, the screener's reasons name the
+sector in 497 cases and the intervention in 500, the source type in 65 and
+geography in 56; a reason can name more than one criterion.
+
+Where the sector was named, the sectors were (counts as of 18 September,
+617 documents out): governance and public finance 75, energy 55, forestry
+and conservation 38, health and social protection 35, water supply and
+resources 24, urban development 21, private sector development 15,
+transport 14, transparency and monitoring systems 13, disaster risk
+management 12, coastal zones 10, mining 4, humanitarian 3, land
+administration 2, and 135 where the reason said sector without naming
+which. Three groups sit at the edge of the definition and are with the
+protocol lead: water resources projects with farming communities, forest
+conservation as against agroforestry, and coastal projects with fishing
+communities.
+
+Where the intervention was the only failure (114 documents on 18
+September), the largest group is agriculture projects that name no climate
+risk (52), then emergency relief (9) and mitigation (7).
+
+### 3.6 Source extension roadmap
+
+The six sources do not bound the review. The WP3 protocol's source universe
+(multilateral development banks, UN agencies such as IFAD, FAO and UNDP,
+African government agencies, INGOs, knowledge portals, evaluation offices)
+remains the identification strategy for extension. The next candidates are
+IFAD, FAO and UNDP. A source that cannot be scraped joins by manual download
+into the same folder structure, or by hand additions in Zotero, and goes
+through the same steps.
+
+### 3.7 Source onboarding procedure
+
+Every new source joins by the same path, so the extraction stage never
+needs redesign:
+
+1. **Retrieval.** A scraper following the repository pattern (one script per
+   source in `R/01_retrieve`, a header block naming the site, the strategy
+   and the quirks, all requests through one polite fetcher), or manual
+   download. Filters as close to the scope as the source allows.
+2. **Folders and paths.** The source's folders are added to `paths.R`, the
+   one file that knows the layout.
+3. **Census and dedup.** `doc_census.R` classifies every file into a family;
+   `dedup_corpus.R` removes copies.
+4. **Screening.** `screen_scope.R` and `screen_rules.R` judge every file.
+5. **Catalogue.** The metadata list goes to the source's `List` folder,
+   mirrored into the repository; the Zotero sync creates the records.
+6. **Family check.** If the source's documents are written in a template
+   the pipeline has not seen, a family is added to `doc_families.R` and, if
+   needed, an extraction module to `R/05_extract/families/`.
+7. **Capped extraction validation.** A small batch is extracted and reviewed
+   against the section 8 metrics before the source is scaled.
+
+### 3.8 Other inputs
+
+- **Template:** the extraction template
   `EvidenceSynthesis_GreyLiterature_AfricanAgricultureAdaptation_UpdatedTemplate_27Aug2026.xlsx`
-  (`02_Template\`, released 27 Aug 2026) — the pinned version;
-  extractions declare the template version they follow. It supersedes the
-  earlier working-database structure (v02/v03; fields reduced and
-  clarified) and triggers the schema regeneration of Section 7, Phase 2.
-  The editable value lists for validated fields live in the SharePoint
-  working database's `lists` tab (linked from the template readme).
-- **Keyword taxonomy**: the live keyword file
-  (`Keywords_implementation_updated_032026.xlsx`, SharePoint) informs
-  screening rules and vocabulary synonyms; a local copy of the earlier
-  version sits in `02_Template\`.
-- **Gold standard**: P001–P010 hand-extracted records in template v02;
-  source documents under `Data\Docs\Selection_mixed stakeholders\`.
+  in `02_Template`, released 27 August 2026 and pinned. Its readme sheet is
+  the data dictionary: every field has a description, options, examples
+  from project P001 and extraction instructions. Extractions declare the
+  template version they follow.
+- **Keyword taxonomy:** the review's keyword file
+  (`Keywords_Adaptation Implementation and Effectiveness_Grey Literature.xlsx`)
+  informs the retrieval filters and the vocabulary synonyms.
+- **Gold set:** projects P001 to P010, extracted by hand into the earlier
+  working database and then audited page by page. Source documents under
+  `03_Documents/pilot/gold_set_P001-P010/`. The corrected reference is
+  `catalogues/gold_v1_general.csv` and its companions.
+- **Holdout set:** ten corpus documents (H001 to H010, all six sources, two
+  in French) never used in tuning, with an independent reference extracted
+  by reading them before the pipeline ran (`catalogues/holdout_reference.csv`).
 
 ## 4. Data management and infrastructure
 
-Three pillars, each with a single job:
+Three pillars, each with one job:
 
-| Pillar | Location | Holds | Sync |
+| Pillar | Location | Holds | How it is kept in step |
 |---|---|---|---|
-| **OneDrive** | `WP2_Evidence Synthesis\Grey Literature\03_Documents\{source}\` | The **documents** (canonical store). Folder semantics: `Docs\2015_2026` (or `evaluation_docs\2015_2026`) = in-scope working set; `to_screen\`, `screened_out\`, `pre_2015\`, `proposal_stage\` = parked states; `List\` = per-source metadata, filters docs, screening evidence | Manual promotion from scraper inbox |
-| **Zotero** | Shared group library *(to be created; API key pending)* | The **catalogue**: one record per corpus document with metadata, source URL, and a link to the OneDrive PDF. Team-browsable; duplicate detection via source-ID tags | RIS import now; automated idempotent push via `R/zotero_upload.R` once the group library exists |
-| **GitHub** | `github.com/Mlolita26/Adaptation-Insights` | Everything **programmatic**: scrapers, screening/extraction code, metadata mirrors (`metadata/{source}/`), filters docs, this protocol. No PDFs, no secrets (`.Renviron` gitignored) | `R/sync_metadata.R` copies `List\` → `metadata/`; commit + push |
+| **OneDrive** | `WP2_Evidence Synthesis/Grey Literature/` | The documents (`03_Documents`, one folder per source, plus `pilot/` and `duplicates/`), the protocol and template (`01_Protocol`, `02_Template`), the outputs for people (`04_Extraction_Results`), the knowledge base (`00_Knowledge`, twelve short notes on what the project is and how it works) | The scripts read and write here directly |
+| **Zotero** | Group library "Adaptation Insights 2" | The catalogue and the record of decisions: one record per screened document, with metadata, the file attached, and a place in its funder's `included`, `to screen`, `screened out` or `duplicates` collection | `zotero_upload.R`, idempotent; run after every screening change |
+| **GitHub** | `github.com/Mlolita26/Adaptation-Insights` (public) | Everything programmatic: scrapers, screening, catalogue, extraction, scoring and publishing code; the metadata mirrors and reference tables (`catalogues/`); this protocol. No PDFs, no keys | Commit and push |
 
-**Extraction outputs** are written as versioned files (per batch, stamped
-with template/prompt/model versions — Annex A) to a dedicated output area;
-they **never overwrite** the hand-curated working database. Merging into the
-database is a reviewed step (Section 7, Phase 6).
+**Folders inside a source.** Each source has `Docs/` with an in scope
+working folder (`2015_2026` or `evaluation_docs`), parked folders
+(`to_screen`, `screened_out`, `pre_2015`, `proposal_stage`, `undated`) and
+`List/` for its metadata. The folder a file sits in is where it was put at
+retrieval. Since September 2026 the decision that counts is the screening
+verdict, not the folder: the extraction driver takes any file the screener
+judged in scope, wherever it sits, and never takes one judged out. Moving
+files to match verdicts is possible but not done, so that nothing is lost
+if a criterion changes.
 
-**Conventions:** file names short (Windows 260-character path limit — keep
-full paths ≤ 240); document filenames carry source, project code, document
-type, and year; every catalogue row keys on the source's document ID.
+**Zotero fields.** Report Number holds the document's own number where the
+funder gives one (a World Bank ICR number). Call Number holds the project
+identifier (World Bank P code, GEF id, AfDB project code, GCF FP code),
+because Zotero has no project number field. Extra holds the file name and
+the screening verdict with its reason. Tags carry the family
+(`family:wb_icr`), the verdict (`screen:in scope`) and an internal document
+tag that lets the sync recognise its own records.
 
-**Manual additions and duplicate reconciliation.** Team members may add items
-to the Zotero library by hand; the catalogue sync will not duplicate them.
-Before creating an item, the sync checks manually-added (untagged) items for
-proof of identity — shared project/report identifier, identical URL, or
-identical attachment file MD5 — and on a confident match **adopts** the
-manual item (adds the pipeline's tag, fields and status collection; the
-member's own tags, notes and collections are preserved). Title-only
-similarity is never auto-merged. A standing report
-(`R/zotero_dedup_report.R` → `Data/zotero_duplicate_report.csv`) lists all
-remaining potential duplicate pairs for team review; nothing is ever deleted
-automatically.
+**Hand additions and duplicate reconciliation.** Team members may add items
+to the library by hand. Before creating a record the sync looks for a hand
+made item that is the same document (shared identifier, same URL, or the
+same file checksum) and adopts it, adding the pipeline's tags and status
+while keeping the member's own tags and notes. A bare file with no record is
+pulled into the corpus (section 3.1) and, once screened, placed under the
+record made for it. Records of files the dedup step moved out go to the
+`duplicates` collection. Nothing is deleted from the library by the
+pipeline; a tidy up script that moves a record's second identical copy of a
+file to Zotero's trash exists and is run by a person.
+
+**Outputs.** Working files of every run (Session 1 CSVs, verification
+reports, harmonised CSVs, raw JSON per document) stay in
+`05_Pipeline/outputs/`, which is not tracked in git. Copies for people go to
+`04_Extraction_Results/`: the results workbooks, the review lists, the
+scores, the cost workbook. Nothing overwrites the hand curated working
+database; merging is a reviewed step (section 7, phase 6).
+
+**Conventions.** File paths are kept under 240 characters where possible;
+the scripts handle longer ones. Document file names carry source, project
+code, document type and year. Every catalogue row keys on the source's own
+document identifier.
 
 ## 5. Extraction target: the data model
 
-The template (27 Aug 2026; its `readme` sheet is the authoritative data
-dictionary — every field has a description, options, examples from P001,
-and extraction instructions) defines two linked tables:
+The template of 27 August 2026 defines two linked tables. Its readme sheet is
+the authority on every field.
 
-**`project_data_general`** — one record per project: identity
+**`project_data_general`**, one record per project: identity
 (`project_code`, `project_title`, `project_id`, `project_lead`), years
-(publication/start/closure — *actual*, not planned), `project_scale`,
-location count/notes, project rationale (one sentence of ~100 words
-capturing **all** climatic and non-climatic drivers and their
-interactions), target beneficiary, `GESI_project` (gender and social
-inclusion, free text), up to three headline results (value + metric +
-unit), budget/disbursed/currency, `funding_mechanism` +
-`funding_mechanism_portion` (instrument mix with percentages, e.g.
-"grant (40%) + loan (40%) + other (20%)"), funder/implementor (actor
-codes), `document_type`, `resource_id`, `evidence_depth`,
-`reference_link_1–3`.
+(publication, start, closure; actual, not planned), `project_scale`,
+location count and notes, project rationale, target beneficiary,
+`GESI_project` (gender and social inclusion, free text), up to three
+headline results (value, metric, unit), budget, disbursed and currency,
+`funding_mechanism` and `funding_mechanism_portion`, funder and implementor
+(actor codes), `document_type`, `resource_id`, `evidence_depth`,
+`reference_link_1` to `3`.
 
-**`project_data_location-specific`** — long format, one record per
-location × intervention × result: location code, `subsector_stated` +
-`subsector type` (coded), `intervention_stated`, `rationale_stated`,
-`target_beneficiary`, result (`result_stated` + `result_value` +
-`result_unit` (free text) + `result_level` (coded)), evidence
-(`evidence_methodology` — how the result was assessed — and
-`evidence_source` — what the evidence is based on; both free text),
-`resource_id`, `evidence_depth`, `resource_link`, notes. The 27 Aug 2026
-revision removed the coded evidence fields (`evidence_type`,
-`evidence_subtype`) and the location-level `result_metric` and
-`document_type`; at this level only `subsector type`, `result_level` and
-`target_beneficiary` remain coded — everything else is verbatim.
+**`project_data_location-specific`**, long format, one record per location,
+intervention and result: location code, `subsector_stated` and coded
+`subsector type`, `intervention_stated`, `rationale_stated`,
+`target_beneficiary`, result (`result_stated`, `result_value`,
+`result_unit` as free text, `result_level` coded), evidence
+(`evidence_methodology`, how the result was assessed; `evidence_source`,
+what it rests on; both free text), `resource_id`, `evidence_depth`,
+`resource_link`, notes. At this level only `subsector type`,
+`result_level` and `target_beneficiary` are coded; everything else is
+verbatim.
 
-Key rules the pipeline enforces:
+The rules the pipeline enforces:
 
-- **Coded + stated pairs.** Nearly every coded field pairs with a `_stated`
-  field carrying the verbatim source text. Under the provenance requirement,
-  each `_stated` value also carries its **page/table reference**.
-- **Controlled vocabularies — coded in a separate session.** Coded fields
-  draw on closed lists (27 Aug 2026 template readme options:
-  document_type 19 · project_scale 6 · subsector type 7 · result_level 5 ·
-  funding_mechanism 5 · result*_metric 27 · result*_unit 12 ·
-  target_beneficiary 24 · location_type 9 · actor_type 21 ·
-  evidence_depth 3). The pipeline separates extraction from coding:
-  **Session 1** extracts the verbatim material from the document (the
-  `_stated` fields — the practice, rationale, result and evidence exactly as
-  the document describes them — with quote and page reference);
-  **Session 2** categorises each verbatim extract into the controlled
-  vocabularies, seeing only the extract and the field's options, never the
-  whole document. Codes are validated **in code**, not by trusting the
-  prompt: values not on the list go to a batched repair step, then to the
-  candidate log.
-- **Template gotcha (resolved 27 Aug 2026):** in the v02 `lists` sheet the
-  `result_metric` and `result_unit` columns were labelled opposite to their
-  use in the data sheets. The 27 Aug 2026 template's readme options are
-  consistent (metrics categorical like "total beneficiaries"; units
-  counting like "hectares"), and the location-level `result_metric` was
-  dropped entirely. Care is still needed if vocabularies are read from the
-  older SharePoint working-database `lists` tab.
-- **Registries.** The model outputs actor/location **names**; codes are
-  assigned in R against the template registries (`actor_codes`,
-  `location_codes`), never by the model. Matching is tiered: deterministic
-  first (normalised name and acronym equality, then unique-substring
-  containment — an ambiguous name is refused, not guessed), then a fuzzy
-  candidate shortlist, and only then one batched LLM call that may pick a
-  code **from the shortlist only** (renames and acronyms count) or answer
-  NEW. Every extracted name is also string-checked against the source
-  document, so only organisations the document actually mentions reach the
-  matcher.
-- **New registry entries.** An unmatched actor surfaces as `NEW: <name>` in
-  the output and as a ready-to-review row in `proposed_new_actors.csv`:
-  name, acronym, scale, actor type (from the template's list) and a
-  **suggested code** following the registry's own numbering (scale prefix
-  plus the next free number in that section). The code becomes real only
-  when a team member adds the row to the `actor_codes` sheet; the next
-  harmonisation run then resolves the placeholders automatically — no
-  document is re-read. The pipeline proposes, the team decides.
-- **No-extraction values.** Absent evidence → explicit empty value with
-  reason category (not present in document / present but not quantifiable /
-  ambiguous — flagged for review).
+- **Coded and stated pairs.** Nearly every coded field pairs with a
+  `_stated` field carrying the document's words, and every stated value
+  carries its page reference.
+- **Two sessions.** Session 1 extracts the document's own words: quotes,
+  literal values and page numbers, for each field group (identity,
+  geography, rationale, results, finance). No categories. Session 2 maps
+  each verified extract to the controlled vocabularies, seeing only the
+  extract and the field's options, never the document. The vocabularies
+  come from the template readme (document_type 19 options, project_scale 6,
+  subsector type 7, result_level 5, funding_mechanism 5, result metric 27,
+  result unit 12, target_beneficiary 24, location_type 9, actor_type 21,
+  evidence_depth 3). Codes are validated in code: a value not on the list
+  goes to a batched repair step, then to the candidate log.
+- **The rationale is the document's words.** The template asks for a
+  sentence of about 100 words covering all climatic and non climatic
+  drivers. A composed sentence can never pass the verbatim check, so the
+  pipeline stores the passages in which the document states the drivers,
+  with their pages. Whether the template should ask for a composed summary
+  as a separate, unchecked field is an open decision (section 12).
+- **Registries.** The model outputs actor and location names; codes are
+  assigned in R against the template registries (1,372 coded actors, 677
+  location codes), never by the model. Matching is tiered: exact name or
+  acronym, then unique substring (an ambiguous name is refused, not
+  guessed), then a fuzzy shortlist, and only then one batched model call
+  that may pick from the shortlist or answer NEW. Every extracted name is
+  string checked against the document, so only organisations the document
+  names reach the matcher. A synonym table built from each organisation's
+  own website widens the match, under one rule: a synonym points at exactly
+  one institution.
+- **New registry entries are audited before anyone reads them.** An
+  unmatched actor or location becomes a row in a proposals file with a
+  suggested code following the registry's own numbering, and an audit
+  script gives each row a verdict (probably new, probably a known actor
+  under another name, probably noise). Of 75 actors proposed on the gold
+  set, 30 were genuinely new. A code becomes real only when a team member
+  adds the row to the registry; the next harmonisation run then resolves
+  the placeholders. No document is re read. The pipeline proposes, the team
+  decides.
+- **Decisions are remembered.** Every vocabulary and actor decision Session
+  2 takes is written to `catalogues/vocab_decisions.csv` (field, a
+  fingerprint of the option list, the extract, the choice) and reused on
+  the next run. This is what makes reruns reproducible: before it, the same
+  extraction harmonised once to 25 matched actors and once to 18. A person
+  can correct a row and the correction survives; deleting a row sends that
+  extract back to the model; changing an option list retires the decisions
+  taken under the old one.
+- **Saying nothing is allowed.** Session 2 may answer NOT STATED and leave
+  the cell empty. Before this it had to pick the nearest option, which
+  turned a results line naming nobody into a beneficiary. On the gold set
+  32 cells took this route. An empty cell with a flag is a finding; an
+  invented one is a defect.
+- **No extraction values.** Absent evidence gives an explicit empty value
+  with a reason: not present in the document, present but not quantifiable,
+  or ambiguous and flagged for review.
+- **Field hygiene in code** (`clean_fields.R`): titles without capitals or
+  codes, counts as bare digits, whole digit results, a percent sign for
+  percentages, an explicit sentence when a document says nothing on gender,
+  and one gate that keeps ratings, money, durations, dates, coverage counts,
+  administrative counts and yes or no indicators out of the results slots.
+  Start and closure years are derived from an explicit implementation
+  period; `evidence_depth` is derived from what was found, never asked of
+  the model.
 
-## 6. Field applicability by document type
+## 6. Document families
 
-Not every document type can supply every field: **Expected** (absence is a
-finding and counts against recall), **Secondary** (extract if present,
-absence neutral), **Not expected** (structurally absent; excluded from recall
-scoring). Profiles are validated during Phase 4 and grow as sources onboard.
+A funder is not a document type. The GEF folder alone held World Bank ICRs,
+AfDB completion reports, GEF Portal forms, UNEP forms, evaluator written
+evaluations and World Bank progress reports. What decides where a field
+sits and how the tables are laid out is the template the document was
+written in. The pipeline calls this the document family, recognises it from
+the first three pages, and routes extraction by it. Seventeen families are
+defined in one place (`doc_families.R`); the working document
+`01_Protocol/Document_Families.docx` describes each one: cover words,
+structure, where each template field sits, how the results tables are
+printed, and traps.
 
-| Document type (source) | Project basics & budget | Interventions | Results with values | Evidence type |
-|---|---|---|---|---|
-| ICR — Implementation Completion & Results Report (WB) | Expected (Data Sheet) | Expected (components; Annex "Key Outputs") | Expected (Results Framework annex: baseline/target/actual) | Expected (M&E section) |
-| PPAR (WB, IEG) | Expected | Expected | Expected | Expected |
-| Terminal Evaluation (GEF) | Expected | Expected | Expected | Expected |
-| Mid-Term Review (GEF/AfDB) | Expected | Expected | Secondary (interim results only) | Expected |
-| PIR — Project Implementation Report (GEF) | Secondary | Expected | Secondary | Secondary |
-| PCR / completion summary (AfDB, GCF) | Expected | Expected | Expected | Secondary |
-| PCR Evaluation Note / validation (AfDB IDEV) | Secondary | Secondary | Secondary (ratings, not values) | Expected |
-| xls/xlsx rating sheets (GEF TE ratings) | Not expected | Not expected | Secondary (ratings only) | Not expected |
+| Family | Document | Extraction module | Notes |
+|---|---|---|---|
+| `wb_icr` | World Bank Implementation Completion and Results Report | `wb_icr` | Two template generations: from 2018 the results framework is Annex 1; before, section F of the data sheet. Tables lose their headers in the text layer; the table reader restores them. |
+| `wb_icrr` | World Bank IEG review of an ICR | `agency_evaluation` | Ratings rather than values; the ICR carries the data. |
+| `wb_isr` | World Bank Implementation Status Report | none | Progress document. |
+| `afdb_pcr` | AfDB project completion report form | `afdb_pcr` | Outcome indicator table with baseline, most recent value, end target and progress; amounts in units of account. |
+| `afdb_pper` | AfDB project performance evaluation report | `agency_evaluation` | |
+| `gef_portal_form` | GEF Portal terminal evaluation or mid term review form | `gef_portal_form` | Fixed field labels; the form date is the generation date, not the evaluation date. |
+| `unep_completion_form` | UNEP operational completion form | `gef_portal_form` | |
+| `gef_pir` | GEF project implementation report | none | Progress document. |
+| `gef_indicator_sheet` | GEF-7 core indicator worksheet | none | Spreadsheet, no narrative. |
+| `gcf_completion_summary` | GCF project completion summary | `gcf_completion` | |
+| `gcf_pcr` | GCF project completion report | `gcf_completion` | |
+| `af_ppr` | Adaptation Fund project performance report | none | Progress document. |
+| `cif_country_me` | CIF country monitoring and evaluation report | `cif_country_me` | Covers several projects; needs a focus project. |
+| `agency_evaluation` | Terminal evaluation, mid term review or final evaluation written by an evaluator | `agency_evaluation` | Sub templates: UNDP (project information table, mid term matrix), FAO (results matrix, co financing annex), UNEP validated terminal review, WFP (evaluation questions), UNIDO (fact sheet), Adaptation Fund consultants. |
+| `completion_report` | Completion, terminal or final report that is not a form | `agency_evaluation` | |
+| `programme_evaluation` | Programme, portfolio or thematic evaluation | `programme_evaluation` | Covers several projects; unsure at screening until a focus project is named. |
+| `generic` | Not recognised | `generic` | The general prompt with no family guidance. |
 
-Practical notes from the corpus structure scans: WB ICRs follow two
-standardized generations (pre/post ~2018) with fixed section maps — the
-pipeline extracts from the Data Sheet, Project Context, Outcome section,
-Results Framework annex, and cost annex, skipping boilerplate annexes.
-French-language documents (GEF/AfDB) are extracted in-language with English
-coded values. Non-PDF formats (docx) are converted; xls rating sheets are
-handled as structured tables.
+**Field applicability.** A field is Expected for a family when the template
+carries it (its absence is a finding and counts against recall), Secondary
+when it may be present (absence is neutral), and Not expected when the
+document type cannot carry it (excluded from recall scoring). Completion
+reports, terminal evaluations and performance evaluations are Expected on
+project basics and budget, interventions, results with values and the
+evidence fields. Mid term reviews are Secondary on results (interim values
+only). Progress documents and indicator sheets are not extracted: progress
+reports are screened out by rule, and the protocol lead has been asked to
+confirm this (section 12).
+
+**Documents and projects do not map one to one.** A programme evaluation
+carries several projects; one project's evidence can be spread over several
+documents. A document covering several projects is held as unsure until a
+focus project is named in the extraction manifest, and every prompt then
+carries that focus line. Combining several documents of one project into one
+record is designed but not built (section 12).
 
 ## 7. Methodology
 
-Six phases; 1–3 are preparatory, 4 is the iterative core, 5–6 scale and
-deliver.
-
 ### 7.0 The workflow at a glance
 
-![The extraction workflow: what runs, what it is checked against, and what it leaves behind](../../01_Protocol/workflow.png)
+![The extraction workflow, from retrieval to publication](workflow_diagram.png)
 
-Documents come from `03_Documents\{source}\`, in-scope only. Two scripted
-sessions run over each one: Session 1 lifts the verbatim material and checks
-every quote against the page it cites; Session 2 turns those extracts into the
-template's controlled vocabularies.
+The picture is `01_Protocol/Workflow_diagram.docx`, kept by hand and
+exported to this image. Ten boxes:
 
-**The gate in the middle is the point.** Accuracy is measured on the ten gold
-documents before anything is run on 656. Below threshold, the response is one of
-three things — change the prompts, sharpen a field definition that turned out to
-be ambiguous, or add to the registries the actors and locations the documents
-actually name — and the subset runs again. Nothing reaches the full corpus until
-the subset passes.
+1. **Retrieve**, one scraper per source. Files added by hand in Zotero join
+   here.
+2. **One document, one record.** Census and dedup.
+3. **Screen every document**, in full, for scope and for family, then the
+   rules pass.
+4. **Verdict**, one of three, one destination each. In scope goes to Zotero
+   included and on to extraction. Unsure goes to Zotero to screen and to a
+   person's queue; the person accepts or rejects, and the decision is
+   recorded in the overrides file. Out of scope goes to Zotero screened out
+   and is never extracted.
+5. **Catalogue and Zotero.** One record per screened document; its status
+   follows the verdict.
+6. **Route** by document family, not by source.
+7. **Extract**, one module per family, all through the same Session 1 script
+   and the same table reader.
+8. **Combine the families** into one set of verified extracts. Nothing is
+   interpreted yet.
+9. **Harmonise once for everything**, with the shared vocabulary and the
+   shared decision file.
+10. **Review queues, then publish.** Actors, locations and vocabulary terms
+    go to a person; a ruling is applied by re harmonising, never by re
+    reading.
 
-A run leaves six things behind, and only the first is the data:
+The pink boxes mark where the pipeline grows: a new source enters at box 1
+with a new scraper; a change of inclusion criteria (the year window, new
+topics) enters at box 3 and reruns the rules; a new document template enters
+at box 6 and 7 with a new family and module; a template or vocabulary change
+enters at box 9.
 
-| What a run produces | Where it lands | Who acts on it |
-|---|---|---|
-| **The extracted data** — project sheet and location sheet | `04_Extraction_Results\extracted_records_latest.xlsx`, `location_records_latest.xlsx` | feeds the synthesis |
-| **Proposed new actors**, triaged before anyone reads them | `review\proposed_new_actors_AUDIT.xlsx` | team: accept, merge, or reject each |
-| **Proposed new locations**, likewise | `review\proposed_new_locations_AUDIT.xlsx` | team: accept and enter coordinates by hand |
-| **Fields flagged for manual review** | the `needs_review` sheet inside each workbook | reviewer |
-| **Questions for the template owner** — values no vocabulary fitted, and definitions that proved ambiguous | `review\candidate_vocab_log.csv`, `01_Protocol\QC_Common_Mistakes.docx` | template owner |
-| **Cost and model usage for the run** | *not yet written — the estimate is printed to the console only* | budget tracking (Section 10) |
+**The gate in the middle is the point.** Accuracy is measured on the gold
+and holdout documents before anything runs on the corpus. Below threshold,
+the response is one of three things: change the prompts, sharpen a field
+definition that proved ambiguous, or add to the registries the actors and
+locations the documents name. Then the subset runs again.
 
-The figure is generated by `R/09_publish/figure_workflow.R`, so it cannot quietly
-fall out of step with this section: change a step or an output, re-run the
-script.
+### 7.1 Phases
 
-**Phase 1 — Corpus consolidation & screening resolution.** Resolve
-`to_screen` piles per source: deterministic rules first (e.g. WB topic
-classification, GEF LDCF/SCCF membership), one batched LLM screen for the
-remainder, human adjudication of disagreements; verdicts recorded per source.
-Output: a frozen extraction queue of `in_scope` documents.
+**Phase 1, corpus consolidation and screening. Done.** All 928 documents
+screened with the method of section 3.4; 259 in scope, 28 with a person.
+Zotero mirrors the verdicts. The extraction queue is the set of documents
+judged in scope, read by the extraction driver from the screening file.
 
-**Phase 2 — Machine-readable template.** Generate the extraction schema
-(JSON Schema) from the template workbook: field definitions, instructions
-and vocabulary options from the `readme` sheet (the 27 Aug 2026 template
-carries no `lists` sheet — the editable lists live in the SharePoint
-working database), registries loaded for post-hoc code assignment. The
-schema is version-stamped from the template version; regenerating on
-template release is a one-step script.
+**Phase 2, machine readable template. Done.** Field definitions,
+instructions and vocabulary options are read from the template readme sheet
+of 27 August 2026; registries are loaded for code assignment in R. The
+template version is stamped on every record.
 
-**Phase 3 — Extraction rules & prompts.** Extraction runs in **two LLM
-sessions**. *Session 1 — verbatim extraction*: one structured-output call
-per document over page-tagged text (`[page N]` markers) of the mapped
-relevant sections; it captures projects, locations, interventions,
-rationales, results and evidence exactly as the document states them —
-verbatim passages with page/table references, no classification. Rules:
-extract **all** results exhaustively (headline results are ranked
-deterministically in code, eliminating run-to-run selection variance); ask
-explicitly for the climate stressor vs perceived benefit; temperature 0.
-*Session 2 — categorisation*: each verbatim extract is assigned to the
-controlled vocabularies in cheap batched calls that see only the extract
-and the field's options. Deterministic-first throughout: metadata fields
-(title, IDs, dates, document type, links) are prefilled from the catalogues
-at zero LLM cost, and registry codes are assigned in code. Separating the
-sessions keeps errors diagnosable (missed content vs wrong code), lets the
-provenance gate apply cleanly to Session 1, and means a template or
-vocabulary revision re-runs only Session 2 — no document is re-read.
+**Phase 3, extraction rules and prompts. Done, being extended by family.**
+Session 1 runs one structured output call per field group over the page
+tagged text of the sections the family module names, with the results
+framework pages also attached as images because table text scrambles when
+extracted. Temperature zero. A near empty first page (a picture cover)
+triggers one small vision call to read the title. Session 2 runs in batched
+calls that see only the extracts and the options. Metadata fields (title,
+identifiers, dates, document type, links) are prefilled from the catalogue
+at no model cost, and a catalogue value beats an extracted one. Prompt
+version s1-v2.0 loads a family module (section 6); the location sheet runs
+prompt loc-v1.4. The family modules are written and probe tested; their
+regression against the gold set is the next step.
 
-**Phase 4 — Iterative validation.**
-*Round 1 (done):* gold standard P001–P010 hand-extracted in template v02.
-The canonical worked example is **P001 — TerrAfrica (WB P149269, ICR
-ICR00004643)**: every example value in the template readme comes from it.
-*Round 2:* AI extracts the gold-standard documents blind; field-level
-comparison against human records; iterate prompts/rules until Section 8
-thresholds are met. Inter-rater agreement measured on a shared subset to
-separate template ambiguity from AI error (Annex B guide).
-*Round 3:* AI-first on a small fresh batch (~15 WB ICRs); human review of
-every record; confirm thresholds hold beyond the tuning set.
+**Phase 4, iterative validation. Done.**
 
-**Phase 5 — Scale-up.** Source by source (WB → GEF → AfDB → GCF), in
-batches. Per-batch sampling review (proposed 10% of records,
-*(to be agreed)*); per-batch metrics tracked; a material drop on a new
-source/document type pauses that source for mini re-validation
-(pause-and-revalidate rule).
+- Round 1: gold standard P001 to P010 extracted by hand into the earlier
+  working database. The canonical worked example is P001, TerrAfrica (World
+  Bank P149269, ICR00004643); every example in the template readme comes
+  from it. The manual records were then audited page by page against the
+  documents; the corrected reference has alternates where two readings are
+  defensible, and the audit measured the original human extraction at about
+  77 percent on the same yardstick.
+- Round 2: the pipeline extracted the gold documents blind, was compared
+  field by field, and prompts and rules were iterated. Result: 88 percent
+  agreement over 208 field checks (19 fields, ten documents, metric and
+  unit included).
+- Round 3: ten holdout documents from all six sources, two in French, never
+  used in tuning, with an independent reference read before the pipeline
+  ran. Result: 83 percent. Instead of two blind human extractors, the
+  comparison was three way (the manual gold, a second careful read, and the
+  pipeline), which separates template ambiguity from pipeline error at
+  lower cost.
 
-**Phase 6 — Outputs & database merge.** Validated records merged into the
-working database by a reviewed R step (never a raw overwrite); no-extraction
-gap report; candidate-vocabulary log to the template owner; methods summary
-with final metrics for the synthesis write-up.
+**Phase 5, scale up. Next.** The extraction driver runs the in scope
+documents by family, in batches, resumable. A sample of records per batch
+is reviewed by a person (proposed 10 percent, to be agreed); metrics are
+tracked per batch and per family; a material drop on a new family or source
+pauses that family for a small re validation. The full run is priced at
+about 60 US dollars live or about 30 through a batch API; the batch API is
+deliberately not wired yet, to avoid upgrading the model library past the
+validated version.
+
+**Phase 6, outputs and database merge.** Validated records are merged into
+the working database by a reviewed R step, never a raw overwrite. The gap
+report (what could not be extracted, and why) and the candidate vocabulary
+log go to the template owner. A methods summary with the final metrics goes
+into the synthesis write up.
 
 ## 8. Quality assurance and performance metrics
 
-All thresholds are proposed working values, to be confirmed after Round 2 and
-**fixed before scale-up**. Metrics are always interpreted against the
-Section 6 applicability profile — a field that is Not expected for a document
-type never counts against recall.
+The two sessions are scored separately. Session 1 is scored on recall and
+provenance (did we capture what the document states, faithfully). Session 2
+is scored on coded field accuracy (given a correct extract, was the right
+option chosen). A coded field error counts against Session 2 only when the
+extract was right. Metrics are always read against the applicability
+profile of section 6: a field a document type cannot carry never counts
+against recall.
 
-**The two sessions are scored separately.** Session 1 is scored on recall
-and provenance validity (did we capture what the document states,
-faithfully); Session 2 on coded-field accuracy (given a correct verbatim
-extract, was the right category chosen). A coded-field error counts against
-Session 2 only when the underlying verbatim extract was correct.
+The thresholds were proposed in July 2026 and fixed after Round 2.
 
-| Metric | Measured how | Proposed working target |
-|---|---|---|
-| Field accuracy — coded fields | Exact match vs gold standard (Round 2) / human review batches (Round 3+), per field and per source type | **≥80% before scale-up (to be agreed)**; fields below threshold get rule/prompt rework |
-| Field accuracy — free-text (`_stated`, rationale) | Human judgement: faithful and complete vs source | Reviewed qualitatively; systematic paraphrase drift triggers prompt fix |
-| Provenance validity | **Automated:** quoted passage must exist verbatim (whitespace-normalised) at the claimed page of the source | **100% mechanical gate** — records failing auto-reject before human review |
-| Recall — location-intervention records | Share of gold-standard long-format rows the AI found (Expected fields only) | **≥80% before scale-up (to be agreed)** |
-| No-extraction accuracy | Random sample of empty fields per batch re-checked by a human | False-empty rate monitored per source type |
-| Result-selection stability | Same document run twice → identical extracted result set | Deterministic by design (exhaustive-then-rank); any diff is a defect |
-| Inter-rater agreement (human) | Two blind extractors, shared subset, per field | Fields below threshold flagged for template definition rework before AI tuning |
-| Stability across batches | Per-batch accuracy during scale-up | No material drop on a new source/type; else pause-and-revalidate |
+| Metric | Measured how | Target | Measured |
+|---|---|---|---|
+| Field accuracy, general sheet | Exact or normalised match against the corrected gold reference, per field; the scorer normalises numbers, expands actor codes to names, accepts alternates and classes each check as match, partial, candidate or mismatch | 80 percent before scale up | 88 percent on the gold set (208 checks), 83 percent on the holdout; human baseline 77 percent |
+| Field accuracy, free text (stated fields, rationale) | Human judgement: faithful and complete against the source | Reviewed qualitatively; systematic paraphrase triggers a prompt fix | Reviewed in Rounds 2 and 3 |
+| Provenance | Automated: every quoted passage, number and name must be found on the cited page, whitespace normalised | Every value checked; a value that fails is dropped from the data and reported | No fabricated quote observed in any measured run. Last location run: 651 verified, 163 found on another page, 18 not verbatim, 2 not found |
+| Recall, location and intervention rows | Share of the reference long format rows the pipeline found (Expected fields only) | 80 percent before scale up | Scored against 60 manual rows; the location sheet is the weaker of the two |
+| Screening precision | Verdicts read against the documents | Misses fixed by rule, not by re asking | 85 percent of in scope and 96 percent of out of scope verdicts right on the first pass; rules and re ask applied since |
+| No extraction accuracy | A random sample of empty fields per batch re checked by a person | False empty rate monitored per family | To run at scale up |
+| Stability | The same input run twice gives the same output | Session 1: exhaustive extraction then deterministic ranking in code. Session 2: the decision file | Three consecutive Session 2 runs byte identical |
+| Stability across batches | Accuracy per batch during scale up | No material drop on a new family or source; else pause and re validate | To run at scale up |
 
-**Known failure modes** (from the first pilot, 2026 Q2) and their design
-responses: rationale extraction missed climate hazards → explicit
-stressor/benefit distinction in prompt + `rationale_level` field; result
-selection varied between runs → exhaustive-then-rank; vocabulary mismatch on
-metrics/units → mapping fixed in schema (Section 5).
+**How a value that fails provenance is handled.** The July draft said such
+records auto reject. In practice they are flagged and kept in the working
+output with their flag, because an auto reject silently loses a correct
+extraction whose page reference was off by one. A flagged value is withheld
+from the merge into the database until a reviewer has looked at it. The
+flag categories are: verified, found on another page, not verbatim, not
+found.
+
+**Known failure modes and their fixes.** Rationale extraction missed climate
+hazards: the prompt now asks separately for the climate stressor and the
+perceived benefit. Result selection varied between runs: extraction is
+exhaustive and ranking is done in code. Vocabulary mismatch on metrics and
+units: fixed in the template of 27 August 2026. Session 2 chose different
+codes on identical input: the decision file. Irrigation and productivity
+read as adaptation at screening: a climate risk must be quoted, enforced by
+rule.
 
 ## 9. Responsible AI use
 
 Anchored to the IAES Technical Note *Considerations and Practical
-Applications for Using AI in Evaluations* (2025):
+Applications for Using AI in Evaluations* (2025).
 
-- **Human oversight.** No AI record enters the working database unreviewed
-  during Phases 4–5 sampling; thresholds and scope decisions are human
-  decisions; the template owner arbitrates contested values.
-- **Anti-hallucination.** Verbatim provenance is mandatory and mechanically
-  verified; outputs without valid provenance are auto-rejected (Section 8).
-  "No extraction" is a correct, valued answer.
-- **Data handling.** Only public institutional documents are processed; no
-  personal data is sent to third-party AI services; API terms of the model
-  provider are checked before use.
-- **Transparency & replicability.** Every output row is stamped with
-  template version, prompt version, model name/version, and run date
-  (Annex A). Exact replicability is not claimed for probabilistic outputs;
-  the deterministic post-processing (ranking, code assignment, validation)
-  is fully replicable.
+- **Human oversight.** No record enters the working database unreviewed
+  during scale up sampling. Thresholds and scope decisions are human
+  decisions, recorded in files the pipeline reads (the overrides file, the
+  registries, the decision file). The template owner arbitrates contested
+  values.
+- **Against fabrication.** Verbatim provenance is mandatory and checked
+  mechanically. A value that fails the check is flagged and withheld from
+  the merge. Saying nothing is a correct and valued answer.
+- **Data handling.** Only public institutional documents are processed. No
+  personal data is sent to a model provider. The models are OpenAI's
+  gpt-5-mini (extraction and harmonisation) and gpt-5-nano (screening),
+  called through the R package ellmer, version 0.2.1, under the provider's
+  API terms.
+- **Transparency and replicability.** Every output row is stamped with the
+  template version, the prompt version, the model and the run date. Every
+  prompt version ever sent is kept (`prompt_history.R`). The code is
+  public. Session 1 outputs from a probabilistic model are not claimed to be
+  exactly reproducible; everything after them (verification, ranking, code
+  assignment, harmonisation with the decision file) is.
 
 ## 10. Risks and mitigations
 
 | Risk | Mitigation |
 |---|---|
-| Template vocabulary doesn't match documents' language → forced or missed codes | Candidate-value flag in output schema; candidate log reviewed by template owner each batch; synonym notes added to schema |
-| Template revision invalidates earlier extractions | Template version stamped on every record; because coding is a separate session over stored verbatim extracts, a vocabulary revision re-runs only the categorisation step — no documents are re-read |
-| Performance drops on a new source/document type | Per-batch metrics + pause-and-revalidate rule; applicability profile set from a structure scan before extraction |
-| Screening of borderline documents delays parts of the corpus | Screening is Phase 1 with its own deliverable; extraction proceeds on `in_scope` while screening runs |
-| French/other-language extraction quality lags English | Language recorded per document; language-stratified metrics in Round 2/3; French gold-standard documents included in review samples |
-| Non-PDF formats (docx, xls rating sheets) break the text pipeline | Format-specific ingestion (docx conversion, table parsing); xls sheets profiled as Not expected for narrative fields |
-| Gold standard itself inconsistent (single-extractor bias) | Inter-rater agreement round on a shared subset; ambiguous fields fixed in template before AI tuning |
-| Cost overrun at scale | Deterministic-first design (metadata prefill, code-side validation); one verbatim call per document plus batched categorisation calls; per-document cost tracked from Round 2; batch API for scale-up *(model tier decision pending)* |
+| The template vocabulary does not match the documents' language, so codes are forced or missed | NOT STATED is allowed; a term outside the list is logged as a candidate for the template owner; the synonym table widens actor matching |
+| A template revision invalidates earlier extractions | Template version stamped on every record. Because coding is a separate session over stored extracts, a vocabulary change reruns Session 2 only, and the decision file retires decisions taken under the old option list |
+| Performance drops on a new family or source | Metrics per batch and per family; pause and re validate; a family module is written from a structure scan before extraction |
+| A document covers several projects, or a project spans several documents | Screening marks multi project documents unsure until a focus is named; the manifest carries the focus into every prompt; multi document merging is designed, not built |
+| Screening verdicts vary on borderline documents | Rules in code, quotes required, unsure queue, human overrides recorded in a file |
+| Hand additions and re uploads create duplicates | Dedup by checksum and identifier before screening; Zotero adoption by identifier, URL or checksum; nothing deleted, a register kept |
+| French documents extract less well than English | Language recorded per document; French documents in the holdout; results stratified by language at scale up |
+| Non PDF formats break the text pipeline | 28 Word and Excel files in the GEF folder wait for a conversion step; spreadsheet indicator sheets are a family that is not extracted |
+| The gold standard itself is inconsistent | It was audited page by page; the reference carries alternates and an adjudication file records who was right where the two readings differed |
+| Cost overrun at scale | Deterministic first (catalogue prefill, code side validation); the five calls per document share one document text, priced at a tenth by the provider; the decision file makes reruns almost free; screening the corpus costs about one dollar, extraction about ten cents per document |
+| The OneDrive path limit (260 characters) | Handled in the scripts; documented for anyone opening files another way |
 
-## 11. Timeline and dependencies *(indicative — to be confirmed)*
+## 11. Timeline
 
 | Period | Milestones |
 |---|---|
-| Q3 2026 | Refined template released and schema generated (Ph2); screening of to_screen piles resolved (Ph1); prompts + extraction rules (Ph3); Round 2 AI-vs-gold-standard iterations; thresholds confirmed; Round 3 AI-first batch on WB ICRs |
-| Q4 2026 | Scale-up WB → GEF → AfDB → GCF (Ph5); validated records merged; gap report + candidate-vocabulary log delivered (Ph6); onboarding of next source (IFAD or Adaptation Fund) using Section 3.3 |
-| 2027 | Extension sources per WP3 universe; periodic re-runs for newly published evaluations; handover per no-cost-extension staffing plan |
+| Q3 2026, done | Template released and read by the pipeline (27 August). Two session extraction built, scored on the gold set (88 percent) and the holdout (83 percent). Decision file, synonym table, proposal audits, field hygiene. Document families defined; census, dedup and whole corpus screening run (928 documents). Zotero follows the screening. Hand additions loop. Family extraction modules written. Repository public with a full README. |
+| Q4 2026 | Protocol lead's answers to the open questions (section 12) applied as rules and overrides, then rules rerun and Zotero re synced. Gold regression of the family based extractor. Full run of the 259 in scope documents by family, with per batch review. Merge into the working database, gap report, candidate vocabulary log. Conversion step for Word and Excel files. Onboarding of the next source (IFAD) by the section 3.7 procedure. |
+| 2027 | Extension sources per the WP3 universe; periodic reruns for newly published evaluations; handover. |
 
-**Dependencies:** the refined template (blocks Ph2); team decisions on QA
-thresholds and the land/forest scope boundary; Zotero group library + API
-key (catalogue automation); reviewer time for Rounds 2–3; model/budget
-decision for scale-up.
+**Dependencies:** the protocol lead's decisions in section 12; reviewer time
+for the per batch samples; the budget decision between a live run and a
+batch API run.
+
+## 12. Open decisions
+
+Questions with the protocol lead, collected in `01_Protocol/QC_Common_Mistakes.docx`
+(sixteen questions) and in the knowledge base:
+
+1. **Sector criterion.** Are water resources projects with farming
+   communities, forest conservation as against agroforestry, and coastal
+   projects with fishing communities in or out? Is a safety net programme
+   with public works against drought part of food systems? The question in
+   the QC document links five documents per sector so they can be read.
+2. **Intervention criterion.** Emergency food relief after a flood or
+   drought responds to a climate hazard but is not adaptation; the screener
+   excludes it. Confirm.
+3. **Timeframe.** Documents dated 2026 fall out of the 2015 to 2025 window
+   although the projects ran inside it. Is the window about the document's
+   date or the project's years? One constant, re applied without re reading.
+4. **Progress documents** (World Bank ISR, GEF PIR, Adaptation Fund PPR)
+   are screened out by rule. Confirm, or admit them as secondary evidence.
+5. **A project with a mid term review and a terminal evaluation.** Is the
+   terminal evaluation authoritative, the mid term review used only when no
+   terminal evaluation exists?
+6. **The same report in English and French.** Treated as one document,
+   English kept. Agree?
+7. **Rationale field.** The document's words (checkable) or a composed
+   sentence covering all drivers (not checkable)? Or both, as two fields?
+8. **Provenance failures.** Flagged and withheld from the merge until
+   reviewed, as now, or rejected outright, as the July draft said?
+9. **Where the controlled vocabularies live.** The template readme is the
+   reference; the code carries a copy checked against it at each template
+   release; the dropdowns in the template point at a sheet that does not
+   exist. Name one source of truth.
+10. **`location_count` granularity** (countries or named sites) and the
+    definition of `project_lead` when funder, coordinator and executing
+    agency differ; the funder of a self published evaluation; financing
+    arms (IDA, the African Development Fund, the GEF Trust Fund) as their
+    own actor or as the parent; overlapping beneficiary options with no
+    definitions. Each is a numbered question in the QC document.
+
+Team decisions: live run or batch API for the full corpus; approval of the
+proposed actor and location codes; when to onboard IFAD. Every screening
+decision is recorded in Zotero, so the rejected documents can be looked at
+there; a new criterion means a rerun of the rules and the sync, and nothing
+is lost.
 
 ---
 
-## Annex A — Extraction output schema (per document)
+## Annex A. What a run produces
 
-Every extraction run emits, per document:
+Every run of the pipeline leaves these behind. The first is the data; the
+rest are its audit trail and its questions.
 
-- `document_ref`: source, source document ID, resource_id, file path/URL
-- `versions`: template version, prompt variant + version, model name/version,
-  run date, pipeline commit hash
-- `project_record`: all `project_data_general` fields, each coded value as
-  `{value, quote, page_or_table, confidence (high/med/low)}`
-- `location_records[]`: all `project_data_location-specific` fields, same
-  value structure
-- `no_extraction[]`: field, reason category (not in document / present but
-  not codable / ambiguous)
-- `candidate_values[]`: field, source wording, proposed vocabulary addition,
-  quote
-- `provenance_check`: pass/fail per quoted value (mechanical)
-- `review_status`: unreviewed / human-validated / human-corrected
+| Output | Where | Who acts on it |
+|---|---|---|
+| Session 1 extracts with page references, one CSV per field group, and a raw JSON per document | `05_Pipeline/outputs/extraction/<run>/` | the pipeline |
+| Verification report: every quote, number and name with its status (verified, found on another page, not verbatim, not found) | same folder | reviewer, for flagged values |
+| Harmonised records in template shape, general and location sheets | `04_Extraction_Results/extracted_records_latest.xlsx`, `location_records_latest.xlsx`; each with a `needs_review` sheet and an `about` sheet naming the run | feeds the synthesis |
+| Proposed new actors and locations, audited | `04_Extraction_Results/review/proposed_new_actors_AUDIT.xlsx`, `proposed_new_locations_AUDIT.xlsx` | team: accept, merge or reject each |
+| Candidate vocabulary terms | `04_Extraction_Results/review/candidate_vocab_log.csv` | template owner |
+| Decisions taken, reused next time | `05_Pipeline/catalogues/vocab_decisions.csv` | a person may correct a row |
+| Scores against gold and holdout, with a reason per disagreement | `04_Extraction_Results/scores/` | pipeline maintainer |
+| Cost of the run and projected cost of the corpus | `04_Extraction_Results/extraction_costs.xlsx` | budget tracking |
 
-**Two-session version stamping.** Verbatim extracts carry the Session 1
-(extraction) prompt and model version; codes carry the Session 2
-(categorisation) prompt version and the template/vocabulary version — so a
+**Version stamping.** Every record carries the template version, the Session
+1 prompt version and model, the Session 2 prompt version and the run date. A
 template revision invalidates only the codes, never the verbatim layer.
 
-## Annex B — Disagreement diagnosis guide
+## Annex B. Disagreement diagnosis guide
 
-When AI output disagrees with the gold standard or a reviewer:
+When the pipeline disagrees with the gold standard or a reviewer:
 
-| Pattern | Diagnosis | Fix / destination |
+| Pattern | Diagnosis | Fix and destination |
 |---|---|---|
-| AI picked a clearly wrong vocabulary option | Prompt/rules defect | Refine field instructions in prompt; retest on gold standard |
-| AI's wording is right but the code differs from the human's; humans also split | Ambiguous field definition | Template owner rewords definition/options; log to template revision |
-| Correct concept, but no vocabulary option fits | Missing vocabulary option | Candidate log → template owner |
-| AI extracted a value the document doesn't support | Hallucination / evidence failure | Should be caught by the provenance gate — if it passed, tighten the gate (paraphrase leakage) |
-| AI missed content a human found | Recall failure | Check section map coverage first (was the passage in the model's input?), then prompt |
-| Source text too vague for any extractor | Reporting-quality problem | No-extraction with reason; feeds the gap report, not a defect |
+| The pipeline picked a clearly wrong option | Prompt or rules defect | Refine the field instruction; retest on the gold set |
+| The pipeline's extract is right but its code differs from the human's, and humans also split | Ambiguous field definition | Template owner rewords the definition or options; logged as a template question |
+| Correct concept, no option fits | Missing vocabulary option | Candidate log to the template owner |
+| The pipeline extracted a value the document does not support | Fabrication or evidence failure | The provenance check should catch it; if it passed, tighten the check (paraphrase leaking through) |
+| The pipeline missed content a human found | Recall failure | Check the family module first (was the passage in the model's input?), then the prompt |
+| The source text is too vague for any extractor | Reporting quality problem | No extraction with a reason; feeds the gap report, not a defect |
+| Two runs of Session 2 disagree on identical input | Missing decision | Check the decision file was read; a new option list retires old decisions by design |
 
-## Annex C — Required updates to the WP3 review protocol
+## Annex C. Required updates to the WP3 review protocol
 
 For the template owner to action in `AIs_WP3_EvidenceSynthesis_GreyLit.docx`
 (this protocol does not modify that document):
 
-1. **Timeframe 2000–2025 → 2015–2025** everywhere: Background framing
-   ("quarter-century"), PICOS Sources (S), Table 1 inclusion, Table 2
-   exclusion ("before 2000" → "before 2015"), §IV retrieval step 3, §VII
-   trend analysis, Appendix document-metadata variables (Year, Timeframe).
-2. **Evaluation-type documents only; proposals excluded** (team decision
-   2026-07-17): narrow PICOS Sources (S) and Table 1 source types (currently
-   admit output/budget/monitoring reporting); in the Appendix document-type
-   repository, mark PADs, appraisal documents, and concept notes as out of
-   scope, and progress/status/monitoring reports as out of scope as
-   standalone bases.
-3. **Retrieval implementation update** (§III–IV): for the pilot sources
-   (World Bank, GEF, GCF, AfDB) the manual registry/download/tracking
-   procedure has been implemented as an automated scraper pipeline with
-   evidence-based screening states (`in_scope` / `to_screen` /
-   `screened_out`) documented per source. The wider source universe of §III
-   and Annex I/II **remains valid as the extension roadmap** — it is the
-   identification strategy for onboarding future sources, not outdated
-   content. Zotero remains the reference-management layer.
-4. **Extraction template** (§VI, Annexes III–XIV): superseded by working
-   database v02 (project-level + location-specific long format, controlled
-   vocabularies, actor/location registries) and, on release, by the refined
-   template (tagging columns removed, provenance fields added).
-5. **Editorial:** research questions Q3/Q5 and Q7/Q10 are duplicates —
-   deduplicate the list.
+1. **Timeframe 2000 to 2025 becomes 2015 to 2025** everywhere: background
+   framing, PICOS sources, inclusion table, exclusion table ("before 2000"
+   becomes "before 2015"), retrieval step 3, trend analysis, appendix
+   metadata variables. Pending the section 12 decision on document date
+   against project years.
+2. **Evaluation type documents only; proposals excluded** (team decision of
+   17 July 2026). Narrow the PICOS sources and the source types in the
+   inclusion table; mark appraisal documents, project documents and concept
+   notes out of scope in the document type repository; progress and status
+   reports out of scope as standalone evidence, pending question 4.
+3. **Screening criteria as implemented** (section 3.4): five criteria in a
+   fixed order, applied to the full text by a model and checked by rules,
+   with human overrides recorded. The sector criterion needs the boundary
+   decisions of section 12.
+4. **Retrieval implementation.** For the six sources the manual registry,
+   download and tracking procedure has been implemented as scrapers with a
+   census, a dedup step and recorded screening verdicts. The wider source
+   universe of the WP3 protocol remains valid as the extension roadmap.
+   Zotero remains the reference layer, and now records every decision.
+5. **Extraction template.** The WP3 template and annexes are superseded by
+   the template of 27 August 2026 (project level and location specific long
+   format, controlled vocabularies, actor and location registries, provenance
+   fields).
+6. **Document families** as the unit of extraction design, in place of the
+   document type list.
+7. **Editorial:** research questions Q3 and Q5, and Q7 and Q10, are
+   duplicates.
 
-## Annex D — Per-source filter details
+## Annex D. Per source retrieval details
 
-The full evidence per source lives in `metadata/{source}/{source}_filters.md`
-on GitHub; this annex records the classification systems each source offers,
-which categories were selected, and the keyword lists shared by all sources.
+The filters below run at retrieval and decide what is downloaded. They are
+recall filters: the scope decision is taken by the screener on the full text
+(section 3.4). Each source's own site is authoritative; the metadata lists
+live in `03_Documents/{source}/List/` and are mirrored in the repository's
+`catalogues/` folder.
 
 ### D.1 World Bank
 
-**Document types.** The WB documents API classifies every document by type
-(`docty`). Of that universe, only three evaluation types are requested:
-*Implementation Completion and Results Report*, *Implementation Completion
-Report*, *Project Performance Assessment Review*. Everything else (appraisal
-documents, implementation status reports, working papers…) is never fetched.
+**Document types.** The Documents and Reports API classifies every document
+by type. Three evaluation types are requested: Implementation Completion and
+Results Report, Implementation Completion Report, Project Performance
+Assessment Review. Nothing else is fetched.
 
-**Sector.** Every returned document carries `teratopic` — the World Bank's
-own multi-valued topical classification (a document typically carries 2–5
-topics). The 29 topics observed on recent ICRs:
+**Sector.** Every document carries the Bank's own topic classification,
+usually two to five topics. Only Agriculture is taken as positive evidence.
+Neighbouring topics (Rural Development, Environment, Water Resources) proved
+too broad. Topics are used as evidence after retrieval, never as a query
+filter, because topic coverage is incomplete on recent documents and query
+side filtering lost in scope projects.
 
-> Agriculture · Rural Development · Environment · Water Resources · Water
-> Supply and Sanitation · Macroeconomics and Economic Growth · Public Sector
-> Development · Finance and Financial Sector Development · Urban Development
-> · Transport · Communities and Human Settlements · Education · Governance ·
-> Health · Nutrition and Population · Energy · Poverty Reduction · Law and
-> Development · Industry · Social Development · Private Sector Development ·
-> International Economics and Trade · Informatics · Infrastructure Economics
-> and Finance · Conflict and Development · Information and Communication
-> Technologies · Science and Technology Development · Social Protections and
-> Labor · Gender
+**Geography.** One query per document type and African country, plus the
+regional and global values under which multi country projects are filed
+(Africa, Eastern, Western, Southern and Central Africa, Western and Central
+Africa, Eastern and Southern Africa, World). After retrieval the country
+field must be African; World filed documents pass only if the title names an
+African country.
 
-**We selected only *Agriculture* as positive topic evidence.** Neighbouring
-topics (*Rural Development*, *Environment*, *Water Resources*) are *not*
-automatic keeps — they proved too broad (urban, macro and infrastructure
-projects carry them); documents under those topics still qualify via title
-keywords, or land in `to_screen` via their abstract. Topics are used as
-**evidence after retrieval**, never as a query filter: WB topic coverage is
-incomplete on recent documents, and query-side topic filtering verifiably
-lost in-scope projects.
+**Other filters in code.** Document date 2015 or later (the API date
+parameter is unreliable with other filters). Budget support instruments
+dropped by title pattern (Development Policy, DPO, DPF, DPL, Poverty
+Reduction Support, Budget Support, PRSC).
 
-**Geography.** One query per doc type × each of the 54 African countries,
-plus the regional/global values multi-country projects are filed under
-(*Africa, Eastern/Western/Southern/Central Africa, Western and Central
-Africa, Eastern and Southern Africa, World*). After retrieval the country
-field must be African; *World*-filed documents pass only if the title names
-an African country.
-
-**Other code filters.** Document date ≥ 2015 (client-side; the API date
-parameter is unreliable in combination with other filters); budget-support
-instruments dropped by title pattern (*Development Policy, DPO, DPF, DPL,
-Poverty Reduction Support, Budget Support, PRSC*).
+**Abstracts.** The Bank's catalogue summary of each document is stored with
+the metadata. A title keyword match is strong evidence; an abstract only
+match is weak, because summaries mention scope words in passing. Only the
+World Bank provides abstracts.
 
 ### D.2 GEF
 
-**Focal areas** (project-level classification on thegef.org; project counts
-as observed 2026-07): Biodiversity (2,514) · Chemicals and Waste (807) ·
-**Climate Change (2,686) ← selected** · International Waters (542) · Land
-Degradation (1,064). Climate Change includes mitigation and enabling
-activities — which is why an agriculture/adaptation content screen is still
-pending for GEF.
+**Focal area.** Climate Change selected (project counts observed in July
+2026: Biodiversity 2,514; Chemicals and Waste 807; Climate Change 2,686;
+International Waters 542; Land Degradation 1,064). Climate Change includes
+mitigation, which is why the screener's sector and intervention criteria
+matter most here.
 
-**Funding sources** (same database): GEF Trust Fund (6,018) · **Least
-Developed Countries Fund (395)** and **Special Climate Change Fund (103)**
-— the two adaptation-implementation funds, *planned* as the primary
-selection for future runs · CBIT Trust Fund (44) · Global Biodiversity
-Framework Fund (82) · Multi Trust Fund (84) · NPIF (12).
+**Funding sources.** The Least Developed Countries Fund (395 projects) and
+the Special Climate Change Fund (103) are the two adaptation implementation
+funds. They are the primary sweep, not the perimeter: adaptation work also
+sits in the GEF Trust Fund (sustainable land management, integrated
+programmes). Gold projects P002 to P004 are Trust Fund financed and would be
+invisible to a fund only filter. Future GEF runs sweep the union of the two
+funds, the Land Degradation focal area and the Climate Change focal area.
 
-**Recall safeguard — LDCF/SCCF is the primary sweep, not the perimeter.**
-Adaptation-relevant work also exists in the main GEF Trust Fund — notably
-Land Degradation focal-area projects (sustainable land management) and
-multi-focal integrated programs: gold-standard projects P002–P004
-(Resilient Food Systems / GEF IEO Food Systems evaluation) are Trust
-Fund–financed and would be invisible to a fund-only filter. Future GEF runs
-therefore sweep the union of LDCF + SCCF, the Land Degradation focal area,
-and the Climate Change focal area (already harvested — the current corpus
-is kept), and classify results by evidence: fund membership = adaptation by
-construction; otherwise focal area plus title/content keywords — so
-borderline Trust Fund projects land in `to_screen` rather than being
-missed. The GEF IEO terminal-evaluation records provide an independent
-cross-check for anything the sweeps miss.
+**Document types** on project pages: terminal evaluation, mid term review,
+project implementation report, evaluation and completion report are kept;
+CEO endorsement, project document, project identification form and review
+sheet are parked as proposal stage.
 
-**Document types** targeted on project pages: kept — terminal evaluation,
-mid-term review, project implementation report (PIR), evaluation, completion
-report; parked as proposal-stage — CEO endorsement, project document,
-project identification form (PIF), review sheet.
-
-**Dates.** The GEF site publishes no document dates; the year is recovered
-from the files in this order of trust: month-name dates on the first pages
-(EN/FR/PT/ES, latest year) → year in the filename → file-creation metadata
-(docx/xls only). PDF creation metadata and numeric date formats are
-deliberately rejected (regenerated files and planned-closing dates give
-false years).
+**Dates.** The GEF site publishes no document dates. The year is recovered
+from the files: month name dates on the first pages (English, French,
+Portuguese, Spanish; latest year), then the year in the file name, then file
+metadata for Word and Excel files only. PDF creation dates and numeric date
+formats are rejected on purpose (regenerated files and planned closing dates
+give false years).
 
 ### D.3 GCF
 
-**Facets on greenclimate.fund**: project status — **Approved + Completed
-selected** (other statuses exist for projects not yet implementable); theme —
-**Adaptation selected** (of Adaptation / Mitigation / Cross-cutting);
-region — **Africa selected**. Document types: evaluation and completion
-documents kept; approved funding proposals parked. No further sector facet
-exists; with 7 in-scope documents, relevance is checked manually. GCF also
-tags projects with "result areas" (e.g. *Health, food and water security*) —
-usable if the corpus grows.
+**Facets** on greenclimate.fund: project status Approved and Completed;
+theme Adaptation; region Africa. Evaluation and completion documents kept;
+approved funding proposals parked. GCF evaluations are also published
+through a gap fill from the Climate Policy Radar API, and most of the GCF
+corpus arrived through the hand additions route (section 3.1).
 
 ### D.4 AfDB
 
-**www.afdb.org category listings swept** (evaluation-only): Project/Programme
-Completion Reports · Completion Report Reviews · Projects Performance
-Evaluation Reports · Evaluation Reports — Agriculture & Agro-industries.
+**Category listings swept** on afdb.org: Project and Programme Completion
+Reports; Completion Report Reviews; Project Performance Evaluation Reports;
+Evaluation Reports, Agriculture and Agro industries.
 
-**IDEV (idev.afdb.org) document categories**: the evaluation search offers
-~30 categories (corporate evaluations, country strategy evaluations,
-thematic evaluations, knowledge products, annual reports…). **Selected — the
-five project-evaluation categories**: Project performance evaluation ·
-Project cluster evaluation · Impact evaluation · Evaluation report · PCR and
-XSR Validation synthesis. The full taxonomy with facet IDs is cached in
-`metadata/afdb/idev_taxonomy.csv`.
+**IDEV categories** (idev.afdb.org, about 30 in all): the five project
+evaluation categories are selected: project performance evaluation, project
+cluster evaluation, impact evaluation, evaluation report, PCR and XSR
+validation synthesis. The full taxonomy with facet identifiers is cached in
+`catalogues/afdb/idev_taxonomy.csv`.
 
-**Document types excluded by name** even when listed in the categories:
-PAR (appraisal = proposal), ESIA, IPR/ISR (progress reports). Priority when
-one document is kept per project: PPER/EER > evaluation/PCR-validation >
-PCR > MTR.
+**Excluded by name** even when listed: appraisal reports (proposals),
+environmental and social impact assessments, progress reports. When one
+document is kept per project the order is: performance evaluation, then
+evaluation or completion report validation, then completion report, then mid
+term review.
 
-**Sector.** AfDB project codes embed a sector letter (`P-XX-`**`A`**`xx-NNN`
-= agriculture); a document qualifies via that letter OR title keywords.
-Dates: listing publication date → year in PDF filename → IDEV dated folder
-path → year in title.
+**Sector.** AfDB project codes embed a sector letter (an A in the third
+group means agriculture); a document qualifies by that letter or by title
+keywords. Dates: listing publication date, then the year in the file name,
+then the dated folder path, then the year in the title.
 
-### D.5 Shared keyword lists (all sources)
+### D.5 Adaptation Fund and CIF, through the Climate Project Explorer
 
-Matching: **any single term**, case-insensitive; terms exist in English,
-French and Portuguese (`R/00_config.R`). A **title** match ⇒ `in_scope`;
-an **abstract-only** match ⇒ `to_screen`. The lists serve the same intent
-as the review's keyword taxonomy (`Keywords_implementation_updated_032026.xlsx`);
-aligning the code lists to that file is a pending harmonisation task — in
-particular, deciding which broad terms (e.g. *nutrition, resilience, pest,
-flood*) to keep, drop, or demote to abstract-level only.
+The Climate Project Explorer (climateprojectexplorer.org) is the multilateral
+climate funds' joint document platform, built by Climate Policy Radar.
+Retrieval uses its public REST API: a document search (top 100 per query)
+and a per project fetch that returns all documents of one project with
+direct PDF links. Enumeration is by country targeted queries over the
+African country list; projects are checked against the Adaptation Fund
+project corpus so guidance and policy documents are skipped. Document types
+are read from the title, because the API's type field is empty. Performance
+reports are parked as progress documents.
 
-**What counts as the abstract.** The World Bank's own catalogue summary of
-each document — the `abstracts` field its documents API returns alongside
-title, date and topics (roughly one paragraph, written when a report is
-filed; for ICRs typically outcome ratings and lessons). It is not the
-document's full text and not a generated summary, and it is stored in the
-catalogue, so abstract-level screening runs without downloading any PDF. An
-abstract-only match is weak evidence because summaries mention scope words
-incidentally (a road project "affected by drought", a health project noting
-"community resilience"), whereas a title keyword is definitional of what the
-project is. Only the World Bank provides abstracts — GEF, GCF and AfDB
-metadata carry none, which is why their `to_screen` piles have different
-uncertainty reasons (untyped titles, missing dates).
+The CIF corpus on the platform is empty, so CIF evaluations are scraped from
+cif.org directly: sitemap enumeration to document pages, then the PDF link
+on each page. The Evaluation and Learning Initiative's administrative papers
+are excluded. CIF material is mostly programme level; the screener judged 70
+of 72 documents out of scope, most for not being country attributable
+agriculture evaluations.
 
-**Agriculture terms (EN):** agriculture, agricultural, farming, farm,
-crop(s), livestock, pastoral, pastoralist, fisheries, fishery, aquaculture,
-agroforestry, food security, food system, food production, value chain,
-agribusiness, smallholder, irrigation, seed, fertilizer, soil, land use,
-cereal, maize, rice, wheat, sorghum, millet, cassava, yam, cocoa, coffee,
-tea, cotton, horticulture, vegetable, fruit, dairy, poultry, cattle, goat,
-sheep, camel, rural development, rural livelihood, food aid, nutrition,
-hunger, agro-pastoral, dryland, rangeland, extension service, farmer field
-school.
+The funds' own sites remain authoritative. A completeness pass against
+adaptation-fund.org project pages, which also carry Word evaluations and
+performance reports, is a known follow up.
 
-**Adaptation terms (EN):** adaptation, climate adaptation, climate change
-adaptation, climate resilience, resilience, climate-smart, climate smart
-agriculture, CSA, drought, flood, rainfall variability, water scarcity,
-desertification, land degradation, soil erosion, climate risk, climate
-vulnerability, early warning, weather index, crop insurance, index
-insurance, disaster risk reduction, DRR, climate information, climate
-services, adaptive capacity, vulnerability reduction, water management,
-water harvesting, conservation agriculture, climate-proofing, heat stress,
-sea level rise, salinization, pest, disease outbreak, food crisis, famine,
-El Niño, La Niña, LDCF, SCCF, NAP, NAPA, NDC.
+### D.6 Shared keyword lists
 
-### D.6 Climate Project Explorer / CPR API channel (Adaptation Fund; CIF gap)
+The retrieval filters match any single term, case insensitive, in English,
+French and Portuguese. A title match keeps the document; an abstract only
+match parks it as to screen. The agriculture list covers farming, crops,
+livestock, fisheries, agroforestry, food security, value chains, irrigation,
+soils, named staple and cash crops, rural livelihoods, extension. The
+adaptation list covers adaptation, resilience, climate smart agriculture,
+drought, flood, rainfall variability, water scarcity, land degradation,
+climate risk and vulnerability, early warning, index insurance, disaster
+risk reduction, climate information services, conservation agriculture,
+heat stress, sea level rise, salinisation, pests, food crises, and the fund
+and plan acronyms (LDCF, SCCF, NAP, NAPA, NDC). The full lists are in
+`R/00_shared/00_config.R`. Since September 2026 these lists only decide what
+is downloaded; the screener decides scope.
 
-**Climate Project Explorer** (climateprojectexplorer.org) is the Multilateral
-Climate Funds' joint document platform (GCF, GEF, Adaptation Fund, CIF),
-built by Climate Policy Radar (CPR). Retrieval uses the **public,
-unauthenticated CPR REST API** (`api.climatepolicyradar.org`):
-`GET /search/documents` (relevance-ranked, top-100 per query, no deeper
-pagination) and `GET /families/{import_id}` (one fund project with all its
-documents, including direct PDF URLs on the CPR CDN plus the fund's own
-source store). Enumeration is by country-targeted query templates over the
-African country list; family IDs come from each hit's `member_of` relation;
-families are checked against the project corpus (`MCF.corpus.AF.n0000`) so
-Guidance/policy corpora are skipped. Document types are identified from the
-document TITLE (the API's type field is empty).
+## Annex E. Growing the corpus and the pipeline
 
-**Rejected routes** (tested 2026-07-23): the platform's token-gated search
-(`POST /api/v1/searches` — origin-bound JWT, not obtainable and not needed)
-and CPR's public HuggingFace dataset (contains laws/policies/UNFCCC only —
-no MCF documents).
+**A new source.** A scraper in `R/01_retrieve`, the source's folders in
+`paths.R`, then the same steps as every other source (section 3.7).
 
-**CIF gap:** the CIF corpus on the platform is effectively empty (one
-proposal), so CIF evaluations are scraped from **cif.org** directly —
-sitemap enumeration to document pages, PDF links from the page; the
-Evaluation & Learning Initiative's own administrative papers are excluded
-upfront. CIF evaluation material is mostly program/portfolio-level;
-country-attributable content must be located within the documents.
+**A wider timeframe** (documents from 2000, say). Change the two year
+constants in `screen_rules.R` and rerun it. No document is read again,
+because the model's verdict is stored separately from the year rule. Then
+rerun the Zotero sync and the extraction driver. Documents before 2015 are
+already in the corpus and already screened on the other criteria.
 
-The aggregator caveat applies to this whole channel: the funds' own sites
-remain authoritative; a completeness pass against adaptation-fund.org
-project pages (which also carry DOCX evaluations and performance progress
-reports) is a known follow-up.
+**A new or changed criterion.** Add the rule to `screen_rules.R`, or change
+the screener prompt and re ask the affected documents. Every earlier
+decision stays in the screening file beside the new one.
+
+**A new document template.** One entry in `doc_families.R` (label,
+detection words, module) and, if the existing modules do not fit, one module
+in `R/05_extract/families/`. `doc_census.R --redetect` reclassifies the
+corpus from cached covers in seconds.
+
+**A template or vocabulary change.** Session 2 reruns against the new
+options at almost no cost. Decisions taken under the old options retire on
+their own, because each is keyed to a fingerprint of the option list.
+Session 1 reruns only if a new field needs new evidence from the documents.
 
 ---
 
-*Change log:*
-v0.1 (2026-07-22) — first draft; revised same day per team edits: corpus
-building added as Objective 1, definitions and roles sections removed,
-corpus section expanded with filter locations, screening-out reasons, and
-to_screen rationale; Annex D added (per-source classification systems,
-selections, and keyword lists); catalogued low-evidence reserve
-de-emphasised — noted only as a future-scope pool.
-2026-07-23 — GEF recall safeguard and abstract definition added (Annex D);
-two-session extraction design (verbatim extraction, then coding) applied
-across §5/§7/§8/Annex A; Adaptation Fund + CIF onboarded via the Climate
-Project Explorer / CPR API channel (master table rows, Annex D.6); manual
-additions & duplicate reconciliation convention added to §4.
-2026-09-08 — data model synced to the updated extraction template of
-27 Aug 2026 (§3.4, §5, §7 Phase 2): fields reduced (`author_primary`,
-`evidence_type`/`evidence_subtype`, location-level `result_metric` and
-`document_type` dropped; `useful_link_1–4` → `reference_link_1–3`) and
-added (`GESI_project`, `funding_mechanism_portion`, `evidence_methodology`,
-`evidence_source`); project rationale instruction now ~100 words covering
-all drivers and interactions; v02 metric/unit label swap resolved
-in-template.
-2026-09-08 (later) — registry procedure operationalised (§5): tiered actor
-matching (deterministic → shortlist → candidate-bound LLM), source
-verification of extracted names, and the new-entry intake convention
-(`proposed_new_actors.csv` with suggested codes; team adds rows, pipeline
-never invents codes).
+*Change log*
+
+v0.1, 22 July 2026: first draft, revised the same day with team edits.
+23 July: GEF recall safeguard, two session design, Adaptation Fund and CIF
+onboarded. 8 September: data model synced to the template of 27 August 2026;
+registry procedure operationalised.
+
+v0.2, 21 September 2026: the protocol brought in line with the pipeline as
+built and run. New: document families (section 6, annex D notes), dedup step
+(3.3), whole text screening with rules, overrides and the unsure queue (3.4),
+exclusion reasons (3.5), the hand additions route (3.1, 4), Zotero as the
+record of decisions (4), decision file, NOT STATED, synonym table, audited
+proposals and field hygiene (5), measured results and costs (7, 8, 10), the
+handling of provenance failures as flags (8), the three way comparison
+method (7), the open decisions (12), what a run produces (annex A) and how
+the pipeline grows (annex E). Corrected: six sources and current counts
+(3.2), Zotero created and populated, gold set path, rounds 2 and 3 done,
+thresholds fixed, timeline, scale up covering all six sources, the registry
+size (1,372 coded actors). Removed: the folder based screening states as the
+decision of record, the master filter table, the JSON output schema that
+was never emitted. Workflow figure replaced by the hand kept diagram. Plain
+language throughout.

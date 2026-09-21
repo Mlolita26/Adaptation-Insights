@@ -212,7 +212,7 @@ its score is the honest one.
 | `export_reference.R` | Publishes the gold set reference extractions. |
 | `cost_report.R` | What the extraction has cost and what the corpus would cost, from measured prompt sizes. |
 | `prompt_history.R` | Every version of every prompt, with the actual text sent. |
-| `figure_workflow.R` | The workflow figure used in the protocol. |
+| `figure_workflow.R` | An earlier generated workflow figure. The protocol now uses the hand drawn `Workflow_diagram.docx` in `01_Protocol`, exported to `docs/workflow_diagram.png`. |
 
 ### R/archive
 
@@ -237,10 +237,12 @@ copies. The pipeline wide files:
 
 ### docs/
 
-`AI_Extraction_Protocol.md`, the protocol text for corpus construction,
-extraction and validation. Written in July 2026 before the pilot ran; the
-list of what the pilot changed is in `01_Protocol/protocol_update_list_2026-09-14.md`
-on OneDrive.
+`AI_Extraction_Protocol.md`, the protocol for corpus construction,
+extraction and validation, draft v0.2 of 21 September 2026. It describes the
+pipeline as built and run, with the measured results and the decisions still
+open. `workflow_diagram.png` is the workflow figure it embeds, exported from
+the hand kept `01_Protocol/Workflow_diagram.docx`. The Word version of the
+protocol is generated from this text with pandoc.
 
 ### outputs/ and downloads/
 
