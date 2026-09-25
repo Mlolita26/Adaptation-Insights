@@ -711,17 +711,30 @@ main <- function() {
     want_tags <- vapply(x$item$tags, function(t) t$tag, character(1))
     curr_tags <- strsplit(coalesce(e$all_tags, ""), "|", fixed = TRUE)[[1]]
     curr_tags <- curr_tags[nzchar(curr_tags)]
-    new_tags  <- unique(c(curr_tags, want_tags))
+    # the verdict tag is ours and there is exactly one: an old screen: tag from
+    # an earlier verdict goes; every other tag (the team's, family:, doc tags) stays
+    keep_tags <- curr_tags[!grepl("^screen:", curr_tags)]
+    new_tags  <- unique(c(keep_tags, want_tags))
     curr_cols <- strsplit(e$collections, ",")[[1]]
     curr_cols <- curr_cols[nzchar(curr_cols)]
     new_cols <- unique(c(setdiff(curr_cols, ours), want_col))
+    # the screening line ("screen: <verdict> (<family>): <reason>") is written
+    # into Extra, replacing an earlier one, so the reason is readable in Zotero
+    want_extra <- coalesce(x$item$extra, "")
+    screen_line <- regmatches(want_extra, regexpr("screen: .*$", want_extra))
+    new_extra <- e$extra
+    if (length(screen_line)) {
+      base <- sub("\\s*\\|?\\s*screen: .*$", "", e$extra)
+      new_extra <- paste(c(base[nzchar(base)], screen_line), collapse = " | ")
+    }
     if (!setequal(new_cols, curr_cols) ||
         !identical(e$report_number, want_rn) ||
         !identical(e$call_number, want_cn) ||
-        length(new_tags) != length(curr_tags)) {
+        !setequal(new_tags, curr_tags) ||
+        !identical(new_extra, e$extra)) {
       patches[[length(patches) + 1]] <- list(
         key = e$key, version = e$version, collections = as.list(new_cols),
-        reportNumber = want_rn, callNumber = want_cn,
+        reportNumber = want_rn, callNumber = want_cn, extra = new_extra,
         tags = lapply(new_tags, function(t) list(tag = t))
       )
     }
