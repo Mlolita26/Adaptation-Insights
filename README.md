@@ -150,7 +150,7 @@ project_id, web_url.
 | `zotero_dedup_report.R` | A standing report of probable duplicate records in the library. |
 | `build_doc_index.R` | One index from corpus filename to catalogue metadata (title, project id, year, report number, URL). The extraction uses it to prefill fields, because a catalogue value beats an extracted one. |
 | `sync_metadata.R` | Refreshes `catalogues/` from the metadata lists that live next to the documents. |
-| `corpus_inventory.R` | A census workbook of the corpus for people. |
+| `corpus_inventory.R` | The census workbook `03_Documents/Corpus_Inventory.xlsx`: per source counts from the screening file, one sheet for the strict agriculture rule and one for the scenario where documents put out on a linked sector (water, forestry and conservation, coastal, social protection, land) come in, plus folder and file listings and Zotero presence. |
 
 Zotero fields: Report Number holds the document's own number where the
 funder gives one (a World Bank ICR number, say). Call Number holds the
