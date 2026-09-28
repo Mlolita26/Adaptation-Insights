@@ -34,7 +34,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "s1-v2.1"   # v2.1 (28 Sep 2026): countries, explicit start; v2.0 (18 Sep 2026): one module per document
+PROMPT_VERSION <- "s1-v2.2"   # v2.2 (28 Sep 2026, Charity pilot): planned closing and template dates excluded, AfDB numbers and unit codes; v2.1: countries, explicit start; v2.0: one module per document
 # family (R/05_extract/families/*.R). The shared prompt keeps only the rules
 # that hold for every family; each module adds where its fields sit, what its
 # results table's columns are called, its actor roles, its currency and its
@@ -228,10 +228,10 @@ identity = list(
     project_title  = type_string("The PROJECT's name, word by word as stated - from the cover, from the identification block the family note names (data sheet, basic data, project information table), or from the 'evaluation of the project X' phrasing (extract X). Never the REPORT's own name (e.g. 'PPCR Evaluation Report' is a report title, not a project title). WRITE IT IN NORMAL SENTENCE CASE even when the cover shouts it in capitals. Keep abbreviations as they are (APPSA, RFS, AFCC2/RI) but NEVER include a project or document code (no P-number, no GEF ID, no report number, no trailing code). Copy the remaining words CHARACTER FOR CHARACTER from the identification block, including spacing around hyphens and slashes: if it reads 'X/Y -Support', do not tidy it to 'X/Y - Support'."),
     project_id     = type_string("The publisher's project identifier exactly as printed IN THIS DOCUMENT, in the form the family note gives. Empty if none printed."),
     project_lead_name = type_string("NAME of the ORGANISATION leading the project, as the document names it (often the implementing agency or publisher; the family note names the role). Never an internal department, global practice, division or regional unit of an organisation — name the organisation itself. An organisation that both commissions and delivers the work is the lead AND an implementor: record it in both places."),
-    publication_year = type_string("Year the source document was published (front page)."),
+    publication_year = type_string("Year the source document was published (front page, 'Date of report', submission date). NEVER a template or form version date printed in a header or footer, such as 'GEF 7 Core Indicators, March 2019 (revised)' or 'Version 2.1, 2018'. Empty if the document carries no date of its own."),
     start_year     = type_string("Year the project ACTUALLY started per the document. Look in the dates block the family note names (Key Dates, Project data, Project Information Table, Relevant Dates): 'Approval', 'Effectiveness', 'entry into force', 'signature', 'officially launched', French 'mise en vigueur'. Never design/concept/endorsement years, and NEVER an extension approval or revised-closing decision date. If no formal date is stated but the document gives an explicit implementation period ('implemented between 2017 and 2022'), use its first year. A prose statement of when work began also counts: 'under implementation since 2018', 'running since 2018', 'operational since 2018'. Empty only if none of these is stated."),
     start_year_evidence = type_string("Short exact quote stating the start (e.g. 'Approval 29-Apr-2014', 'Effectiveness date: 12 March 2017'), with its wording unchanged. An implementation period alone ('implemented between 2017 and 2022') is NOT a start statement: leave start_year and this field empty and put the period in implementation_period."),
-    closure_year   = type_string("Year the project ACTUALLY closed ('actual closing', 'completed in'; the last year of an explicit implementation period counts if the project is described as finished). Empty if still running ('to date') or not stated."),
+    closure_year   = type_string("Year the project ACTUALLY closed ('actual closing', 'completed in'; the last year of an explicit implementation period counts if the project is described as finished). NEVER a planned, expected, original or revised closing date of a project still under implementation (interim and mid-term evaluations, progress reports): leave empty then. Empty if still running ('to date') or not stated."),
     closure_year_evidence = type_string("Short exact quote stating the closing."),
     implementation_period = type_string("The implementation period exactly as the document states it, e.g. '2017-2022' or 'implemented between 2017 and 2022', if any such statement exists. Empty otherwise."),
     document_type_stated = type_string("The document's OWN designation of itself, verbatim (e.g. 'Implementation Completion and Results Report', 'Project Performance Evaluation Report', 'Mid-term evaluation of the project ...')."),
@@ -447,8 +447,20 @@ fold_results <- function(res, row) {
   rl <- res$results
   if (is.null(rl)) rl <- list()
   if (is.data.frame(rl)) rl <- lapply(seq_len(nrow(rl)), function(i) as.list(rl[i, ]))
+  # AfDB completion report tables print numbers with a dot as thousands
+  # separator and three decimals: "30.000" is 30,000 and "1,352.000" is 1,352.
+  # Read as decimals they shrink a thousandfold (Charity pilot, 28 Sep 2026).
+  fm <- row$family_module; fm <- if (is.null(fm) || !length(fm) || is.na(fm[1])) "" else as.character(fm[1])
+  if (identical(fm, "afdb_pcr")) {
+    rl <- lapply(rl, function(r) {
+      v <- trimws(as.character(r$value %||% ""))
+      if (grepl("^[0-9]{1,3}(\\.[0-9]{3})+$", v)) r$value <- gsub(".", "", v, fixed = TRUE)
+      else if (grepl("^[0-9,]{4,}\\.000$", v)) r$value <- gsub(",", "", sub("\\.000$", "", v), fixed = TRUE)
+      r
+    })
+  }
   is_money <- vapply(rl, function(r) grepl(
-    "US\\$|USD|EUR|CFAF|\\bUA\\b|disburs|financ|budget|grant amount",
+    "US ?\\$|\\$ ?[0-9]|dollars?|USD|EUR|CFAF|\\bUA\\b|disburs|financ|budget|grant amount|contribution of|fund contribution",
     paste(r$unit_stated, r$metric_stated), ignore.case = TRUE), logical(1))
   rl <- rl[!is_money]
   # sanity gates (holdout findings): durations, dates, admin counts and
@@ -757,7 +769,13 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", family = "", groups = 
           row[[field]] <<- val
         }
       }
-      stash("project_title", ixr$title)
+      # The World Bank and GEF catalogues name the PROJECT; the Adaptation
+      # Fund, GCF, AfDB and CIF lists name the DOCUMENT ("... - Final
+      # evaluation report", and for a GCF code shared by several documents
+      # possibly another document's title). Only a project name may replace
+      # the extracted title (Charity pilot, 28 Sep 2026).
+      if (ixr$source %in% c("worldbank", "gef")) stash("project_title", ixr$title)
+      else if (nzchar(ixr$title)) row$project_title_catalogue <- ixr$title
       stash("project_id", ixr$project_id)
       stash("resource_id", ixr$report_no)
       if (!nzchar(gv(row$publication_year)) && nzchar(ixr$year) && ixr$year != "NA")
@@ -785,6 +803,24 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", family = "", groups = 
         row$closure_year_evidence <- paste0("derived from implementation period: ", per)
       }
     }
+  }
+  # a GEF core indicator worksheet carries no date of its own: the only year
+  # printed is the template version in the footer (Charity pilot, 28 Sep 2026)
+  if (identical(as.character(row$family %||% ""), "gef_indicator_sheet") && nzchar(gv(row$publication_year))) {
+    row$publication_year_flag <- paste0("worksheet: ", gv(row$publication_year), " is the form template's version date, not the document's; left empty")
+    row$publication_year <- ""
+  }
+  # ...and the worksheet's own name is not a project title
+  if (identical(as.character(row$family %||% ""), "gef_indicator_sheet") && grepl("core indicator", tolower(gv(row$project_title)))) {
+    row$project_title_flag <- paste0("worksheet: '", gv(row$project_title), "' is the form's name, not the project's; left empty")
+    row$project_title <- ""
+  }
+  # a closing later than the report itself is a plan, not a closure
+  py <- suppressWarnings(as.integer(gv(row$publication_year)))
+  cy <- suppressWarnings(as.integer(gv(row$closure_year)))
+  if (!is.na(py) && !is.na(cy) && cy > py) {
+    row$closure_year_flag <- paste0("closing ", cy, " is later than the report (", py, "): a planned date, not the actual closing; left empty")
+    row$closure_year <- ""; row$closure_year_evidence <- ""
   }
   # year sanity check (template: only 2000-2025 accepted)
   for (yf in c("publication_year", "start_year", "closure_year")) {

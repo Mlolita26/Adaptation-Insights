@@ -199,11 +199,43 @@ cat("  actors                 registry", nrow(areg), "| synonyms",
 # same function, kept under its old name so those two do not change.
 nrm <- actor_nrm
 
-resolve_actors <- function(all_names) {
+# The registry writes national bodies as "<body>, <Country>". Documents
+# write them without the country. The country of the document decides.
+country_tail <- function(nm) {
+  if (!grepl(",", nm, fixed = TRUE)) return("")
+  tail <- trimws(sub("^.*,", "", nm))
+  if (grepl(" and | et | & ", tail) || length(strsplit(tail, " +")[[1]]) > 3) return("")
+  actor_nrm(tail)
+}
+AREG_TAIL <- vapply(areg$name, country_tail, character(1), USE.NAMES = FALSE)
+AREG_HEAD <- actor_nrm(ifelse(nzchar(AREG_TAIL), sub(",[^,]*$", "", areg$name), areg$name))
+in_context <- function(country, ctx) nzchar(country) && nzchar(ctx) && grepl(country, ctx, fixed = TRUE)
+# a body without its country matches the one registry row of that body in a
+# country the document names (Charity pilot, 28 Sep 2026)
+match_actor_country <- function(name, ctx) {
+  n <- actor_nrm(name); if (!nzchar(n) || !nzchar(ctx)) return(NA_character_)
+  k <- which(AREG_HEAD == n & nzchar(AREG_TAIL) & vapply(AREG_TAIL, in_context, logical(1), ctx = ctx))
+  cd <- unique(areg$code[k]); if (length(cd) == 1) cd else NA_character_
+}
+# a candidate that belongs to a country the document never names is not a
+# candidate: Lesotho's ministry for a Mozambican document
+drop_foreign <- function(rows, ctx) {
+  if (!length(rows) || !nzchar(ctx)) return(rows)
+  keep <- vapply(rows, function(i) !nzchar(AREG_TAIL[i]) || in_context(AREG_TAIL[i], ctx), logical(1))
+  rows[keep]
+}
+
+resolve_actors <- function(all_names, context = NULL) {
   uniq <- unique(trimws(unlist(strsplit(all_names[nzchar(all_names)], ";\\s*"))))
   uniq <- uniq[nzchar(uniq)]
-  map <- setNames(vapply(uniq, function(u) match_actor_det(u, AIDX)$code,
-                       character(1)), uniq)
+  ctx_of <- function(u) if (!is.null(context) && u %in% names(context)) context[[u]] else ""
+  map <- setNames(vapply(uniq, function(u) {
+    cd <- match_actor_det(u, AIDX)$code
+    if (is.na(cd)) cd <- match_actor_country(u, ctx_of(u))
+    cd
+  }, character(1)), uniq)
+  n_country <- sum(!is.na(map) & vapply(uniq, function(u) is.na(match_actor_det(u, AIDX)$code), logical(1)))
+  if (n_country) cat("  actors                ", n_country, "matched through the document's country\n")
   pending <- names(map)[is.na(map)]
   # An organisation the model already recognised stays recognised: without
   # this, two harmonise runs of the same extraction matched 25 actors and
@@ -229,11 +261,16 @@ resolve_actors <- function(all_names) {
     }
   }
   if (length(pending)) {                     # one batched LLM disambiguation
-    cand_rows  <- lapply(pending, function(p) actor_candidates(p, AIDX))
+    cand_rows  <- lapply(pending, function(p) {
+      cc <- actor_candidates(p, AIDX)
+      keep <- cc$rows %in% drop_foreign(cc$rows, ctx_of(p))
+      list(rows = cc$rows[keep], via = cc$via[keep])
+    })
     cand_codes <- lapply(cand_rows, function(cc) areg$code[cc$rows])
     lines <- vapply(seq_along(pending), function(i) {
       cand <- cand_rows[[i]]$rows
-      paste0(i, ") '", pending[i], "' -> candidates: ",
+      ctx <- ctx_of(pending[i])
+      paste0(i, ") '", pending[i], "'", if (nzchar(ctx)) paste0(" [document covers: ", substr(ctx, 1, 120), "]") else "", " -> candidates: ",
              if (length(cand)) paste0(areg$code[cand], "=", areg$name[cand],
                                       ifelse(nzchar(areg$acro[cand]),
                                              paste0(" [", areg$acro[cand], "]"), ""),
@@ -247,7 +284,10 @@ resolve_actors <- function(all_names) {
       "initials — letters merely CONTAINED in a candidate's name (e.g. 'TAF'",
       "inside 'Taflalet') are NOT a match. A department, global practice,",
       "division or regional unit is not an organisation — answer 'NEW' for",
-      "those. When in ANY doubt, answer 'NEW' and describe the organisation",
+      "those. A national ministry, agency or government belongs to the country",
+      "the document covers (given in brackets): the same ministry of ANOTHER",
+      "country is NOT a match, answer 'NEW' with that country.",
+      "When in ANY doubt, answer 'NEW' and describe the organisation",
       "so a registry entry can be prepared. Never guess codes."))
     spec <- type_object(mapping = type_array(items = type_object(
       i = type_integer(), code = type_string("Registry code or 'NEW'."),
@@ -394,7 +434,10 @@ codes_for <- function(x, map) {
 }
 
 # ------------------------------------------------- deterministic first maps --
-unit_syn <- c("ha" = "hectares", "hectare" = "hectares", "hectares" = "hectares",
+# AfDB result tables abbreviate units: mho is metric tons per hectare (not
+# siemens), mtd metric tons, nbr number (Charity pilot, 28 Sep 2026)
+unit_syn <- c("mho" = "CANDIDATE: metric tons per hectare", "mtd" = "tons", "nbr" = "quantity",
+              "ha" = "hectares", "hectare" = "hectares", "hectares" = "hectares",
   "%" = "percentage", "percent" = "percentage", "percentage" = "percentage",
   "percentage points" = "percentage", "people" = "individuals",
   "persons" = "individuals", "individuals" = "individuals",
@@ -449,8 +492,21 @@ h <- s1
 gc_chr <- function(col) if (col %in% names(h)) as.character(h[[col]]) else rep("", nrow(h))
 
 # actors -> codes
+# each actor name carries the text that says where its document's project
+# is, so a ministry without a country can be placed
+actor_ctx <- local({
+  ctx <- list()
+  doc_txt <- actor_nrm(paste(gc_chr("project_title"), gc_chr("scope_stated"),
+                             gc_chr("location_notes"), gc_chr("location_count_basis")))
+  for (i in seq_len(nrow(h))) {
+    nm <- trimws(unlist(strsplit(paste(gc_chr("project_lead_name")[i], gc_chr("funder_names")[i],
+                                       gc_chr("implementor_names")[i], sep = ";"), ";\\s*")))
+    for (u in nm[nzchar(nm)]) ctx[[u]] <- paste(ctx[[u]], doc_txt[i])
+  }
+  ctx
+})
 amap <- resolve_actors(c(gc_chr("project_lead_name"), gc_chr("funder_names"),
-                         gc_chr("implementor_names")))
+                         gc_chr("implementor_names")), context = actor_ctx)
 h$project_lead <- vapply(gc_chr("project_lead_name"), codes_for, character(1), map = amap)
 h$funder       <- vapply(gc_chr("funder_names"), codes_for, character(1), map = amap)
 h$implementors <- vapply(gc_chr("implementor_names"), codes_for, character(1), map = amap)   # template column renamed 28 Sep 2026
@@ -497,12 +553,31 @@ for (i in 1:3) {
       "list is never a reason to answer NOT STATED."))
   h[[paste0("result", i, "_unit")]] <- llm_map("result_unit", us, OPT$unit)
 }
+# A metric that counts people is counted in individuals. "Number" as the
+# stated unit maps to quantity, which is right for profiles or sub-projects
+# and wrong for advisory agents trained (Charity pilot, 28 Sep 2026).
+PEOPLE_METRICS <- c("direct beneficiaries", "total beneficiaries", "women beneficiaries",
+  "youth beneficiaries", "smallholder farmers reached", "extension agents trained",
+  "crop producers", "livestock producers", "fishers", "processors", "wholesalers",
+  "association members")
+for (i in 1:3) {
+  mcol <- paste0("result", i, "_metric"); ucol <- paste0("result", i, "_unit")
+  fix <- h[[mcol]] %in% PEOPLE_METRICS & h[[ucol]] %in% c("quantity", "")
+  h[[ucol]][fix] <- "individuals"
+}
 
 # funding mechanism: deterministic from instrument wording first ('funded
 # by <known grant fund>' rules included); anything a keyword can't settle
 # goes to the LLM with the template definitions instead of defaulting to
 # 'other' blindly
 fm <- vapply(gc_chr("instrument_stated"), map_funding_det, character(1))
+# the instrument mix names the instruments even when the instrument wording
+# is a financing table ("loan (90.91%) + counterpart (9.09%)")
+portion <- tolower(gc_chr("funding_mechanism_portion"))
+has_loan <- grepl("\\bloans?\\b|\\bcredits?\\b", portion)
+has_grant <- grepl("\\bgrants?\\b", portion)
+from_portion <- ifelse(has_loan & has_grant, "loan+grant", ifelse(has_loan, "loan", ifelse(has_grant, "grant", "")))
+fm[!nzchar(fm) & nzchar(from_portion)] <- from_portion[!nzchar(fm) & nzchar(from_portion)]
 # no instrument wording, but the funder itself settles it (grant-only funds)
 grantfunder <- grepl("gef|global environment facility|trust fund|adaptation fund",
                      tolower(gc_chr("funder_names")))

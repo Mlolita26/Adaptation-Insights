@@ -57,11 +57,12 @@ cat("existing synonyms:", if (is.null(existing)) 0 else nrow(existing), "\n")
 
 ## ---- mechanical rows --------------------------------------------------------
 mech <- list()
-add_row <- function(code, name, syn, source, note = "") {
+GENERIC_HEAD <- "ministry|minist|department|direction|directorate|government|national|regional|general|office|agency|agence|bureau|institute|institut|university|universit|council|conseil|commission|secretariat|authority|fund|fonds|chamber|chambre|federation|union|association|programme|program|project|projet|service|centre|center|committee|comite|board|society|cooperative|company|corporation|foundation|network|forum|platform|alliance|initiative|observatory|laboratory"
+add_row <- function(code, name, syn, source, note = "", tier = "trusted") {
   syn <- trimws(syn)
   if (!nzchar(syn) || identical(actor_nrm(syn), actor_nrm(name))) return(invisible())
   mech[[length(mech) + 1L]] <<- data.frame(
-    actor_code = code, actor_name = name, synonym = syn, tier = "trusted",
+    actor_code = code, actor_name = name, synonym = syn, tier = tier,
     source = source, status = "active", evidence = note,
     added = format(Sys.Date()), stringsAsFactors = FALSE)
 }
@@ -77,7 +78,15 @@ for (i in seq_len(nrow(reg))) {
     listish <- grepl(" and | et | & ", tail) ||
                length(strsplit(tail, " +")[[1]]) > 3 ||
                length(strsplit(head_, " +")[[1]]) < 2
-    if (!listish) add_row(cd, nm, head_, "registry-rule:comma")
+    # A generic body without its country ("Ministry of Agriculture and Food
+    # Security") is not one organisation: Lesotho, Malawi and Mozambique all
+    # have one. Such a synonym reaches the shortlist as a candidate but never
+    # decides a match on its own (Charity pilot, 28 Sep 2026).
+    generic <- grepl(paste0("^(the )?(", GENERIC_HEAD, ")\\b"), tolower(head_))
+    if (!listish) {
+      if (generic) add_row(cd, nm, head_, "registry-rule:comma-generic", tier = "candidate")
+      else add_row(cd, nm, head_, "registry-rule:comma")
+    }
   }
   # "The Gambia Agency" -> "Gambia Agency"
   if (grepl("^[Tt]he ", nm)) add_row(cd, nm, sub("^[Tt]he ", "", nm), "registry-rule:the")

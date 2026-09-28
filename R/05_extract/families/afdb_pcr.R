@@ -61,7 +61,16 @@ MODULE <- list(
       "assessment cell explains target revisions. French: 'Rapport sur les",
       "effets', 'Rapport sur les produits', 'Valeur de reference', 'Valeur la",
       "plus recente', 'Cible finale'. The Beneficiaries table gives the",
-      "headcount and the share of women in one place."),
+      "headcount and the share of women in one place. NUMBERS in these tables",
+      "use a DOT as thousands separator with three decimals: '30.000' is",
+      "30,000 and '1,352.000' is 1,352; never read them as 30 or as",
+      "percentages. The code in brackets after an indicator is its UNIT:",
+      "(nbr) number, (mtd) metric tons, (mho) metric tons per hectare, (ha)",
+      "hectares, (km) kilometres, (%) percent, (tca) tonnes of CO2 equivalent;",
+      "mho is not an electrical unit. When an indicator row is a percentage or",
+      "an index, the Assessment or Narrative cell often gives the real count",
+      "('409,089 people and 1,352,522 livestock with access to water'): report",
+      "that count as the result."),
     finance = paste(
       "Block 1 C 'Project data': the 'Financing source / instrument' table",
       "(Foreign currency / Local currency / Total) gives the plan by source,",
@@ -78,6 +87,8 @@ MODULE <- list(
 
   traps = paste(
     "Amounts are in Units of Account unless the form says EUR or USD.",
+    "Table numbers use a dot as thousands separator ('30.000' = 30,000);",
+    "unit codes: nbr number, mtd metric tons, mho metric tons per hectare.",
     "'Progress towards target' percentages are not results. A Board cover",
     "memorandum may precede the form. Many AfDB operations are outside the",
     "agriculture sector; that is the screener's call, not this extraction's.")

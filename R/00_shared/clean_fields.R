@@ -320,8 +320,8 @@ result_reject_reason <- function(value, unit, stated = "", metric = "") {
                    "highly likely|negligible)\\b"), m) ||
       grepl("scale|rating", v))
     return("RATING NOT A RESULT")
-  if (grepl(paste0("us\\$|usd|eur|cfaf|mzn|\\bua\\b|disburs|budget|",
-                   "grant amount|expenditure|cost of"), m) &&
+  if (grepl(paste0("us ?\\$|\\$ ?[0-9]|dollars?|usd|eur|cfaf|mzn|\\bua\\b|disburs|budget|",
+                   "grant amount|expenditure|cost of|contribution of|fund contribution"), m) &&
       !grepl("income|revenue|price|saving|profit", m))
     return("MONEY NOT A RESULT")
   # A bare "extension" also names extension agents, extension workers and

@@ -202,8 +202,11 @@ match_actor_det <- function(name, IDX) {
   # 4. containment, for long names only. A short acronym sits inside unrelated
   # words ('TAF' inside 'Taflalet'), which is why this tier has a length guard
   # and why synonyms are never allowed into it.
-  if (nchar(n) >= 8) {
-    k <- which(nzchar(reg$nname) &
+  # ...and only between names of two words or more: the registry actor
+  # "Resilience" matched the word resilience in a financing sentence
+  # (Charity pilot, 28 Sep 2026). A one-word name still matches exactly.
+  if (nchar(n) >= 8 && grepl(" ", n, fixed = TRUE)) {
+    k <- which(nzchar(reg$nname) & grepl(" ", reg$nname, fixed = TRUE) &
                vapply(reg$nname, function(x)
                  grepl(x, n, fixed = TRUE) || grepl(n, x, fixed = TRUE), logical(1)))
     cd <- unique(reg$code[k])
