@@ -191,6 +191,7 @@ slot; that is decided in code, not by the model.
 | `audit_proposed_locations.R` | The same for locations, checked against the location registry. |
 | `audit_reference_targets.R` | Finds numbers the manual reference recorded as results that are in fact targets. |
 | `build_actor_synonyms.R`, `check_actor_synonyms.R` | Build the synonym table for organisation names and prove that no synonym points at two institutions. |
+| `check_actor_countries.R` | Writes every national body in the registry the ways a document would (with its country, in capitals, by acronym, without the country) and checks the matcher resolves each to the right code. Run after a registry or matcher change. |
 | `harvest_actor_websites.R` | Reads one page of each organisation's own site to learn how it names itself. |
 
 ### R/08_quality: how good is it

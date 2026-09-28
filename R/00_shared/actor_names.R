@@ -243,3 +243,58 @@ actor_candidates <- function(name, IDX, k = 8L) {
   keep <- seq_len(min(k, length(idx)))
   list(rows = idx[keep], via = v[keep])
 }
+
+## ---- the country of a national body -----------------------------------------
+# The registry writes national bodies as "<body>, <Country>" and documents
+# name the same body in several countries. The country decides. Since prompt
+# s1-v2.3 the extractor writes the country after a comma too; for older
+# extractions the document's own text (title, scope, location notes) serves
+# as context. (Charity pilot, 28 Sep 2026.)
+
+# the country in a name's last comma segment, normalised; "" when the last
+# segment is a list ("Fisheries and Food") or long
+actor_country_tail <- function(nm) {
+  if (!grepl(",", nm, fixed = TRUE)) return("")
+  tail <- trimws(sub("^.*,", "", nm))
+  if (grepl(" and | et | & ", tail) || length(strsplit(tail, " +")[[1]]) > 3) return("")
+  actor_nrm(tail)
+}
+
+# per registry row: the body without its country (head) and the country (tail)
+actor_country_index <- function(reg) {
+  tail <- vapply(reg$name, actor_country_tail, character(1), USE.NAMES = FALSE)
+  head <- actor_nrm(ifelse(nzchar(tail), sub(",[^,]*$", "", reg$name), reg$name))
+  list(head = head, tail = tail, code = reg$code, acro = reg$nacro, nname = reg$nname)
+}
+
+actor_in_context <- function(country, ctx) nzchar(country) && nzchar(ctx) && grepl(country, ctx, fixed = TRUE)
+
+# a body written with its country, or without it but in a document that names
+# the country, matches the one registry row of that body in that country
+match_actor_country <- function(name, ctx, CIDX) {
+  own <- actor_country_tail(name)
+  if (nzchar(own)) { ctx <- paste(ctx, own); name <- sub(",[^,]*$", "", name) }
+  n <- actor_nrm(name); if (!nzchar(n)) return(NA_character_)
+  # the name already carried its country ("Zambia Agricultural Research
+  # Institute, Zambia"): the head is a complete registry name
+  k0 <- which(CIDX$nname == n & !nzchar(CIDX$tail))
+  cd <- unique(CIDX$code[k0]); if (length(cd) == 1) return(cd)
+  if (!nzchar(ctx)) return(NA_character_)
+  in_ctx <- vapply(CIDX$tail, actor_in_context, logical(1), ctx = ctx)
+  k <- which(CIDX$head == n & nzchar(CIDX$tail) & in_ctx)
+  cd <- unique(CIDX$code[k]); if (length(cd) == 1) return(cd)
+  # an acronym shared by bodies in several countries ("MINADER" in Cameroon
+  # and Cote d'Ivoire) is settled by the country as well
+  if (nchar(n) >= 3 && !grepl(" ", n, fixed = TRUE)) {
+    k <- which(CIDX$acro == n & nzchar(CIDX$tail) & in_ctx)
+    cd <- unique(CIDX$code[k]); if (length(cd) == 1) return(cd)
+  }
+  NA_character_
+}
+
+# shortlist rows whose country the document never names are not candidates
+actor_drop_foreign <- function(rows, ctx, CIDX) {
+  if (!length(rows) || !nzchar(ctx)) return(rows)
+  keep <- vapply(rows, function(i) !nzchar(CIDX$tail[i]) || actor_in_context(CIDX$tail[i], ctx), logical(1))
+  rows[keep]
+}

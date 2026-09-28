@@ -199,35 +199,11 @@ cat("  actors                 registry", nrow(areg), "| synonyms",
 # same function, kept under its old name so those two do not change.
 nrm <- actor_nrm
 
-# The registry writes national bodies as "<body>, <Country>". Documents
-# write them without the country. The country of the document decides.
-country_tail <- function(nm) {
-  if (!grepl(",", nm, fixed = TRUE)) return("")
-  tail <- trimws(sub("^.*,", "", nm))
-  if (grepl(" and | et | & ", tail) || length(strsplit(tail, " +")[[1]]) > 3) return("")
-  actor_nrm(tail)
-}
-AREG_TAIL <- vapply(areg$name, country_tail, character(1), USE.NAMES = FALSE)
-AREG_HEAD <- actor_nrm(ifelse(nzchar(AREG_TAIL), sub(",[^,]*$", "", areg$name), areg$name))
-in_context <- function(country, ctx) nzchar(country) && nzchar(ctx) && grepl(country, ctx, fixed = TRUE)
-# a body without its country matches the one registry row of that body in a
-# country the document names (Charity pilot, 28 Sep 2026)
-match_actor_country <- function(name, ctx) {
-  # a name written with its country ("Ministry of Agriculture, Zambia") is
-  # its own context, and its head is matched against the registry heads
-  own <- country_tail(name)
-  if (nzchar(own)) { ctx <- paste(ctx, own); name <- sub(",[^,]*$", "", name) }
-  n <- actor_nrm(name); if (!nzchar(n) || !nzchar(ctx)) return(NA_character_)
-  k <- which(AREG_HEAD == n & nzchar(AREG_TAIL) & vapply(AREG_TAIL, in_context, logical(1), ctx = ctx))
-  cd <- unique(areg$code[k]); if (length(cd) == 1) cd else NA_character_
-}
-# a candidate that belongs to a country the document never names is not a
-# candidate: Lesotho's ministry for a Mozambican document
-drop_foreign <- function(rows, ctx) {
-  if (!length(rows) || !nzchar(ctx)) return(rows)
-  keep <- vapply(rows, function(i) !nzchar(AREG_TAIL[i]) || in_context(AREG_TAIL[i], ctx), logical(1))
-  rows[keep]
-}
+# country helpers live in R/00_shared/actor_names.R; the index is built once
+CIDX <- actor_country_index(areg)
+in_context <- function(country, ctx) actor_in_context(country, ctx)
+match_actor_country_h <- function(name, ctx) match_actor_country(name, ctx, CIDX)
+drop_foreign <- function(rows, ctx) actor_drop_foreign(rows, ctx, CIDX)
 
 resolve_actors <- function(all_names, context = NULL) {
   uniq <- unique(trimws(unlist(strsplit(all_names[nzchar(all_names)], ";\\s*"))))
@@ -235,7 +211,7 @@ resolve_actors <- function(all_names, context = NULL) {
   ctx_of <- function(u) if (!is.null(context) && u %in% names(context)) context[[u]] else ""
   map <- setNames(vapply(uniq, function(u) {
     cd <- match_actor_det(u, AIDX)$code
-    if (is.na(cd)) cd <- match_actor_country(u, ctx_of(u))
+    if (is.na(cd)) cd <- match_actor_country_h(u, ctx_of(u))
     cd
   }, character(1)), uniq)
   n_country <- sum(!is.na(map) & vapply(uniq, function(u) is.na(match_actor_det(u, AIDX)$code), logical(1)))
