@@ -199,6 +199,7 @@ slot; that is decided in code, not by the model.
 |---|---|
 | `score_pilot.R` | Field by field agreement between the pipeline and the gold set for the ten gold projects, with a column saying why each disagreement happened. |
 | `score_locations.R` | The same for the location sheet against the manual location rows. |
+| `reference_comparison.R` | One workbook that puts a reference extraction, the pipeline's rows and the scorer's verdicts side by side: summary by field and document, every check, mismatches shaded. Takes the score, reference and harmonised CSVs as arguments. |
 
 The gold set (projects P001 to P010) may be used to tune prompts. The holdout
 set (H001 to H010, ten corpus documents) is never looked at while tuning, so
