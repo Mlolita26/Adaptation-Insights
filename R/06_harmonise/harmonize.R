@@ -213,6 +213,10 @@ in_context <- function(country, ctx) nzchar(country) && nzchar(ctx) && grepl(cou
 # a body without its country matches the one registry row of that body in a
 # country the document names (Charity pilot, 28 Sep 2026)
 match_actor_country <- function(name, ctx) {
+  # a name written with its country ("Ministry of Agriculture, Zambia") is
+  # its own context, and its head is matched against the registry heads
+  own <- country_tail(name)
+  if (nzchar(own)) { ctx <- paste(ctx, own); name <- sub(",[^,]*$", "", name) }
   n <- actor_nrm(name); if (!nzchar(n) || !nzchar(ctx)) return(NA_character_)
   k <- which(AREG_HEAD == n & nzchar(AREG_TAIL) & vapply(AREG_TAIL, in_context, logical(1), ctx = ctx))
   cd <- unique(areg$code[k]); if (length(cd) == 1) cd else NA_character_
