@@ -34,20 +34,24 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "s1-v2.0"   # v2.0 (18 Sep 2026): one module per document
+PROMPT_VERSION <- "s1-v2.1"   # v2.1 (28 Sep 2026): countries, explicit start; v2.0 (18 Sep 2026): one module per document
 # family (R/05_extract/families/*.R). The shared prompt keeps only the rules
 # that hold for every family; each module adds where its fields sit, what its
 # results table's columns are called, its actor roles, its currency and its
 # traps, and the World Bank wording that used to sit in the shared prompt
 # lives in wb_icr.R. v1.2 (16 Sep 2026), from adjudicating the gold
 # disagreements against the documents: title copied character for character;
-# start year accepts "since 2018" prose; location_count never counts the
-# evaluation's own focus groups or interviews; a publisher that delivers the
+# location_count never counts the evaluation's own focus groups or
+# interviews; a publisher that delivers the
 # work is also an implementor and partners named in running text count;
 # financing read from the focus programme's row in a multi-programme table.
 # v1.1: team field rules - no shouty titles, no codes in titles, numeric-only
 # location_count, location_notes always filled, GESI stated when absent,
 # whole-digit results, % for percentages
+# v1.3 (28 Sep 2026), team decisions on the QC questions: location_count is
+# the number of COUNTRIES (finer levels go to location_notes, which also
+# notes multi-scale work); the start year is recorded only when stated
+# explicitly, never taken from an implementation period.
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))   # for output file names
 # .Renviron lives in the OneDrive-redirected Documents folder; a shell that
 # overrides HOME (e.g. Git Bash) makes R miss it, so load it explicitly
@@ -240,12 +244,18 @@ geography = list(
     "aggregate location lists that appear in different sections."),
   type = type_object(
     scope_stated   = type_string("Exact quote of the document's own statement of geographic scope/coverage (e.g. 'The study's geographical scope was nationwide' or the countries list)."),
-    location_count = type_string("A BARE NUMBER and nothing else - digits only, no words, no '~', no 'N/A', no unit. It is the count of DISTINCT African locations named anywhere as receiving interventions, at the MOST PRECISE level the document supports: if specific villages, sites or districts are enumerated, count those (20 pilot villages beats 4 countries); fall back to counting countries only when nothing finer is enumerated. Aggregate across the whole document; count each location once. NEVER count the evaluation's own fieldwork: focus groups, interviews, survey rounds, sampling units and respondent groups are not places. If a sentence says four focus groups were held with farmers from two districts, the count is two. Leave empty only when the document truly never says."),
-    location_count_basis = type_string("One sentence saying exactly what was counted, at which level (villages/districts/countries) and where the lists are (pages), so the count can be checked."),
+    location_count = type_string("A BARE NUMBER and nothing else - digits only, no words, no '~', no 'N/A', no unit. It is the number of DISTINCT AFRICAN COUNTRIES in which the project implemented activities, as the document names them. A project in one country is 1. Count a country once. Countries outside Africa are NOT counted here: name them in location_notes (the template keeps the scope beyond Africa there). Do NOT count districts, villages, sites or provinces here: they belong in location_notes. Do NOT count countries that only appear as context, comparison, mission destinations, event venues or partner headquarters. NEVER count the evaluation's own fieldwork: focus groups, interviews, survey rounds and respondent groups are not places. Leave empty only when the document truly never names where the project worked."),
+    location_count_basis = type_string("One sentence naming the countries counted and where the list is (pages), so the count can be checked."),
     location_notes = type_string(paste(
       "ALWAYS fill this, and it MUST account for the number in location_count.",
       "Give a VERBATIM sentence, phrase or list from the document naming where",
       "the project worked - quote it exactly, do not paraphrase.",
+      "Then add the finer level when the document enumerates it: how many",
+      "districts, villages or sites, with a short quote. If the project works",
+      "at several scales (regional or national policy work plus local sites),",
+      "say so in a few words.",
+      "Name any countries outside Africa here, with their number, since",
+      "location_count leaves them out.",
       "The two fields must tell one story. If the passage you quote covers only",
       "PART of what you counted, say so first and then quote, for example:",
       "'26 countries are named as receiving support; 15 of them received CSIF",

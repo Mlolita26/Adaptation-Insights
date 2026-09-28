@@ -458,8 +458,10 @@ against recall.
 | Stability across batches | Accuracy per batch during scale up | No material drop on a new family or source; else pause and re validate |
 
 **Validation results.** On the gold set the pipeline agrees with the
-corrected reference on 88 percent of field checks (208 checks, 19 fields,
-ten documents). On the holdout set it reaches 83 percent. The original
+corrected reference on 91 percent of field checks (189 of 208 checks, 19
+fields, ten documents, 28 September 2026). Location count, funder,
+implementors, budget, currency, document type and resource id match on every
+document. On the holdout set it reaches 83 percent. The original
 human extraction, measured the same way, reached 77 percent. No fabricated
 quote has been found in any measured run. On a review of 200 screening
 verdicts read against the documents, 85 percent of in scope verdicts and 96

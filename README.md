@@ -431,7 +431,7 @@ doubles.
 
 ## 9. Where the work stands
 
-As of 21 September 2026.
+As of 28 September 2026.
 
 | Measure | Value |
 |---|---|
@@ -441,8 +441,9 @@ As of 21 September 2026.
 | Unsure, waiting for a person | 28 |
 | Documents in the shared Zotero library | every judged document, with its file |
 | Document families defined | 17, with extraction modules for the eight that carry results |
-| Gold set agreement, general sheet | 88 percent over ten projects, after correcting the gold set where the documents proved it wrong |
+| Gold set agreement, general sheet | 91 percent over ten projects (189 of 208 field checks, 28 September 2026), after correcting the gold set where the documents proved it wrong and aligning it to the agreed rules on start year and location count |
 | Fabricated quotes observed | none |
+| Session 1 prompt version | s1-v2.1 (countries counted, explicit start year only) |
 
 The main exclusion reasons are the timeframe (documents before 2015 or dated
 2026), the sector (transport, energy, forestry, governance, water, health)
