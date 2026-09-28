@@ -226,7 +226,7 @@ identity = list(
     project_lead_name = type_string("NAME of the ORGANISATION leading the project, as the document names it (often the implementing agency or publisher; the family note names the role). Never an internal department, global practice, division or regional unit of an organisation — name the organisation itself. An organisation that both commissions and delivers the work is the lead AND an implementor: record it in both places."),
     publication_year = type_string("Year the source document was published (front page)."),
     start_year     = type_string("Year the project ACTUALLY started per the document. Look in the dates block the family note names (Key Dates, Project data, Project Information Table, Relevant Dates): 'Approval', 'Effectiveness', 'entry into force', 'signature', 'officially launched', French 'mise en vigueur'. Never design/concept/endorsement years, and NEVER an extension approval or revised-closing decision date. If no formal date is stated but the document gives an explicit implementation period ('implemented between 2017 and 2022'), use its first year. A prose statement of when work began also counts: 'under implementation since 2018', 'running since 2018', 'operational since 2018'. Empty only if none of these is stated."),
-    start_year_evidence = type_string("Short exact quote stating the start (e.g. 'Approval 29-Apr-2014', 'implemented between 2017 and 2022'), with its wording unchanged."),
+    start_year_evidence = type_string("Short exact quote stating the start (e.g. 'Approval 29-Apr-2014', 'Effectiveness date: 12 March 2017'), with its wording unchanged. An implementation period alone ('implemented between 2017 and 2022') is NOT a start statement: leave start_year and this field empty and put the period in implementation_period."),
     closure_year   = type_string("Year the project ACTUALLY closed ('actual closing', 'completed in'; the last year of an explicit implementation period counts if the project is described as finished). Empty if still running ('to date') or not stated."),
     closure_year_evidence = type_string("Short exact quote stating the closing."),
     implementation_period = type_string("The implementation period exactly as the document states it, e.g. '2017-2022' or 'implemented between 2017 and 2022', if any such statement exists. Empty otherwise."),
@@ -758,15 +758,18 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", family = "", groups = 
     }
   }
 
+  # Decision of 28 Sep 2026 (QC question 3): the start year is recorded only
+  # when the document states it explicitly. The first year of an implementation
+  # period is NOT a start; the cell stays empty and is flagged so QC decides.
+  # The closure year may still take the last year of a period the document
+  # describes as finished (the template asks for the actual closing).
   per <- gv(row$implementation_period)
   if (nzchar(per)) {
     yrs <- as.integer(unlist(regmatches(per, gregexpr("(19|20)[0-9]{2}", per))))
     yrs <- yrs[!is.na(yrs) & yrs >= 1990 & yrs <= 2035]
     if (length(yrs)) {
-      if (!nzchar(gv(row$start_year))) {
-        row$start_year <- as.character(min(yrs))
-        row$start_year_evidence <- paste0("derived from implementation period: ", per)
-      }
+      if (!nzchar(gv(row$start_year)))
+        row$start_year_flag <- paste0("start year not stated explicitly; implementation period only (", per, "): QC to decide")
       if (length(yrs) >= 2 && !nzchar(gv(row$closure_year))) {
         row$closure_year <- as.character(max(yrs))
         row$closure_year_evidence <- paste0("derived from implementation period: ", per)

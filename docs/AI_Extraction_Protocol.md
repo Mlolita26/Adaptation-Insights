@@ -236,7 +236,7 @@ every field.
 location count and notes; project rationale; target beneficiary;
 `GESI_project` (gender and social inclusion); up to three headline results
 (value, metric, unit); budget, disbursed and currency; `funding_mechanism`
-and `funding_mechanism_portion`; funder and implementor as actor codes;
+and `funding_mechanism_portion`; `budget_notes`; funder and implementors as actor codes;
 `document_type`; `resource_id`; `evidence_depth`; `reference_link_1` to
 `3`.
 

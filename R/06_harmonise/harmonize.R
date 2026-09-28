@@ -453,7 +453,17 @@ amap <- resolve_actors(c(gc_chr("project_lead_name"), gc_chr("funder_names"),
                          gc_chr("implementor_names")))
 h$project_lead <- vapply(gc_chr("project_lead_name"), codes_for, character(1), map = amap)
 h$funder       <- vapply(gc_chr("funder_names"), codes_for, character(1), map = amap)
-h$implementor  <- vapply(gc_chr("implementor_names"), codes_for, character(1), map = amap)
+h$implementors <- vapply(gc_chr("implementor_names"), codes_for, character(1), map = amap)   # template column renamed 28 Sep 2026
+
+# budget_notes (decision of 28 Sep 2026, QC question 7): budget_total stays the
+# standardised total across all sources; the split goes here in very short
+# words and amounts, e.g. "lead 44700000; cofinancing 263500000". Empty when
+# the document gives no lead share or the share equals the total.
+num_or_na <- function(x) suppressWarnings(as.numeric(gsub("[^0-9.]", "", x)))
+bt <- num_or_na(gc_chr("budget_total")); bl <- num_or_na(gc_chr("budget_lead_share"))
+h$budget_notes <- ifelse(!is.na(bl) & bl > 0 & (is.na(bt) | bl < bt),
+  ifelse(!is.na(bt), sprintf("lead %s; cofinancing %s", format(bl, scientific = FALSE, trim = TRUE), format(bt - bl, scientific = FALSE, trim = TRUE)),
+                    sprintf("lead %s", format(bl, scientific = FALSE, trim = TRUE))), "")
 
 # scale + beneficiary + document type (deterministic, then batched LLM)
 h$project_scale <- llm_map("project_scale (geographic level of the project)",
@@ -658,7 +668,7 @@ TEMPLATE_COLS <- c("project_code", "project_title", "project_id", "project_lead"
   "result2", "result2_metric", "result2_unit",
   "result3", "result3_metric", "result3_unit", "result_notes",
   "budget_total", "disbursed", "currency", "funding_mechanism",
-  "funding_mechanism_portion", "funder", "implementor", "document_type",
+  "funding_mechanism_portion", "budget_notes", "funder", "implementors", "document_type",
   "resource_id", "evidence_depth",
   "reference_link_1", "reference_link_2", "reference_link_3")
 for (cc in TEMPLATE_COLS) if (!cc %in% names(h)) h[[cc]] <- ""

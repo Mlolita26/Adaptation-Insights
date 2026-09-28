@@ -103,7 +103,7 @@ actor_expand <- function(e) {
 id_nrm <- function(x) gsub("(?<=[A-Za-z])0+(?=[0-9])", "", x, perl = TRUE)
 
 
-CONTAINS <- c("project_lead", "funder", "implementor")
+CONTAINS <- c("project_lead", "funder", "implementors")
 
 match_field <- function(field, gold_cell, extracted) {
   a <- alts(gold_cell); e <- as.character(extracted)
@@ -137,7 +137,7 @@ match_field <- function(field, gold_cell, extracted) {
 FIELDS <- c("project_title", "project_id", "project_lead", "publication_year",
   "start_year", "closure_year", "project_scale", "location_count",
   "target_beneficiary_project", "budget_total", "disbursed", "currency",
-  "funding_mechanism", "funder", "implementor", "document_type",
+  "funding_mechanism", "funder", "implementors", "document_type",
   "resource_id", "evidence_depth")
 
 rows <- list()
