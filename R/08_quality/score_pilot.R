@@ -26,7 +26,7 @@ hfile <- if (length(args)) args[1] else {
   f[which.max(file.mtime(f))]
 }
 cat("scoring:", hfile, "\n")
-h <- read.csv(hfile, check.names = FALSE, stringsAsFactors = FALSE); h[is.na(h)] <- ""
+h <- read.csv(hfile, check.names = FALSE, stringsAsFactors = FALSE, colClasses = "character"); h[is.na(h)] <- ""   # text, so 33000000 never prints as 3.3e+07
 gfile <- if (length(args) >= 2) args[2] else file.path(REPO, "catalogues", "gold_v1_general.csv")
 cat("reference:", gfile, "\n")
 g <- read.csv(gfile, check.names = FALSE, stringsAsFactors = FALSE,

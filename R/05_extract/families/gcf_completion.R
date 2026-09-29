@@ -50,8 +50,9 @@ MODULE <- list(
       "ex-ante vs. ex-post results' with Indicators / Baseline / Ex-ante target",
       "vs. Actual result / Reason for the variance and an achievement rating;",
       "its percentages of target are printed as bars and land at the end of the",
-      "page text, so read that page from the image. Take an outcome or",
-      "result-area indicator before the beneficiary headcount."),
+      "page text, so read that page from the image. Report the beneficiary",
+      "headcount total and every outcome and result-area indicator; the",
+      "ranking is done in code."),
     finance = paste(
       "The data block gives total project cost including co-financing",
       "(budget_total), GCF financing or 'GCF Proceeds approved'",

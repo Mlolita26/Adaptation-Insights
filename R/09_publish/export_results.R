@@ -20,6 +20,7 @@ suppressPackageStartupMessages({ library(openxlsx) })
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
 source(file.path(REPO, "R", "00_shared", "paths.R"))
+source(file.path(REPO, "R", "00_shared", "clean_fields.R"))   # template_exact()
 OUT <- file.path(REPO, "outputs", "extraction")
 
 newest <- function(dir, pat, exclude = NULL) {
@@ -59,7 +60,12 @@ write_book <- function(rows, sheet_name, extra_cols, out_file, src, review_rule,
   to_template <- function(x) {
     m <- as.data.frame(lapply(cols, function(cn) if (cn %in% names(x)) x[[cn]] else ""),
                        stringsAsFactors = FALSE)
-    names(m) <- cols; m
+    names(m) <- cols
+    # the template spells two document types with a non-breaking hyphen and the
+    # emissions unit with a subscript two: write its exact strings
+    for (cn in intersect(c("document_type", "result1_unit", "result2_unit", "result3_unit"), names(m)))
+      m[[cn]] <- template_exact(m[[cn]])
+    m
   }
   main <- to_template(rows)
   keep_extra <- intersect(extra_cols, names(rows))

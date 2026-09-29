@@ -264,10 +264,36 @@ actor_country_tail <- function(nm) {
 actor_country_index <- function(reg) {
   tail <- vapply(reg$name, actor_country_tail, character(1), USE.NAMES = FALSE)
   head <- actor_nrm(ifelse(nzchar(tail), sub(",[^,]*$", "", reg$name), reg$name))
-  list(head = head, tail = tail, code = reg$code, acro = reg$nacro, nname = reg$nname)
+  traps <- unique(c(COUNTRY_TRAPS, tail[grepl(" ", tail, fixed = TRUE)]))
+  list(head = head, tail = tail, code = reg$code, acro = reg$nacro, nname = reg$nname, traps = traps)
 }
 
-actor_in_context <- function(country, ctx) nzchar(country) && nzchar(ctx) && grepl(country, ctx, fixed = TRUE)
+## ---- a country's name inside another name -----------------------------------
+# A country's name is often part of a longer geographic name that is not that
+# country: the Somali region of Ethiopia (not Somalia), the Niger Delta and
+# Niger State in Nigeria (not Niger), Lake Chad, Benin City, South Sudan,
+# Guinea-Bissau, the Gulf of Guinea, the Congo basin. The check matches whole
+# words only and first removes these longer names from the context, so "mali"
+# is never found inside "somalia" and "niger" never inside "niger delta".
+# Multi-word registry countries ("south sudan", "sierra leone") are added by
+# actor_country_index(). Every trap that once produced a wrong code is a case
+# in R/08_quality/test_regressions.R. (Charity pilot, 28 Sep 2026.)
+COUNTRY_TRAPS <- c(
+  "somali region", "somali regional state",
+  "niger delta", "niger river", "river niger", "niger basin", "niger state",
+  "lake chad", "chad basin", "benin city", "gulf of benin",
+  "south sudan", "sudan savanna", "sudan savannah",
+  "guinea bissau", "equatorial guinea", "papua new guinea", "gulf of guinea",
+  "guinea savanna", "guinea savannah", "guinea worm", "guinea fowl",
+  "congo river", "congo basin", "democratic republic of congo",
+  "democratic republic of the congo", "dr congo")
+
+actor_in_context <- function(country, ctx, traps = COUNTRY_TRAPS) {
+  if (!nzchar(country) || !nzchar(ctx)) return(FALSE)
+  word <- paste0("(^| )", country, "( |$)")
+  for (t in traps) if (t != country && grepl(word, t)) ctx <- gsub(t, " ", ctx, fixed = TRUE)
+  grepl(word, ctx)
+}
 
 # a body written with its country, or without it but in a document that names
 # the country, matches the one registry row of that body in that country
@@ -280,7 +306,7 @@ match_actor_country <- function(name, ctx, CIDX) {
   k0 <- which(CIDX$nname == n & !nzchar(CIDX$tail))
   cd <- unique(CIDX$code[k0]); if (length(cd) == 1) return(cd)
   if (!nzchar(ctx)) return(NA_character_)
-  in_ctx <- vapply(CIDX$tail, actor_in_context, logical(1), ctx = ctx)
+  in_ctx <- vapply(CIDX$tail, actor_in_context, logical(1), ctx = ctx, traps = CIDX$traps)
   k <- which(CIDX$head == n & nzchar(CIDX$tail) & in_ctx)
   cd <- unique(CIDX$code[k]); if (length(cd) == 1) return(cd)
   # an acronym shared by bodies in several countries ("MINADER" in Cameroon
@@ -295,6 +321,18 @@ match_actor_country <- function(name, ctx, CIDX) {
 # shortlist rows whose country the document never names are not candidates
 actor_drop_foreign <- function(rows, ctx, CIDX) {
   if (!length(rows) || !nzchar(ctx)) return(rows)
-  keep <- vapply(rows, function(i) !nzchar(CIDX$tail[i]) || actor_in_context(CIDX$tail[i], ctx), logical(1))
+  keep <- vapply(rows, function(i) !nzchar(CIDX$tail[i]) || actor_in_context(CIDX$tail[i], ctx, CIDX$traps), logical(1))
   rows[keep]
+}
+
+## ---- proposals ------------------------------------------------------------------
+# "Government of Ethiopia, Ethiopia" is "Government of Ethiopia": when the head
+# already names the country the registry writes no tail (Zambia Agricultural
+# Research Institute). (Vocabulary review, 28 Sep 2026)
+actor_tidy_proposal <- function(nm) {
+  nm <- trimws(as.character(nm))
+  tail <- actor_country_tail(nm)
+  if (!nzchar(tail)) return(nm)
+  head <- trimws(sub(",[^,]*$", "", nm))
+  if (grepl(paste0("(^| )", tail, "( |$)"), actor_nrm(head))) head else nm
 }

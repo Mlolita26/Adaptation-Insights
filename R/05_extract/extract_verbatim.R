@@ -34,7 +34,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "s1-v2.3"   # v2.3 (28 Sep 2026): national bodies carry their country; v2.2 (Charity pilot): planned closing and template dates excluded, AfDB numbers and unit codes; v2.1: countries, explicit start; v2.0: one module per document
+PROMPT_VERSION <- "s1-v2.6"   # v2.6 (29 Sep 2026): result values keep their decimals (3.6 stays 3.6, 12.5 stays 12.5); v2.5 (28 Sep 2026): headline results rule (reach, physical, effect; eligibility, category, beneficiary anchor); v2.4: money as plain digits, rationale is the reason not the achievement; v2.3: national bodies carry their country; v2.2 (Charity pilot): planned closing and template dates excluded, AfDB numbers and unit codes; v2.1: countries, explicit start; v2.0: one module per document
 # family (R/05_extract/families/*.R). The shared prompt keeps only the rules
 # that hold for every family; each module adds where its fields sit, what its
 # results table's columns are called, its actor roles, its currency and its
@@ -87,6 +87,7 @@ full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- if (length(full)) normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..")) else getwd()
 OUT_DIR <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "outputs", "extraction"))
 source(file.path(REPO, "R", "00_shared", "clean_fields.R"))
+source(file.path(REPO, "R", "00_shared", "results_rank.R"))   # choose_headline(): the three headline results
 source(file.path(REPO, "R", "00_shared", "rf_table.R"))
 source(file.path(REPO, "R", "00_shared", "doc_families.R"))
 RAW_DIR <- file.path(OUT_DIR, "raw")
@@ -270,6 +271,9 @@ rationale = list(
   type = type_object(
     rationale_project = type_string(paste(
       "WHY the project was needed, IN THE DOCUMENT'S OWN WORDS.",
+      "This is the REASON the project was designed: the problem, hazard or",
+      "need that existed BEFORE the project. It is never what the project",
+      "achieved, delivered or exceeded.",
       "Copy the sentence or sentences that state the problem, EXACTLY as",
       "printed, word for word. Do NOT rewrite, summarise, translate, tidy or",
       "recombine them into a sentence of your own, and do not add words to",
@@ -288,9 +292,11 @@ rationale = list(
       "tenure, weak institutions or extension, gender gaps.",
       "NEVER put here: the project's objectives or components, the activities",
       "it carried out, who funded or implemented it, or its results. A",
-      "sentence starting 'To improve...' or 'The project supported...' is the",
-      "wrong content unless the document itself uses those words to describe",
-      "the problem.")),
+      "sentence starting 'To improve...', 'The project supported...' or 'The",
+      "project has achieved its objectives in...' is the wrong content unless",
+      "the document itself uses those words to describe the problem. If the",
+      "document states no reason at all, leave the field EMPTY rather than",
+      "quoting an achievement or an objective.")),
     rationale_project_page = type_integer("Page number where the quoted rationale passage appears."),
     target_beneficiary_stated = type_string(paste(
       "EXACT quote (verbatim, machine-checkable) of the passage naming who the",
@@ -351,18 +357,42 @@ results = list(
     "'sites targeted' - is coverage, not a result: a result is what the",
     "implementation PRODUCED. A place count counts only when the document",
     "reports something achieved there (villages where tenure was",
-    "clarified, communities that adopted a practice)."),
+    "clarified, communities that adopted a practice).",
+    "ALWAYS INCLUDE THE PROJECT'S TOTAL NUMBER OF DIRECT BENEFICIARIES (people;",
+    "or households or farmers when people are not counted) WHEREVER IT SITS:",
+    "an objective-level row, an intermediate row, a beneficiaries table, a",
+    "'key outputs' box or the narrative. It anchors the results of almost",
+    "every document. Give the whole-project total; country shares, components",
+    "and gender or age sub-groups are separate entries with project_total 'no'.",
+    "Percentages of a target achieved ('% realized', 'progress towards target')",
+    "are never results. Economic-analysis figures (net present value, rate of",
+    "return, carbon over 20 years, cost per beneficiary) and context statistics",
+    "(national population, potential area, national herd) are never results.",
+    "When a table cell holds an index or a percentage and the narrative cell",
+    "beside it gives the real count ('409,089 people and 1,352,522 livestock'),",
+    "report the real count. When the executive summary and the table disagree",
+    "on a figure, report the table's figure and put the other in result_notes.",
+    "In a mid-term review report the latest progress values and write",
+    "'mid-term value' in scope."),
   type = type_object(
     results = type_array(description = "One entry per distinct quantitative actual result.",
       items = type_object(
-        value  = type_string("The NUMBER in WHOLE DIGITS, nothing else: 14325, not '14,325'; 4700000, not '4.7 million'; 47, not '47 percent'; 15, not '15.00'. No qualifiers ('over', 'approximately'), no units, no ranges, no sentences - put those in metric_stated or scope. 'N' or 'Y' for a yes/no indicator."),
+        value  = type_string("The NUMBER as digits, nothing else, KEEPING THE DECIMALS THE DOCUMENT GIVES: 14325, not '14,325'; 4700000, not '4.7 million'; 47, not '47 percent'; 3.6 stays 3.6 and 12.5 stays 12.5 (never round or truncate); 15, not '15.00'. No thousands separators, no qualifiers ('over', 'approximately'), no units, no ranges, no sentences - put those in metric_stated or scope. 'N' or 'Y' for a yes/no indicator."),
         metric_stated = type_string("What is counted, in the document's own words (the indicator name or phrase, verbatim) — e.g. wording like 'direct project beneficiaries', 'land area under sustainable management', 'women trained'."),
         unit_stated   = type_string("Counting unit in the document's own words (e.g. 'farmers', 'ha', 'households'). For a percentage write the symbol %, not the word. Empty if none stated."),
         indicator_level = type_enum(values = c("outcome", "output", "narrative"),
           description = "outcome = an indicator at the level of the project's objective (PDO indicators, outcome indicators, core indicators, fund-level indicators); output = a component, output or intermediate indicator; narrative = a figure in running text only. The family note names these levels as this document calls them."),
         status = type_enum(values = c("achieved", "partially achieved", "not achieved", "no target stated"),
           description = "Achievement vs target, as the document rates it."),
-        scope  = type_string("Denominator/coverage: which component, geography, whole program or one country, unique or aggregated counts. One short phrase."),
+        value_type = type_enum(values = c("achieved", "target", "baseline", "planned", "estimate", "context"),
+          description = "achieved = an actual value at the latest date reported (the only kind that is a result); target = an end or revised target; baseline = the starting value; planned = a design or appraisal figure; estimate = an economic-analysis or projection figure; context = a statistic about the country or area, not the project."),
+        category = type_enum(values = c("reach_people", "physical_quantity", "effect_rate", "institutional", "other"),
+          description = "reach_people = a count of people, households, farmers, jobs or trainees; physical_quantity = a quantity of land, water, production, animals, length or structures (ha, tonnes, m3, km, heads, units built); effect_rate = a percentage, rate, yield, income or other measure of change; institutional = plans, policies, agreements, committees, systems, events, products; other = anything else."),
+        project_total = type_enum(values = c("yes", "no", "unknown"),
+          description = "yes = the figure is the whole-project total; no = a country share, a component, a site or a gender or age sub-group; unknown = the document does not say."),
+        in_summary = type_enum(values = c("yes", "no"),
+          description = "yes = the figure is also quoted in the executive summary, the achievement or efficacy narrative or the justification of the outcome rating; no = it appears only in a table or annex."),
+        scope  = type_string("Denominator/coverage: which component, geography, whole program or one country, unique or aggregated counts; 'mid-term value' in a mid-term review. One short phrase."),
         page   = type_integer("Page where the actual value is stated.")
       )),
     result_notes = type_string("Caveats changing how the numbers read (double counting, data quality, contradictions) plus notable failed indicators, briefly. Empty if none."),
@@ -374,9 +404,9 @@ finance = list(
     "the financing table in the identification block first; the family note",
     "says where it is and in which currency."),
   type = type_object(
-    budget_total = type_string("Total PLANNED budget: the financing-plan or identification-block TOTAL across ALL sources (lead fund grant/credit + co-financing + government counterpart + beneficiary in-kind). Typical table rows: the lead fund's grant or credit, 'Government', 'Co-financing', 'TOTAL'. NEVER the amount spent/executed - that is disbursed, a different field. Digits only, EXPANDED to full units: 'UA 1.71 million' -> 1710000."),
-    budget_lead_share = type_string("The lead funder's / main envelope alone (the lead funder the family note names), digits only, expanded to full units. Empty if same as budget_total."),
-    disbursed    = type_string("Total actually SPENT/disbursed: look for 'actual disbursed', 'actual at closing', 'total spent', 'expenditure', execution tables, French 'decaisse'. Sum ALL sources actually spent when several are stated. Not commitments, not the plan. The identification block wins on contradictions (flag them in finance_notes). Digits only, expanded to full units (1.39 million -> 1390000)."),
+    budget_total = type_string("Total PLANNED budget: the financing-plan or identification-block TOTAL across ALL sources (lead fund grant/credit + co-financing + government counterpart + beneficiary in-kind). Typical table rows: the lead fund's grant or credit, 'Government', 'Co-financing', 'TOTAL'. NEVER the amount spent/executed - that is disbursed, a different field. Digits only, EXPANDED to full units: 'UA 1.71 million' -> 1710000. Write the number as PLAIN DIGITS: 33000000, never '33,000,000', never '33 million', never scientific notation such as 3.3e+07."),
+    budget_lead_share = type_string("The lead funder's / main envelope alone (the lead funder the family note names), digits only, expanded to full units, plain digits (30000000, never 3e+07 or '30 million'). Empty if same as budget_total."),
+    disbursed    = type_string("Total actually SPENT/disbursed: look for 'actual disbursed', 'actual at closing', 'total spent', 'expenditure', execution tables, French 'decaisse'. Sum ALL sources actually spent when several are stated. Not commitments, not the plan. The identification block wins on contradictions (flag them in finance_notes). Digits only, expanded to full units (1.39 million -> 1390000), plain digits, never scientific notation."),
     currency     = type_string("ISO currency code, e.g. 'USD', 'EUR', 'UA'."),
     instrument_stated = type_string("EXACT wording of the financing instrument(s) from the title page or financing table, verbatim (the family note says where it is printed)."),
     funding_mechanism_portion = type_string("INSTRUMENT-TYPE mix (grant/loan/investment/other — never fund or account names) WITH PERCENTAGES in parentheses joined by ' + ', per the template format: 'grant (40%) + loan (40%) + other-in-kind contribution (20%)'. Compute percentages from stated amounts when the document gives amounts but no percentages. Empty if the split cannot be established."),
@@ -443,51 +473,23 @@ choose_three <- function(top) {
   pick
 }
 
-fold_results <- function(res, row) {
+fold_results <- function(res, row, pages_txt = NULL) {
   rl <- res$results
   if (is.null(rl)) rl <- list()
   if (is.data.frame(rl)) rl <- lapply(seq_len(nrow(rl)), function(i) as.list(rl[i, ]))
-  # AfDB completion report tables print numbers with a dot as thousands
-  # separator and three decimals: "30.000" is 30,000 and "1,352.000" is 1,352.
-  # Read as decimals they shrink a thousandfold (Charity pilot, 28 Sep 2026).
+  # what is not a result (money, durations, dates, admin counts, ratings, place
+  # counts, AfDB dot-thousands misreads) is decided in R/00_shared/results_rank.R
+  # so that refold_results.R applies exactly the same gate to a finished run
   fm <- row$family_module; fm <- if (is.null(fm) || !length(fm) || is.na(fm[1])) "" else as.character(fm[1])
-  if (identical(fm, "afdb_pcr")) {
-    rl <- lapply(rl, function(r) {
-      v <- trimws(as.character(r$value %||% ""))
-      if (grepl("^[0-9]{1,3}(\\.[0-9]{3})+$", v)) r$value <- gsub(".", "", v, fixed = TRUE)
-      else if (grepl("^[0-9,]{4,}\\.000$", v)) r$value <- gsub(",", "", sub("\\.000$", "", v), fixed = TRUE)
-      r
-    })
-  }
-  is_money <- vapply(rl, function(r) grepl(
-    "US ?\\$|\\$ ?[0-9]|dollars?|USD|EUR|CFAF|\\bUA\\b|disburs|financ|budget|grant amount|contribution of|fund contribution",
-    paste(r$unit_stated, r$metric_stated), ignore.case = TRUE), logical(1))
-  rl <- rl[!is_money]
-  # sanity gates (holdout findings): durations, dates, admin counts and
-  # no-data placeholder zeros must never occupy a headline slot
-  is_junk <- vapply(rl, function(r) {
-    v <- tolower(as.character(r$value)); m <- tolower(as.character(r$metric_stated))
-    no_digit  <- !grepl("[0-9]", v) && !v %in% c("n", "y", "no", "yes")
-    duration  <- grepl("[0-9]\\s*-?\\s*(month|week|year)s?\\b", v) ||
-                 grepl("duration|extension|time ?frame|closing date|implementation period", m)
-    datelike  <- grepl("^\\s*[0-9]{1,2} (january|february|march|april|may|june|july|august|september|october|november|december)|(19|20)[0-9]{2}\\s*$", v) &&
-                 grepl("date|closing|launch|approval", m)
-    admin     <- grepl("reports?|meetings?|missions?|recommendations?|contracts?|audits?|supervision", m) &&
-                 !grepl("beneficiar|farmer|train|hectare|household", m)
-    longtext  <- nchar(v) > 40
-    zero_nodata <- grepl("^\\s*0(\\.0+)?\\s*$", v) && !identical(r$status, "not achieved")
-    # shared gate: ratings, and place counts that say where the project worked
-    # rather than what changed there ("20 pilot villages")
-    shared <- nzchar(result_reject_reason(as.character(r$value),
-                                          as.character(r$unit_stated),
-                                          as.character(r$metric_stated)))
-    no_digit || duration || datelike || admin || longtext || zero_nodata || shared
-  }, logical(1))
-  rl <- rl[!is_junk]
-  achieved <- Filter(function(r) !identical(r$status, "not achieved"), rl)
+  rl <- results_gate(rl, fm, pages_txt)
+  # headline rule (survey of 50 documents, 28 Sep 2026; R/00_shared/results_rank.R):
+  # eligibility, then reach, main physical achievement, main measured effect,
+  # then fill from the framework. A small achieved value of a failed indicator
+  # is still the achieved value (18 ha of a 4,000 ha target); zeros stay out.
   failed   <- Filter(function(r) identical(r$status, "not achieved"), rl)
-  ranked <- rank_results(achieved)
-  top    <- choose_three(ranked)
+  chosen <- choose_headline(rl)
+  top    <- chosen$top
+  ranked <- c(top, chosen$rest)
   for (i in 1:3) {
     r <- if (length(top) >= i) top[[i]] else NULL
     row[[paste0("result", i)]] <- if (is.null(r)) "" else as.character(r$value)
@@ -708,9 +710,9 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", family = "", groups = 
     }
     cat(sprintf("  %-10s ok (%ss)\n", gname, secs))
     raw[[gname]] <- res
-    write_json(res, file.path(RAW_DIR, paste0("s1_", substr(doc_name, 1, 55),
-               "_", gname, ".json")), auto_unbox = TRUE, pretty = TRUE)
-    if (gname == "results") { row <- fold_results(res, row); next }
+    write_json(res, file.path(RAW_DIR, paste0("s1_", if (nzchar(pcode)) paste0(pcode, "_") else "", substr(doc_name, 1, 55),
+               "_", gname, ".json")), auto_unbox = TRUE, pretty = TRUE)   # project code first: focus projects sharing one document no longer overwrite each other
+    if (gname == "results") { row <- fold_results(res, row, doc$pages); next }
     for (f in names(res)) {
       vv <- res[[f]]
       row[[if (f == "source_pages") paste0(gname, "_pages") else f]] <-

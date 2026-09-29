@@ -316,7 +316,7 @@ result_reject_reason <- function(value, unit, stated = "", metric = "") {
   m <- tolower(paste(unit %||% "", stated %||% "", metric %||% ""))
   if (!nzchar(v) && !nzchar(trimws(m))) return("")
   if (grepl(paste0("\\b(rating|ratings|score|scored|scoring|scale of|likert|",
-                   "out of (5|4|6|10)|satisfactor|unsatisfactor|",
+                   "out of (5|4|6|10)|satisfactor(y|ily)?|unsatisfactor(y|ily)?|rated|",
                    "highly likely|negligible)\\b"), m) ||
       grepl("scale|rating", v))
     return("RATING NOT A RESULT")
@@ -485,4 +485,265 @@ check_count_vs_notes <- function(count, notes) {
             tolower(n))) return("")
   paste0("COUNT AND NOTES DISAGREE: count ", cnt,
          ", notes mention ", paste(unique(nums), collapse = "/"))
+}
+
+## ---- money ------------------------------------------------------------------
+# Money is plain digits everywhere in the pipeline: 33000000, never 3.3e+07.
+# R writes a numeric 33000000 as "3.3e+07" the moment as.character() touches
+# it, which once leaked into budget_total and budget_notes (Charity pilot,
+# 28 Sep 2026). Parse with money_num(), write with format_money(). Cases in
+# R/08_quality/test_regressions.R.
+money_num <- function(x) {
+  if (is.numeric(x)) return(x)
+  x <- tolower(trimws(as.character(x)))
+  sci <- grepl("^[0-9.]+e[+-]?[0-9]+$", x)
+  out <- suppressWarnings(as.numeric(gsub("[^0-9.]", "", x)))
+  out[sci] <- suppressWarnings(as.numeric(x[sci]))
+  out
+}
+format_money <- function(n) {
+  n <- money_num(n)
+  whole <- !is.na(n) & abs(n - round(n)) < 1e-9
+  out <- rep("", length(n))
+  out[whole] <- formatC(n[whole], format = "f", digits = 0)
+  out[!is.na(n) & !whole] <- formatC(n[!is.na(n) & !whole], format = "f", digits = 2)
+  trimws(out)
+}
+# "lead N; cofinancing N" (QC question 7, 28 Sep 2026): empty when the document
+# gives no lead share or the share is not below the total
+budget_notes_for <- function(total, lead) {
+  bt <- money_num(total); bl <- money_num(lead)
+  ok <- !is.na(bl) & bl > 0 & (is.na(bt) | bl < bt)
+  out <- rep("", length(bl))
+  both <- ok & !is.na(bt)
+  out[both] <- paste0("lead ", format_money(bl[both]), "; cofinancing ", format_money(bt[both] - bl[both]))
+  out[ok & is.na(bt)] <- paste0("lead ", format_money(bl[ok & is.na(bt)]))
+  out
+}
+
+## ---- beneficiary metrics by rule --------------------------------------------
+# The references word people counts the same way every time: "direct" makes
+# direct beneficiaries; "reached", "total" or a count of men and women together
+# makes total beneficiaries; women or female makes women beneficiaries; youth
+# makes youth beneficiaries; households makes vulnerable households; farmers
+# who benefited or adopted makes smallholder farmers reached. The model used to
+# answer total or direct at random for the same wording (Charity pilot re-run,
+# 28 Sep 2026). Returns "" when the rule does not apply.
+map_people_metric_det <- function(x) {
+  x <- tolower(paste(x, collapse = " "))
+  if (!nzchar(trimws(x))) return("")
+  if (grepl("of which|dont ", x)) return("")
+  people <- grepl("beneficiar|benefit(t)?(ing|ed)|people|persons|individuals|reached|served|registered", x)
+  both <- grepl("males? and females?|females? and males?|men and women|women and men|hommes et femmes|by gender|by sex", x)
+  if (grepl("women|female|femmes|girls", x) && !both && people) return("women beneficiaries")
+  if (grepl("youth|young people|jeunes|young men|young women", x) && !both && people) return("youth beneficiaries")
+  if (grepl("household|menage|ménage", x) && grepl("beneficiar|benefit|reached|supported|served|assisted|targeted|considered", x)) return("vulnerable households")
+  if (grepl("direct", x) && grepl("beneficiar|benefit", x)) return("direct beneficiaries")
+  if (both && grepl("beneficiar|benefit", x)) return("total beneficiaries")
+  if (grepl("beneficiar|benefit(t)?(ing|ed)", x) && grepl("reached|total|cumulative|indirect", x)) return("total beneficiaries")
+  if (grepl("beneficiar|people with access|people (reached|served|supported)|registered beneficiar|people &|people and livestock", x)) return("direct beneficiaries")
+  if (grepl("farmers?|farm managers?|smallholders?|producers?|agriculteurs?|producteurs?", x) && grepl("benefit|reached|adopt|supported|assisted|bénéfici", x) && !grepl("group|organi|cooperativ|association", x)) return("smallholder farmers reached")
+  ""
+}
+
+## ---- template-exact strings ---------------------------------------------------
+# The template writes two document types with a non-breaking hyphen (U+2011) and
+# the emissions unit with a subscript two (U+2082). The pipeline uses plain
+# ASCII inside; the export writes the template's own characters so that filters
+# and pivots in the template line up. (Vocabulary review, 28 Sep 2026)
+TEMPLATE_EXACT <- c("mid-term evaluation" = "mid\u2011term evaluation",
+                    "multi-country synthesis" = "multi\u2011country synthesis",
+                    "tCO2e" = "tCO\u2082e")
+template_exact <- function(x) {
+  x <- as.character(x); k <- x %in% names(TEMPLATE_EXACT)
+  x[k] <- unname(TEMPLATE_EXACT[x[k]]); x
+}
+template_ascii <- function(x) {
+  x <- as.character(x); k <- x %in% TEMPLATE_EXACT
+  x[k] <- names(TEMPLATE_EXACT)[match(x[k], TEMPLATE_EXACT)]; x
+}
+
+## ---- units: a count noun is a quantity ------------------------------------------
+# "policies", "villages", "weather stations", "training days" are counts; the
+# template's unit for a count is quantity. Only measure words keep a candidate
+# unit (kilometres, tons per hectare) for the team to decide on.
+UNIT_MEASURE_RE <- "percent|%|\\bha\\b|hectare|\\bkg|\\bton|litre|liter|\\bm3\\b|cubic|\\bkm|kilomet|metre|meter|/|\\bper\\b|score|scale|ratio|\\brate|index|\\byes\\b|\\bno\\b|tco|co2|month|year|usd|eur|\\bua\\b|\\$|\\bmho\\b|\\bmtd\\b"
+unit_count_fallback <- function(stated, mapped) {
+  st <- tolower(trimws(as.character(stated %||% ""))); mp <- as.character(mapped %||% "")
+  open <- startsWith(mp, "CANDIDATE:") || !nzchar(mp) || toupper(mp) == "NOT STATED"
+  if (!open || !nzchar(st)) return(mp)
+  if (grepl(UNIT_MEASURE_RE, st)) return(mp)
+  "quantity"
+}
+
+## ---- candidate labels ----------------------------------------------------------
+# A candidate label names what was counted: no digits, no percent signs, no
+# qualifiers copied from the sentence ("as low as 39% for Maize"). A label that
+# is only a unit word (percentage, number) says nothing and is dropped.
+clean_candidate_label <- function(x) {
+  x <- as.character(x); k <- startsWith(x, "CANDIDATE:")
+  if (!any(k)) return(x)
+  lab <- trimws(sub("^CANDIDATE:\\s*", "", x[k]))
+  lab <- gsub("[0-9][0-9.,]*\\s*%?", "", lab)
+  lab <- sub("^(as (low|high) as|over|more than|nearly|approximately|about|almost|around|up to|at least|for|of|the)\\s+", "", lab, ignore.case = TRUE)
+  lab <- sub("^(as (low|high) as|over|more than|nearly|approximately|about|almost|around|up to|at least|for|of|the)\\s+", "", lab, ignore.case = TRUE)
+  lab <- trimws(gsub("\\s+", " ", lab))
+  unit_words <- c("percent", "percentage", "number", "quantity", "count", "total", "nbr", "%", "value")
+  x[k] <- ifelse(nzchar(lab) & !tolower(lab) %in% unit_words, paste0("CANDIDATE: ", lab), "")
+  x
+}
+
+## ---- a people metric never carries a measure unit ---------------------------------
+# "vulnerable households [hectares]" and "direct beneficiaries [percentage]" are
+# contradictions: the unit says land or an index, the metric says people. The
+# metric goes back to a candidate built from the stated wording. (28 Sep 2026)
+MEASURE_UNITS <- c("hectares", "tons", "kg", "kg/hectare", "liters", "tCO2e", "percentage")
+PEOPLE_METRIC_OPTIONS <- c("direct beneficiaries", "total beneficiaries", "women beneficiaries",
+  "youth beneficiaries", "smallholder farmers reached", "vulnerable households", "crop producers",
+  "livestock producers", "fishers", "processors", "wholesalers", "association members", "extension agents trained")
+stated_is_measure <- function(stated_unit) {
+  u <- tolower(trimws(as.character(stated_unit %||% "")))
+  grepl(UNIT_MEASURE_RE, u) & !grepl("^%|percent|pour ?cent", u)   # a percentage share of people is still about people
+}
+squish <- function(x) trimws(gsub("\\s+", " ", as.character(x %||% "")))
+# A candidate carries the document's exact wording (Lolita, 29 Sep 2026): the
+# team decides later whether it becomes an option, and a made-up label would
+# hide what the document said.
+candidate_verbatim <- function(mapped, stated) {
+  mapped <- as.character(mapped); stated <- squish(stated)
+  k <- (startsWith(mapped, "CANDIDATE:") | !nzchar(mapped)) & nzchar(stated)
+  mapped[k] <- paste0("CANDIDATE: ", substr(stated[k], 1, 160))
+  mapped
+}
+metric_unit_consistent <- function(metric, unit, stated_metric) {
+  metric <- as.character(metric); unit <- as.character(unit)
+  clash <- metric %in% PEOPLE_METRIC_OPTIONS & (unit %in% MEASURE_UNITS | startsWith(unit, "CANDIDATE:")) &
+           !(metric %in% c("women beneficiaries", "youth beneficiaries") & unit == "percentage")
+  if (!any(clash)) return(metric)
+  metric[clash] <- candidate_verbatim("", stated_metric[clash])
+  metric
+}
+
+## ---- result metrics by rule -----------------------------------------------------
+# When the document's wording says which template option it is, the option is
+# chosen here and the model is not asked. Area units select among the land
+# options; rate units select the yield option; head nouns select the people,
+# organisation and effect options. Returns "" when no rule applies, and never
+# an option that is not in the template. (29 Sep 2026)
+METRIC_AREA_UNIT_RE <- "\\bha\\b|hectare|superficie|\\bhas\\b|acres?\\b"
+metric_head <- function(m) {
+  m <- tolower(squish(m))
+  m <- sub("^\\s*((indicator|output|outcome|result|pdo|io)\\s*)?[a-z]?[0-9]+(\\.[0-9]+)*[.:)]?\\s*", "", m)
+  m <- sub("^(number|nombre|no\\.?|total( number)?|cumulative( number)?|share|percentage|proportion|area|volume|quantity|increase|decrease|change)\\s*(of|de|in|d')?\\s*", "", m)
+  m
+}
+map_metric_det <- function(stated_metric, stated_unit = "") {
+  m <- tolower(squish(stated_metric)); u <- tolower(squish(stated_unit)); mu <- paste(m, u)
+  if (!nzchar(m)) return("")
+  head <- metric_head(m)
+  area <- grepl(METRIC_AREA_UNIT_RE, u) || (grepl(METRIC_AREA_UNIT_RE, m) && !grepl("per hectare|/ha|kg/|t/", mu))
+  rate <- grepl("kg/ha|t/ha|kg per ha|tons? per ha|per hectare|q/ha|quintal|\\bmho\\b", mu) || grepl("^%|percent", u)
+  # land options, decided by the unit
+  if (area) {
+    if (grepl("landscapes? under improved (practices|management)", m)) return("biodiversity landscapes conserved")
+    if (grepl("protected area", m) && !grepl("excluding protected", m)) return("terrestrial protected areas")
+    if (grepl("restor|rehabilitat|reforest|afforest|regenerat|reclaim|degraded|dunes? fixed|fixed dunes|stabili[sz]ed", m)) return("land restored")
+    if (grepl("irrigat|drainage", m)) return("irrigated land")
+    if (grepl("climate.?smart|climate.?resilient|resilient (crops?|practices|agricultur|technolog)|sustainable land|sustainable landscape|land and water management|\\bslw?m\\b|improved (land|agricultural|farming|soil) (management|practices|technolog)|agroforestry|soil and water conservation|conservation agriculture|under (new|improved) technolog|improved technolog|adaptation practices|csa\\b", m)) return("land under climate-smart practices")
+    if (grepl("biodivers|conserv|ecosystem|habitat|mangrove|wetland|forest|rangeland|pasture|watershed|catchment", m) ||
+        (grepl("marine|coastal|landscape", m) && grepl("conserv|manag|protect|restor", m))) return("biodiversity landscapes conserved")
+    return("")
+  }
+  if (grepl("^(jobs?|employment|emplois|green jobs)", head) || grepl("jobs? created|employment created|emplois cr", m) || grepl("^jobs?$", u)) return("jobs created")
+  # a people unit is a people count whatever else the sentence mentions
+  people_unit <- nzchar(u) && grepl("farmer|farm manager|producer|household|beneficiar|people|persons|individuals|women|men\\b|youth|members|participants|trainees|pastoralist|fisher|agripreneur|jobs|students|staff", u)
+  if (people_unit) {
+    if (grepl("^(farm managers?|farmers?|smallholders?|producers?|agricult|producteurs?)", head) || grepl("farm managers|farmers|producers", u)) return("smallholder farmers reached")
+    return("")
+  }
+  # effects
+  yield_head <- grepl("^((average|mean|crop|increased?|increase in|improved|higher) )*(yields?|rendements?|productivity)\\b", head)
+  if (yield_head || (rate && grepl("yield|rendement", m)) || grepl("\\bmho\\b|kg/ha|t/ha", mu)) return("crop yield increase")
+  if (grepl("\\bincome|revenue|revenu|earnings", m) && !grepl("share of|spen[dt]|expenditure|of (their|the|household) income|cost", m)) return("income increase")
+  if (grepl("post.?harvest loss|harvest loss|storage loss|losses? reduc|reduc.* loss", m)) return("harvest loss reduced")
+  if (grepl("\\bpest|disease (incidence|prevalence|reduc|control)|armyworm|locust|infestation", m) && !grepl("human|hiv|malaria", m)) return("pest/disease reduction")
+  if (grepl("soil organic|organic matter|soil carbon|soil fertility|soil health", m)) return("soil organic matter improved")
+  # people and organisation counts, by head noun
+  if (grepl("^(jobs?|employment|emplois|green jobs)", head) || grepl("jobs? created|employment created|emplois cr", m)) return("jobs created")
+  if (grepl("extension (agents?|workers?|officers?|staff)|advisory agents?|agents de vulgarisation|conseillers agricoles", m)) return("extension agents trained")
+  if (grepl("^(members of|association members|membres)|members of (the )?(associations?|cooperatives?|groups?)", head)) return("association members")
+  if (grepl("^cooperatives?\\b", head) && !grepl("members", head)) return("cooperatives reached")
+  if (grepl("^(farmer|farmers'?|producer|women'?s?|youth|common interest|self.?help|savings|water users?'?) (groups?|associations?)|^groupements?|^\\bwuas?\\b|^\\bcigs?\\b|^vslas?\\b|^clubs?\\b", head)) return("farmer groups")
+  if (grepl("^(producer|farmer|farmers'?|fisher|fishers'?) organi|^organi[sz]ations? (of|de) (producers|farmers)|^associations?\\b|^unions?\\b|^federations?\\b|^cooperatives? and associations", head)) return("producer organizations")
+  if (grepl("^(crop|maize|rice|cassava|sorghum|millet|wheat|vegetable|horticultur|cereal|coffee|cocoa|cashew|potato|bean) (farmers|producers|growers)", head)) return("crop producers")
+  if (grepl("^(livestock|pastoral|herders?|dairy|cattle|poultry|small ruminant|animal) (farmers|producers|keepers|owners|herders)|^pastoralists?", head)) return("livestock producers")
+  if (grepl("^(fishers?|fishermen|fisherfolk|fishing (communit|households)|artisanal fishers?|p\u00eacheurs)", head)) return("fishers")
+  if (grepl("^(processors?|transformateurs|agro.?processors?)", head)) return("processors")
+  if (grepl("^(wholesalers?|traders|grossistes|commer\u00e7ants)", head)) return("wholesalers")
+  ""
+}
+
+## ---- an option must fit the thing counted --------------------------------------
+# The model sometimes picks an option for a count of something else: 17,980 land
+# titles issued to associations became "producer organizations". The head noun
+# of the stated metric must be compatible with the kind of option.
+METRIC_KIND <- c(
+  "direct beneficiaries" = "people", "total beneficiaries" = "people", "women beneficiaries" = "people",
+  "youth beneficiaries" = "people", "smallholder farmers reached" = "people", "vulnerable households" = "people",
+  "crop producers" = "people", "livestock producers" = "people", "fishers" = "people", "processors" = "people",
+  "wholesalers" = "people", "association members" = "people", "extension agents trained" = "people",
+  "cooperatives reached" = "org", "farmer groups" = "org", "producer organizations" = "org",
+  "biodiversity landscapes conserved" = "land", "irrigated land" = "land", "land restored" = "land",
+  "land under climate-smart practices" = "land", "terrestrial protected areas" = "land",
+  "crop yield increase" = "rate", "income increase" = "rate", "harvest loss reduced" = "rate",
+  "pest/disease reduction" = "rate", "soil organic matter improved" = "rate", "jobs created" = "jobs")
+NOT_PEOPLE_OR_ORG_RE <- paste0(
+  "^([a-z'-]+ ){0,4}(titles?|certificates?|deeds?)\\b|^(polic|plans?|strateg|laws?|decrees?|agreements?|technolog|products?|",
+  "reports?|events?|stations?|wells?|boreholes?|dams?|schemes?|structures?|markets?|centres?|centers?|",
+  "seeds?|inputs?|kits?|fertili|animals?|cattle|livestock|goats|sheep|poultry|trees?|seedlings?|plots?|",
+  "hectares?|\\bha\\b|km\\b|kilomet|tons?|tonnes|kg\\b|litres?|liters?|cubic|m3|villages?|districts?|countries|communes?|sites?)")
+metric_option_conflict <- function(option, stated_metric, unit = "") {
+  option <- as.character(option); kind <- unname(METRIC_KIND[option]); kind[is.na(kind)] <- ""
+  head <- vapply(stated_metric, metric_head, character(1), USE.NAMES = FALSE)
+  unit <- as.character(unit)
+  bad <- (kind %in% c("people", "org") & grepl(NOT_PEOPLE_OR_ORG_RE, head)) |
+         (kind == "land" & nzchar(unit) & !unit %in% c("hectares", "") & !startsWith(unit, "CANDIDATE:") & !grepl(METRIC_AREA_UNIT_RE, tolower(stated_metric))) |
+         (kind == "org" & grepl("^(members|membres)", head))
+  bad[is.na(bad)] <- FALSE
+  bad
+}
+
+## ---- units by rule (moved from harmonize.R, 29 Sep 2026) ----------------------
+# AfDB result tables abbreviate units: mho is metric tons per hectare (not
+# siemens), mtd metric tons, nbr number (Charity pilot, 28 Sep 2026)
+unit_syn <- c("mho" = "CANDIDATE: mho", "mtd" = "tons", "nbr" = "quantity",
+  "mt" = "tons", "metric tons" = "tons", "metric tonnes" = "tons", "metric ton" = "tons",
+  "t co2e" = "tCO2e", "tco2" = "tCO2e", "tonnes of co2" = "tCO2e", "tonnes co2e" = "tCO2e",
+  "women" = "individuals", "men" = "individuals", "youth" = "individuals", "participants" = "individuals",
+  "trainees" = "individuals", "members" = "individuals", "producers" = "individuals", "pastoralists" = "individuals",
+  "fishers" = "individuals", "students" = "individuals", "staff" = "individuals", "agripreneurs" = "individuals",
+  "jobs" = "individuals", "males and females" = "individuals", "registered beneficiaries" = "individuals",
+  "associations" = "organizations", "cooperatives" = "organizations", "organisations" = "organizations",
+  "committees" = "groups", "cbos" = "groups", "wuas" = "groups", "farmer groups" = "groups",
+              "ha" = "hectares", "hectare" = "hectares", "hectares" = "hectares",
+  "%" = "percentage", "percent" = "percentage", "percentage" = "percentage",
+  "percentage points" = "percentage", "people" = "individuals",
+  "persons" = "individuals", "individuals" = "individuals",
+  "farmers" = "individuals", "beneficiaries" = "individuals",
+  "households" = "households", "hh" = "households", "groups" = "groups",
+  "organizations" = "organizations", "organisations" = "organizations",
+  "kg" = "kg", "kilograms" = "kg", "kg/ha" = "kg/hectare",
+  "kg/hectare" = "kg/hectare", "liters" = "liters", "litres" = "liters",
+  "tco2e" = "tCO2e", "mtco2" = "tCO2e", "mtco2e" = "tCO2e", "tons" = "tons",
+  "tonnes" = "tons", "t" = "tons", "number" = "quantity", "count" = "quantity",
+  "quantity" = "quantity", "countries" = "quantity", "yes/no" = "quantity")
+# the general normaliser drops "%" and "/" entirely, which silently wiped
+# every percentage unit and every "kg/ha", so units get their own one
+unrm <- function(x) trimws(gsub("\\s+", " ", tolower(gsub("[.]+$", "", x))))
+map_unit_det <- function(u) {
+  k <- unrm(u)
+  if (k %in% names(unit_syn)) return(unname(unit_syn[k]))
+  k2 <- actor_nrm(u)
+  if (!nzchar(k2)) return(if (nzchar(k)) u else "")
+  if (k2 %in% names(unit_syn)) unname(unit_syn[k2]) else u
 }

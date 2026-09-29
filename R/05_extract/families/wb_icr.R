@@ -75,7 +75,11 @@ MODULE <- list(
       "achievement in a sentence: use it to confirm the table. 2015-2017",
       "template: Data Sheet section F 'Results Framework Analysis' with 'Actual",
       "Value Achieved at Completion or Target Years'. Yes/No indicators are not",
-      "numeric results. Take PDO indicators before intermediate ones."),
+      "numeric results. Take PDO indicators before intermediate ones, but",
+      "ALWAYS report the 'Direct project beneficiaries' total even when it sits",
+      "among the intermediate indicators or only in the efficacy text; 2023 to",
+      "2025 templates end Annex 1 with a 'Key Outputs' box that restates the",
+      "PDO results in one place."),
     finance = paste(
       "Data Sheet financing table: one row per source (IDA, IBRD, named trust",
       "funds, co-financiers, Borrower) with columns Original Amount (US$) /",

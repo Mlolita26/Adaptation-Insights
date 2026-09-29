@@ -97,6 +97,7 @@ project root one level above that. If you clone the repo elsewhere, point
 | `rf_table.R` | Reads a results framework table as a table: figures define the columns, header words name what each column means. |
 | `clean_fields.R` | Deterministic tidying of extracted fields (titles, years, identifiers, amounts). |
 | `actor_names.R` | The one way to compare two organisation names. |
+| `results_rank.R` | Chooses the three headline results of a document: eligibility first (an achieved value, whole project, not a target, percent of target, money, estimate, context or process figure), then the project's reach (people, households or farmers), its main physical achievement in the document's own unit (hectares, tonnes, cubic metres, kilometres, animals, structures) and its main measured effect (yield, income, death rate, adoption), then the framework in order. Built from a survey of 50 documents (28 Sep 2026). |
 | `vocab_cache.R` | Remembers every mapping from a verbatim extract to a controlled value, so a rerun makes the same choice and almost no calls. |
 | `install_packages.R` | Installs the R packages the pipeline needs. |
 
@@ -199,6 +200,8 @@ slot; that is decided in code, not by the model.
 | Script | What it is |
 |---|---|
 | `score_pilot.R` | Field by field agreement between the pipeline and the gold set for the ten gold projects, with a column saying why each disagreement happened. |
+| `compare_results_slots.R` | Puts the three result slots of two Session 1 runs side by side, document by document, marks the slots that are reference values, and counts hits and documents with a people count first. Used to judge the headline results rule. |
+| `test_regressions.R` | Regression tests. Every fault that once produced a wrong value is a case here (a country name found inside another name, a ministry coded to the wrong country, money printed in scientific notation, a budget note computed from the wrong number). Run it before a harmonisation and after any change under R/00_shared. It exits with status 1 when a case fails. The list only grows. |
 | `score_locations.R` | The same for the location sheet against the manual location rows. |
 | `reference_comparison.R` | One workbook that puts a reference extraction, the pipeline's rows and the scorer's verdicts side by side: summary by field and document, every check, mismatches shaded. Takes the score, reference and harmonised CSVs as arguments. |
 
@@ -397,6 +400,7 @@ Rscript R/05_extract/run_corpus.R --dry               # plan and price; drop --d
 Rscript R/06_harmonise/harmonize.R                    # newest Session 1 output
 
 # 8 and 9 score and publish
+Rscript R/08_quality/test_regressions.R               # regression cases, run before harmonising
 Rscript R/08_quality/score_pilot.R                    # against the gold set
 Rscript R/09_publish/export_results.R                 # workbooks into 04_Extraction_Results
 Rscript R/09_publish/cost_report.R
@@ -445,7 +449,7 @@ As of 28 September 2026.
 | Document families defined | 17, with extraction modules for the eight that carry results |
 | Gold set agreement, general sheet | 91 percent over ten projects (189 of 208 field checks, 28 September 2026), after correcting the gold set where the documents proved it wrong and aligning it to the agreed rules on start year and location count |
 | Fabricated quotes observed | none |
-| Session 1 prompt version | s1-v2.1 (countries counted, explicit start year only) |
+| Session 1 prompt version | s1-v2.5 (headline results rule: reach, physical achievement, effect; money as plain digits; rationale is the reason not the achievement; national bodies written with their country; planned closing dates excluded) |
 
 The main exclusion reasons are the timeframe (documents before 2015 or dated
 2026), the sector (transport, energy, forestry, governance, water, health)

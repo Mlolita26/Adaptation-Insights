@@ -50,7 +50,10 @@ s1_csv <- if (length(args)) args[1] else {
   f[which.max(file.mtime(f))]
 }
 cat("harmonizing:", s1_csv, "\n")
-s1 <- read.csv(s1_csv, check.names = FALSE, stringsAsFactors = FALSE)
+# every column as text: read.csv would turn money columns into doubles and
+# as.character(33000000) is "3.3e+07", which then leaked into budget_total
+# and made budget_notes read "lead 3.207" (Charity pilot, 28 Sep 2026)
+s1 <- read.csv(s1_csv, check.names = FALSE, stringsAsFactors = FALSE, colClasses = "character")
 s1[is.na(s1)] <- ""
 
 # ------------------------------------------------------- controlled values --
@@ -184,6 +187,7 @@ log_candidates <- function(df_doc, field, stated, chosen) {
 # proposals uses the same definition of "same organisation" as the matcher
 # that made them, and so that the checks can run without an API key.
 source(file.path(REPO, "R", "00_shared", "actor_names.R"))
+source(file.path(REPO, "R", "00_shared", "clean_fields.R"))   # money_num, format_money, budget_notes_for are used before the field rules below
 areg <- actor_registry(TEMPLATE_XLSX)
 ASYN <- local({
   f <- file.path(REPO, "catalogues", "actor_synonyms.csv")
@@ -382,7 +386,7 @@ resolve_actors <- function(all_names, context = NULL) {
       scale <- if (!is.null(inf)) as.character(inf$scale) else "unknown"
       pre <- switch(scale, global = "GLO", continental = "CON",
                     national = country_prefix(as.character(inf$country)), "")
-      data.frame(date = format(Sys.Date()), actor_name = nm,
+      data.frame(date = format(Sys.Date()), actor_name = actor_tidy_proposal(nm),
         actor_accronym = if (!is.null(inf)) as.character(inf$acronym) else "",
         suggested_scale = scale,
         suggested_country = if (!is.null(inf)) as.character(inf$country) else "",
@@ -394,11 +398,15 @@ resolve_actors <- function(all_names, context = NULL) {
         stringsAsFactors = FALSE)
     })
     nn <- do.call(rbind, rows)
+    # one proposal per body: "Ministry of Environment and Sustainable Development,
+    # Mauritania" and "Ministry of the Environment and Sustainable Development,
+    # Mauritania" are the same row (vocabulary review, 28 Sep 2026)
+    nn <- nn[!duplicated(actor_fold(nn$actor_name)), , drop = FALSE]
     path <- file.path(OUT_DIR, "proposed_new_actors.csv")
     if (file.exists(path)) {                       # don't re-propose known names
       seen <- tryCatch(read.csv(path, stringsAsFactors = FALSE)$actor_name,
                        error = function(e) character(0))
-      nn <- nn[!nn$actor_name %in% seen, , drop = FALSE]
+      nn <- nn[!actor_fold(nn$actor_name) %in% actor_fold(seen), , drop = FALSE]
     }
     if (nrow(nn))
       write.table(nn, path, sep = ",", row.names = FALSE,
@@ -414,31 +422,7 @@ codes_for <- function(x, map) {
 }
 
 # ------------------------------------------------- deterministic first maps --
-# AfDB result tables abbreviate units: mho is metric tons per hectare (not
-# siemens), mtd metric tons, nbr number (Charity pilot, 28 Sep 2026)
-unit_syn <- c("mho" = "CANDIDATE: metric tons per hectare", "mtd" = "tons", "nbr" = "quantity",
-              "ha" = "hectares", "hectare" = "hectares", "hectares" = "hectares",
-  "%" = "percentage", "percent" = "percentage", "percentage" = "percentage",
-  "percentage points" = "percentage", "people" = "individuals",
-  "persons" = "individuals", "individuals" = "individuals",
-  "farmers" = "individuals", "beneficiaries" = "individuals",
-  "households" = "households", "hh" = "households", "groups" = "groups",
-  "organizations" = "organizations", "organisations" = "organizations",
-  "kg" = "kg", "kilograms" = "kg", "kg/ha" = "kg/hectare",
-  "kg/hectare" = "kg/hectare", "liters" = "liters", "litres" = "liters",
-  "tco2e" = "tCO2e", "mtco2" = "tCO2e", "mtco2e" = "tCO2e", "tons" = "tons",
-  "tonnes" = "tons", "t" = "tons", "number" = "quantity", "count" = "quantity",
-  "quantity" = "quantity", "countries" = "quantity", "yes/no" = "quantity")
-# the general normaliser drops "%" and "/" entirely, which silently wiped
-# every percentage unit and every "kg/ha", so units get their own one
-unrm <- function(x) trimws(gsub("\\s+", " ", tolower(gsub("[.]+$", "", x))))
-map_unit_det <- function(u) {
-  k <- unrm(u)
-  if (k %in% names(unit_syn)) return(unname(unit_syn[k]))
-  k2 <- nrm(u)
-  if (!nzchar(k2)) return(if (nzchar(k)) u else "")
-  if (k2 %in% names(unit_syn)) unname(unit_syn[k2]) else u
-}
+# unit_syn / map_unit_det live in R/00_shared/clean_fields.R (29 Sep 2026)
 map_doctype_det <- function(d) {
   k <- tolower(d)
   if (grepl("implementation completion", k)) return("implementation completion report")
@@ -495,11 +479,12 @@ h$implementors <- vapply(gc_chr("implementor_names"), codes_for, character(1), m
 # standardised total across all sources; the split goes here in very short
 # words and amounts, e.g. "lead 44700000; cofinancing 263500000". Empty when
 # the document gives no lead share or the share equals the total.
-num_or_na <- function(x) suppressWarnings(as.numeric(gsub("[^0-9.]", "", x)))
-bt <- num_or_na(gc_chr("budget_total")); bl <- num_or_na(gc_chr("budget_lead_share"))
-h$budget_notes <- ifelse(!is.na(bl) & bl > 0 & (is.na(bt) | bl < bt),
-  ifelse(!is.na(bt), sprintf("lead %s; cofinancing %s", format(bl, scientific = FALSE, trim = TRUE), format(bt - bl, scientific = FALSE, trim = TRUE)),
-                    sprintf("lead %s", format(bl, scientific = FALSE, trim = TRUE))), "")
+# money columns as plain digits (money_num / format_money in clean_fields.R);
+# text that is not a number is left as it is
+for (m in c("budget_total", "budget_lead_share", "disbursed")) if (m %in% names(h)) {
+  v <- money_num(h[[m]]); h[[m]] <- ifelse(is.na(v), h[[m]], format_money(v))
+}
+h$budget_notes <- budget_notes_for(gc_chr("budget_total"), gc_chr("budget_lead_share"))
 
 # scale + beneficiary + document type (deterministic, then batched LLM)
 h$project_scale <- llm_map("project_scale (geographic level of the project)",
@@ -529,9 +514,35 @@ for (i in 1:3) {
       "all - a bare figure, a date, a duration, an administrative count, or a",
       "pure unit word such as 'Percent' or 'Number'. In every other case the",
       "extract DOES state the field: if no option fits, answer 'CANDIDATE: '",
-      "followed by a 2-6 word label naming what was counted. Not being in the",
+      "followed by a 2-6 word NOUN label naming what was counted, never a",
+      "copied phrase and never digits or percent signs ('loss ratio', not 'as",
+      "low as 39% for Maize'). Not being in the",
       "list is never a reason to answer NOT STATED."))
-  h[[paste0("result", i, "_unit")]] <- llm_map("result_unit", us, OPT$unit)
+  # beneficiary wording is mapped by rule first (clean_fields.R), the way the
+  # references word it; the model decides only where the rule is silent
+  det <- vapply(paste(ms, gc_chr(paste0("result", i, "_unit_stated"))), map_people_metric_det, character(1), USE.NAMES = FALSE)
+  det[!det %in% OPT$metric] <- ""
+  det[stated_is_measure(gc_chr(paste0("result", i, "_unit_stated")))] <- ""   # a land or index row is not a people count
+  cur <- h[[paste0("result", i, "_metric")]]
+  ust <- gc_chr(paste0("result", i, "_unit_stated"))
+  # the wording decides the option where it can (land by unit, yield by rate,
+  # head nouns for people and organisations); the model's choice is dropped
+  # when it contradicts the thing counted; what is left without an option
+  # carries the document's exact wording (29 Sep 2026)
+  det2 <- mapply(map_metric_det, ms, ust, USE.NAMES = FALSE); det2[!det2 %in% OPT$metric] <- ""
+  metric <- ifelse(nzchar(det) & nzchar(ms), det, ifelse(nzchar(det2), det2, cur))
+  conflict <- metric_option_conflict(metric, ms, "")
+  metric[conflict] <- ""
+  metric <- candidate_verbatim(metric, ms)
+  h[[paste0("result", i, "_metric")]] <- metric
+  unit <- llm_map("result_unit", us, OPT$unit)
+  unit <- mapply(unit_count_fallback, ust, unit, USE.NAMES = FALSE)
+  # a yield stated per hectare in kg is kg/hectare
+  unit[metric == "crop yield increase" & unit %in% c("kg", "") & grepl("per hectare|/ha|par hectare", tolower(ms))] <- "kg/hectare"
+  unit <- candidate_verbatim(unit, ifelse(startsWith(unit, "CANDIDATE:"), ust, ""))
+  h[[paste0("result", i, "_unit")]] <- unit
+  h[[paste0("result", i, "_metric")]] <- metric_unit_consistent(h[[paste0("result", i, "_metric")]],
+                                                                h[[paste0("result", i, "_unit")]], ms)
 }
 # A metric that counts people is counted in individuals. "Number" as the
 # stated unit maps to quantity, which is right for profiles or sub-projects
@@ -544,7 +555,13 @@ for (i in 1:3) {
   mcol <- paste0("result", i, "_metric"); ucol <- paste0("result", i, "_unit")
   fix <- h[[mcol]] %in% PEOPLE_METRICS & h[[ucol]] %in% c("quantity", "")
   h[[ucol]][fix] <- "individuals"
+  h[[ucol]][h[[mcol]] == "vulnerable households" & h[[ucol]] %in% c("quantity", "", "individuals")] <- "households"
 }
+# "women" alone is the template's "women (female-headed households)": the
+# template has no plain women option, and the reference readings used this one
+# (vocabulary review, 28 Sep 2026)
+h$target_beneficiary_project[tolower(h$target_beneficiary_project) %in%
+  c("candidate: women", "candidate: women farmers", "candidate: rural women", "women")] <- "women (female-headed households)"
 
 # funding mechanism: deterministic from instrument wording first ('funded
 # by <known grant fund>' rules included); anything a keyword can't settle
