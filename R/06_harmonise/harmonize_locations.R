@@ -27,7 +27,7 @@ suppressPackageStartupMessages({
 
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))
-HARM_VERSION <- "loc-s2-v1.0"
+HARM_VERSION <- "loc-s2-v1.1"   # v1.1 (29 Sep 2026): main results per site, verbatim candidates, level by rule, coordinates "no data"
 if (!nzchar(Sys.getenv("OPENAI_API_KEY")))
   for (p in c(file.path(Sys.getenv("OneDrive"), "Documents", ".Renviron"),
               file.path(Sys.getenv("USERPROFILE"), "Documents", ".Renviron")))
@@ -90,12 +90,15 @@ rows <- split_multivalue(rows)
 # ---- team field rules: whole-digit values, % for percentages -----------------
 source(file.path(REPO, "R", "00_shared", "clean_fields.R"))
 source(file.path(REPO, "R", "00_shared", "vocab_cache.R"))
+source(file.path(REPO, "R", "00_shared", "results_rank.R"))   # results_gate, choose_headline, select_main_results
+source(file.path(REPO, "R", "00_shared", "loc_rules.R"))      # det_subsector, det_target, det_level, loc_unit_fix (tested in test_regressions.R)
 if (nrow(rows)) {
   n_fix <- 0
   for (i in seq_len(nrow(rows))) {
     if (!nzchar(rows$result_value[i])) next
     cn <- clean_number(rows$result_value[i])
     u  <- clean_unit(rows$result_unit_stated[i], rows$result_value[i])
+    u  <- loc_unit_fix(u, rows$result_stated[i])   # "nbr" -> the counted noun, "mtd" -> tons
     if (!identical(cn$value, rows$result_value[i]) ||
         !identical(u, rows$result_unit_stated[i])) n_fix <- n_fix + 1
     rows$result_value[i] <- cn$value
@@ -107,6 +110,18 @@ if (nrow(rows)) {
   cat(sprintf("  %-18s %d value/unit cells normalised (whole digits, %%)\n",
               "field rules", n_fix))
 }
+## ── main results per site (Lolita, 29 Sep 2026) ─────────────────────────────
+# One row per main result of each site, up to five; a site without a
+# quantitative result keeps one row. The other results go to the notes.
+n_before <- nrow(rows)
+rows <- select_main_results(rows, n = 5L)
+cat(sprintf("  %-18s %d Session 1 rows -> %d main rows (up to 5 per site)\n", "main results", n_before, nrow(rows)))
+rownames(rows) <- NULL
+# the depth follows what is left after the gate: 2 with a result (stated or
+# valued), 1 with an intervention only, 0 when the place is merely named
+rows$evidence_depth <- ifelse(nzchar(rows$result_stated) | nzchar(rows$result_value), "2",
+                       ifelse(nzchar(rows$intervention_stated), "1", "0"))
+
 locs <- if (!is.na(S1_LOCS)) {
   l <- read.csv(S1_LOCS, stringsAsFactors = FALSE, colClasses = "character")
   l[is.na(l)] <- ""; l
@@ -185,17 +200,33 @@ loc_level <- function(doc, name) {
 }
 
 ## ── location-code matcher (deterministic tiers + proposal intake) ──────────
+# Codes proposed by EARLIER runs (29 Sep 2026). A place already proposed for
+# this project keeps the code the review file gave it, otherwise a re-run of the
+# same documents mints new codes while the review file keeps the old ones, and
+# the sheet ends up with codes that resolve to nothing.
+PREV_PROP <- local({
+  f <- file.path(REVIEW_DIR, "proposed_new_locations.csv")
+  if (!file.exists(f))
+    return(data.frame(location_name = character(0), location_id = character(0),
+                      location_country = character(0), first_seen_project = character(0),
+                      stringsAsFactors = FALSE))
+  x <- read.csv(f, stringsAsFactors = FALSE, colClasses = "character")
+  x[is.na(x)] <- ""; x
+})
+prev_code <- function(name, pcode, ctry) {
+  if (!nrow(PREV_PROP)) return("")
+  same <- norm_loc(PREV_PROP$location_name) == norm_loc(name) &
+          PREV_PROP$first_seen_project == pcode
+  if (nzchar(ctry) && any(same & tolower(trimws(PREV_PROP$location_country)) == ctry))
+    same <- same & tolower(trimws(PREV_PROP$location_country)) == ctry
+  if (any(same)) PREV_PROP$location_id[which(same)[1]] else ""
+}
 proposals <- list()
 next_no <- local({
   counters <- new.env()
   # codes already handed out in earlier runs must be counted too, or every run
   # restarts at registry-max + 1 and re-issues the same codes to other places
-  prev_ids <- local({
-    p <- file.path(REVIEW_DIR, "proposed_new_locations.csv")
-    if (!file.exists(p)) return(character(0))
-    x <- read.csv(p, stringsAsFactors = FALSE, colClasses = "character")
-    x$location_id[!is.na(x$location_id)]
-  })
+  prev_ids <- PREV_PROP$location_id[!is.na(PREV_PROP$location_id)]
   function(pcode) {
     key <- pcode
     if (is.null(counters[[key]])) {
@@ -242,7 +273,8 @@ match_one_loc <- function(name, pcode, doc) {
   # tier 3: new location -> proposal (dedup within this run)
   key <- paste0(tolower(name), "|", ctry)
   if (!is.null(proposals[[key]])) return(list(code = proposals[[key]]$location_id, how = "proposed"))
-  code <- paste0(pcode, ".", next_no(pcode))
+  earlier <- prev_code(name, pcode, ctry)
+  code <- if (nzchar(earlier)) earlier else paste0(pcode, ".", next_no(pcode))
   proposals[[key]] <<- data.frame(
     location_name = trimws(name), location_id = code,
     location_type = map_loc_type(loc_level(doc, name)),
@@ -282,19 +314,6 @@ SUB_DEFS <- paste(
   "7) cross cutting: spans several domains or targets none in particular",
   "(finance, insurance, policy, capacity building across sectors).")
 
-det_subsector <- function(txt) {
-  t <- tolower(txt)
-  fish <- grepl("fish|aquacult|coastal|marine", t)
-  live <- grepl("livestock|pastoral|herd|cattle|goat|sheep|poultry|dairy|fodder", t)
-  crop <- grepl("crop|maize|rice|seed|cocoa|coffee|cassava|wheat|sorghum|horticult|vegetable|cereal|yield|palm oil|soy", t)
-  land <- grepl("land management|land use|land degradation|watershed|forest|restoration|reforestation|slwm|soil conservation|erosion|deforestation", t)
-  food <- grepl("value chain|processing|post-?harvest|storage|market access|food distribution|food system", t)
-  hits <- c(fish = fish, live = live, crop = crop, land = land, food = food)
-  if (sum(hits) != 1) return("")
-  c(fish = "farming system-fish", live = "farming system-livestock",
-    crop = "farming system-crop", land = "land use",
-    food = "agri-food")[names(hits)[hits]]
-}
 
 TARGETS <- c("agribusiness", "artisanal fisher", "children", "community",
   "cooperative", "elderly", "farm laborer", "farmer association",
@@ -303,23 +322,6 @@ TARGETS <- c("agribusiness", "artisanal fisher", "children", "community",
   "producer", "producer organization", "smallholder farmer", "subsistence farmer",
   "vulnerable population", "women (female-headed households)",
   "women's group/organization", "youth")
-det_target <- function(txt) {
-  t <- tolower(txt)
-  pat <- c("smallholder farmer" = "smallholder", "subsistence farmer" = "subsistence farmer",
-    "artisanal fisher" = "artisanal fish|small-scale fish", "pastoralist/herder" = "pastoralist|herder",
-    "farmer association" = "farmer associations?\\b", "farmer group" = "farmer groups?\\b",
-    "producer organization" = "producer organi", "cooperative" = "cooperativ",
-    "women's group/organization" = "women'?s group|women'?s organi",
-    "women (female-headed households)" = "female-?headed|\\bwomen\\b",
-    "youth" = "\\byouth\\b|young people", "household" = "households?\\b",
-    "community" = "communit", "indigenous peoples" = "indigenous",
-    "agribusiness" = "agribusiness|agri-?enterprise", "farm laborer" = "farm labou?rer",
-    "children" = "\\bchildren\\b", "elderly" = "elderly", "migrant" = "migrant",
-    "people with disabilities/ disability" = "disabilit",
-    "vulnerable population" = "vulnerable")
-  hit <- names(pat)[vapply(pat, function(p) grepl(p, t), logical(1))]
-  if (length(hit) == 1) hit else ""   # several hits -> LLM picks overarching
-}
 
 RESULT_LEVELS <- c("input", "process", "output", "outcome", "impact")
 LEVEL_DEFS <- paste(
@@ -398,9 +400,10 @@ log_candidate <- function(field, value, context) {
 }
 
 apply_vocab <- function(rows, field_out, text_fun, det_fun, vocab, defs, what,
-                        only = rep(TRUE, nrow(rows))) {
+                        only = rep(TRUE, nrow(rows)), verbatim_fun = text_fun) {
   rows[[field_out]] <- ""
   txts <- text_fun(rows)
+  verb <- verbatim_fun(rows)   # a candidate carries the document's own wording (29 Sep 2026)
   for (i in seq_len(nrow(rows))) if (only[i] && nzchar(trimws(txts[i])))
     rows[[field_out]][i] <- det_fun(txts[i])
   todo <- which(only & nzchar(trimws(txts)) & !nzchar(rows[[field_out]]))
@@ -418,8 +421,10 @@ apply_vocab <- function(rows, field_out, text_fun, det_fun, vocab, defs, what,
       } else if (v %in% vocab) rows[[field_out]][i] <- v
       else if (startsWith(v, "CANDIDATE")) {
         log_candidate(what, sub("^CANDIDATE:\\s*", "", v), txts[i])
-        rows$notes_extra[i] <- paste0(rows$notes_extra[i], "; vocab candidate (",
-                                      what, "): ", sub("^CANDIDATE:\\s*", "", v))
+        vb <- trimws(gsub("\\s+", " ", verb[i]))
+        if (nzchar(vb)) rows[[field_out]][i] <- paste0("CANDIDATE: ", substr(vb, 1, 160))
+        else rows$notes_extra[i] <- paste0(rows$notes_extra[i], "; vocab candidate (",
+                                           what, "): ", sub("^CANDIDATE:\\s*", "", v))
       } else if (nzchar(v)) {
         # tolerate case/spacing mismatches from the model
         hit <- vocab[tolower(gsub("[^a-z]", "", vocab)) == tolower(gsub("[^a-zA-Z]", "", v))]
@@ -433,11 +438,12 @@ apply_vocab <- function(rows, field_out, text_fun, det_fun, vocab, defs, what,
   rows
 }
 
-rows$notes_extra <- ""
+rows$notes_extra <- ifelse(nzchar(rows$main_notes), paste0("; ", rows$main_notes), "")
 cat("controlled-vocabulary mapping:\n")
 rows <- apply_vocab(rows, "subsector_type",
   function(r) paste(r$subsector_stated, "|", r$intervention_stated),
-  det_subsector, SUBSECTORS, SUB_DEFS, "subsector type")
+  det_subsector, SUBSECTORS, SUB_DEFS, "subsector type",
+  verbatim_fun = function(r) r$subsector_stated)
 rows <- apply_vocab(rows, "target_beneficiary",
   function(r) r$target_beneficiary_stated,
   det_target, TARGETS, paste("Pick the LARGER/overarching group when several",
@@ -485,6 +491,16 @@ rows <- apply_vocab(rows, "target_beneficiary",
   # farmers, which is a less precise answer drawn from weaker evidence.
   n_own <- 0
   for (i in which(need)) {
+    # the counted group is the beneficiary: "4 market gardening cooperatives",
+    # "66 households engaged in fish farming" (29 Sep 2026)
+    tb <- det_target(rows$result_unit_stated[i])
+    if (nzchar(tb)) {
+      rows$target_beneficiary[i] <- tb
+      rows$notes_extra[i] <- paste0(rows$notes_extra[i],
+        "; beneficiary is the counted group (", rows$result_unit_stated[i], ")")
+      n_own <- n_own + 1
+      next
+    }
     own <- paste(rows$result_stated[i], rows$intervention_stated[i],
                  rows$subsector_stated[i])
     if (!grepl(BENEFIT_RX, tolower(own))) next
@@ -526,9 +542,28 @@ rows <- apply_vocab(rows, "target_beneficiary",
               "beneficiary", n_inherit, n_left))
 }
 has_result <- nzchar(rows$result_stated) | nzchar(rows$result_value)
-rows <- apply_vocab(rows, "result_level",
-  function(r) paste(r$result_stated, "|", r$result_value, r$result_unit_stated),
-  function(txt) "", RESULT_LEVELS, LEVEL_DEFS, "result_level", only = has_result)
+# The level follows WHAT WAS COUNTED: the result statement and the unit, never
+# the activity that produced it. Feeding the intervention wording in made the
+# model call a count of delivered things a "process" (29 Sep 2026).
+level_text <- function(r) ifelse(has_words(r$result_stated),
+  paste(r$result_stated, "|", r$result_unit_stated),
+  r$result_unit_stated)
+rows <- apply_vocab(rows, "result_level", level_text,
+  det_level, RESULT_LEVELS, LEVEL_DEFS, "result_level", only = has_result,
+  verbatim_fun = function(r) rep("", nrow(r)))   # a level has no candidate: unstated stays empty
+# Every row with a result carries a level: the template has no empty option and
+# the commonest case by far is a direct result of an activity. A defaulted cell
+# says so, so that QC can see which ones were not evidenced.
+{
+  gap <- has_result & !nzchar(rows$result_level)
+  if (any(gap)) {
+    rows$result_level[gap] <- "output"
+    rows$notes_extra[gap] <- paste0(rows$notes_extra[gap],
+      "; result level not evidenced by the wording, defaulted to output")
+    cat(sprintf("  %-18s %d row(s) defaulted to output (the wording decided nothing)\n",
+                "result_level", sum(gap)))
+  }
+}
 
 ## ── coordinates: not invented ───────────────────────────────────
 # These used to be filled from the model's world knowledge and marked
@@ -539,10 +574,13 @@ prop <- if (length(proposals)) do.call(rbind, unname(proposals)) else NULL
 if (!is.null(prop)) {
   need <- which(prop$location_name != "Unspecified")
   if (length(need)) {
-    prop$coordinate_latitude[need]  <- ""
-    prop$coordinate_longitude[need] <- ""
+    # Lolita, 29 Sep 2026: no coordinates unless the document gives them; the
+    # QC step asks people to fill them in, so the cells say so
+    prop$coordinate_latitude[need]  <- "no data"
+    prop$coordinate_longitude[need] <- "no data"
+    prop$coordinate_type[need] <- "no data"
     prop$note[need] <- trimws(paste(prop$note[need],
-      "coordinates to be entered by hand - the document does not give them"))
+      "coordinates to be entered in QC - the document does not give them"))
   }
   # append to the shared review file, dedup by name+country+project
   PROP_CSV <- file.path(REVIEW_DIR, "proposed_new_locations.csv")
@@ -558,8 +596,12 @@ if (!is.null(prop)) {
 
 ## ── project-level fields from the latest harmonized general run ────────────
 gen <- local({
-  fs <- list.files(file.path(REPO, "outputs", "extraction"),
-                   pattern = "^harmonized_.*\\.csv$", full.names = TRUE)
+  # LOC_GENERAL_CSV points at the general-sheet harmonised file of the same
+  # documents (a pilot run in its own folder); default: the newest gold run
+  env <- Sys.getenv("LOC_GENERAL_CSV", "")
+  fs <- if (nzchar(env) && file.exists(env)) env else
+    list.files(file.path(REPO, "outputs", "extraction"),
+               pattern = "^harmonized_.*\\.csv$", full.names = TRUE)
   if (!length(fs)) return(NULL)
   g <- read.csv(fs[which.max(file.mtime(fs))], stringsAsFactors = FALSE,
                 colClasses = "character")

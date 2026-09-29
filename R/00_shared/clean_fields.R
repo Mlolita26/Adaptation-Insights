@@ -308,6 +308,14 @@ DATE_VALUE_RE <- paste0(
 ## ---- one gate for "is this actually a result?" -------------------------------
 # Returns "" when the value is a real result, otherwise the reason to reject it.
 # Used by both pipelines so the two sheets apply the same test.
+# currency codes and names met in the corpus (29 Sep 2026): a sum of money
+# stated in kwacha, shillings, birr or ouguiya is no more a result than one in
+# dollars. Word-bounded so that "rand" does not catch "random".
+CURRENCY_RE <- paste0("\\b(mk|mwk|zmw|zmk|kwacha|kes|ksh|kshs|tzs|tsh|ugx|ush|shillings?|etb|birr|",
+                      "mru|mro|ouguiya|ghs|cedis?|ngn|naira|rwf|bif|xof|xaf|fcfa|f ?cfa|francs?|zar|rand|",
+                      "egp|dinars?|dirhams?|sdr|gbp|euros?|meticais|metical|escudos?|dobras?|nakfa|",
+                      "leones?|dalasi|liberian dollars?|pula|lilangeni|emalangeni|loti|maloti|",
+                      "ariary|rupees?|mauritian rupees?|kwanzas?|sudanese pounds?|ssp|sdg)\\b")
 result_reject_reason <- function(value, unit, stated = "", metric = "") {
   v <- tolower(trimws(as.character(value %||% "")))
   # the harmonised metric is evidence too: "project duration" and
@@ -320,8 +328,9 @@ result_reject_reason <- function(value, unit, stated = "", metric = "") {
                    "highly likely|negligible)\\b"), m) ||
       grepl("scale|rating", v))
     return("RATING NOT A RESULT")
-  if (grepl(paste0("us ?\\$|\\$ ?[0-9]|dollars?|usd|eur|cfaf|mzn|\\bua\\b|disburs|budget|",
-                   "grant amount|expenditure|cost of|contribution of|fund contribution"), m) &&
+  if ((grepl(paste0("us ?\\$|\\$ ?[0-9]|dollars?|usd|eur|cfaf|mzn|\\bua\\b|disburs|budget|",
+                    "grant amount|expenditure|cost of|contribution of|fund contribution"), m) ||
+       grepl(CURRENCY_RE, m)) &&
       !grepl("income|revenue|price|saving|profit", m))
     return("MONEY NOT A RESULT")
   # A bare "extension" also names extension agents, extension workers and

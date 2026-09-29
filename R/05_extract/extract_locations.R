@@ -29,7 +29,7 @@ suppressPackageStartupMessages({
 
 MODE  <- Sys.getenv("EXTRACT_MODE", "pilot")
 MODEL <- Sys.getenv("EXTRACT_MODEL", "gpt-5-mini")
-PROMPT_VERSION <- "loc-v1.4"   # v1.4: ultimate + evidenced beneficiary, document's own beneficiary statement captured, verbatim rationale, one shared result gate (coverage and ratings are not results)
+PROMPT_VERSION <- "loc-v1.5"   # v1.5 (29 Sep 2026): decimals kept, value_type and category per row, every result listed (main ones chosen in code), AfDB three-decimal numbers, where sites are listed; v1.4: ultimate + evidenced beneficiary, document's own beneficiary statement captured, verbatim rationale, one shared result gate (coverage and ratings are not results)
 MODEL_TAG <- gsub("[^a-z0-9]+", "-", tolower(MODEL))
 # .Renviron lives in the OneDrive-redirected Documents folder; a shell that
 # overrides HOME (e.g. Git Bash) makes R miss it — load it explicitly
@@ -173,7 +173,12 @@ locations = list(
     "when the document works at country level. Exclude places that are",
     "only: evaluation travel stops, control/comparison sites, capital",
     "cities mentioned as ministry seats, other projects' sites, or",
-    "geographic context (rivers, borders, climate zones)."),
+    "geographic context (rivers, borders, climate zones).",
+    "WHERE SITES ARE LISTED: World Bank completion reports name them in the",
+    "data sheet, the component descriptions and the results annex; AfDB",
+    "completion reports in the project area paragraph and the beneficiaries",
+    "table; GEF, GCF and Adaptation Fund evaluations in the methodology and",
+    "site chapters and in annex site lists; portal forms rarely name sites."),
   type = type_object(
     locations = type_array(description = "One entry per distinct named intervention location.",
       items = type_object(
@@ -254,7 +259,12 @@ location_rows = list(
     "villages', '3 countries covered', 'sites targeted'. That is coverage.",
     "A result is what the implementation PRODUCED. A place count counts only",
     "when the document reports something achieved at those places (villages",
-    "where tenure was clarified, communities that adopted a practice)."),
+    "where tenure was clarified, communities that adopted a practice).",
+    "List EVERY quantitative result the document ties to a location, one row",
+    "per result; the main ones are chosen afterwards in code, so do not",
+    "select. Say for each value whether it is achieved, a target, a baseline,",
+    "a plan, an estimate or a context statistic. AfDB tables print numbers",
+    "with three decimals: '7,520.000' is 7,520 and '3.600' is 3.6."),
   type = type_object(
     rows = type_array(description = "One entry per location x intervention (x result).",
       items = type_object(
@@ -282,8 +292,12 @@ location_rows = list(
           "benefited here, leave this EMPTY rather than assume.")),
         target_beneficiary_page = type_integer("Page of the passage that shows this group benefiting. 0 if none."),
         result_stated = type_string("The concrete result reported for this location, quoted or closely paraphrased, max 50 words. Empty if no result is reported."),
-        result_value = type_string("EXACTLY ONE number in WHOLE DIGITS: 2829, not '2,829'; 4700000, not '4.7 million'; 43, not '43 percent'. No qualifiers, no units, no ranges, no lists, never several numbers separated by semicolons. If this location has several reported results, emit SEVERAL ROWS for it, one per result, repeating the location and intervention. Empty if the result is qualitative or there is none."),
+        result_value = type_string("EXACTLY ONE number as digits, KEEPING THE DECIMALS THE DOCUMENT GIVES: 2829, not '2,829'; 4700000, not '4.7 million'; 43, not '43 percent'; 3.6 stays 3.6 and 12.5 stays 12.5 (never round or truncate). No thousands separators, no qualifiers, no units, no ranges, no lists, never several numbers separated by semicolons. If this location has several reported results, emit SEVERAL ROWS for it, one per result, repeating the location and intervention. Empty if the result is qualitative or there is none."),
         result_unit_stated = type_string("Counting unit/what-is-counted for that value, in the document's words: 'farmers trained', 'hectares', 'training workshops held'. For a percentage use the symbol %, not the word. Empty if no value."),
+        value_type = type_enum(values = c("achieved", "target", "baseline", "planned", "estimate", "context"),
+          description = "achieved = an actual value at the latest date reported (the only kind that is a result); target = an end or revised target; baseline = the starting value; planned = a design figure; estimate = a projection or economic-analysis figure; context = a statistic about the place, not the project."),
+        category = type_enum(values = c("reach_people", "physical_quantity", "effect_rate", "institutional", "other"),
+          description = "reach_people = a count of people, households, farmers, jobs or trainees; physical_quantity = land, water, production, animals, length or structures; effect_rate = a percentage, rate, yield, income or other measure of change; institutional = plans, policies, agreements, committees, systems, events; other = anything else."),
         evidence_methodology_stated = type_string("HOW the result was assessed, per the document: survey, interviews, monitoring data, field visits..., quoted or closely paraphrased, max 50 words. Empty if unstated."),
         evidence_source_stated = type_string("The evidence SOURCE named for the result: progress reports, M&E system, workshop reports, use metrics... Empty if unstated."),
         page = type_integer("Page where this row's core statement is."))),
@@ -338,6 +352,8 @@ fold_rows <- function(res, meta) {
   df <- do.call(rbind, lapply(rl, function(r) {
     rs <- g(r, "result_stated"); rv <- g(r, "result_value")
     bad <- bad_result(r); ru <- g(r, "result_unit_stated")
+    vt <- g(r, "value_type")
+    if (!nzchar(bad) && nzchar(vt) && vt != "achieved") bad <- paste0("NOT AN ACHIEVED VALUE (", vt, ")")
     if (nzchar(bad)) { rs <- ""; rv <- ""; ru <- "" }
     flags <- c(bad,
       if (any(word_count(c(g(r, "subsector_stated"), g(r, "intervention_stated"),
@@ -355,6 +371,8 @@ fold_rows <- function(res, meta) {
       result_stated     = rs,
       result_value      = rv,
       result_unit_stated = ru,
+      value_type = vt,
+      category = g(r, "category"),
       evidence_methodology_stated = g(r, "evidence_methodology_stated"),
       evidence_source_stated = g(r, "evidence_source_stated"),
       page = g(r, "page"),
@@ -599,7 +617,7 @@ extract_doc <- function(pdf_path, focus = "", pcode = "", groups = GROUPS) {
     }
     cat(sprintf("  %-14s ok (%ss)\n", gname, secs))
     raw[[gname]] <- res
-    write_json(res, file.path(RAW_DIR, paste0("s1loc_", substr(doc_name, 1, 55),
+    write_json(res, file.path(RAW_DIR, paste0("s1loc_", if (nzchar(pcode)) paste0(pcode, "_") else "", substr(doc_name, 1, 55),
                "_", gname, ".json")), auto_unbox = TRUE, pretty = TRUE)
   }
   rows_df <- if (!is.null(raw$location_rows)) fold_rows(raw$location_rows, meta) else NULL

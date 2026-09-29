@@ -27,7 +27,14 @@ HFILE <- if (length(args) >= 1) args[1] else {
   fs[which.max(file.mtime(fs))]
 }
 GFILE <- if (length(args) >= 2) args[2] else file.path(REPO, "catalogues", "gold_v1_locations.csv")
-cat("pipeline:", HFILE, "\ngold:    ", GFILE, "\n\n")
+# optional: the Session 1 enumeration (s1loc_locations_*.csv) gives a second
+# coverage figure, the gold sites the model NAMED anywhere, beside the sites
+# that reached a row (29 Sep 2026)
+EFILE <- if (length(args) >= 3) args[3] else ""
+# optional 4th: the Session 1 rows, to tell a value never read from a value read
+# but not chosen among the site's main results
+RFILE <- if (length(args) >= 4) args[4] else ""
+cat("pipeline:", HFILE, "\ngold:    ", GFILE, if (nzchar(EFILE)) paste0("\nnamed:    ", EFILE), "\n\n")
 
 h <- read.csv(HFILE, stringsAsFactors = FALSE, colClasses = "character", check.names = FALSE)
 g <- read.csv(GFILE, stringsAsFactors = FALSE, colClasses = "character", check.names = FALSE)
@@ -110,6 +117,12 @@ jac <- function(a, b) {
 g$loc_names <- lapply(ifelse(nzchar(g$location_names), g$location_names, g$location),
                       function(x) norm_loc(trimws(strsplit(x, ";")[[1]])))
 h$loc_names <- lapply(h$location, function(x) norm_loc(codes_to_names(x)))
+enum <- if (nzchar(EFILE) && file.exists(EFILE)) {
+  e <- read.csv(EFILE, stringsAsFactors = FALSE, colClasses = "character"); e[is.na(e)] <- ""; e
+} else NULL
+s1rows <- if (nzchar(RFILE) && file.exists(RFILE)) {
+  e <- read.csv(RFILE, stringsAsFactors = FALSE, colClasses = "character"); e[is.na(e)] <- ""; e
+} else NULL
 
 summary_rows <- list(); align_rows <- list()
 for (pc in sort(unique(g$project_code))) {
@@ -122,6 +135,13 @@ for (pc in sort(unique(g$project_code))) {
     g == h || grepl(paste0("\\b", g, "\\b"), h) || grepl(paste0("\\b", h, "\\b"), g),
     logical(1)))
   loc_hit <- sum(vapply(g_locs, covers, logical(1)))
+  named_hit <- NA_integer_
+  if (!is.null(enum)) {
+    e_locs <- unique(c(h_locs, norm_loc(enum$location_name[enum$project_code_hint == pc])))
+    e_locs <- e_locs[nzchar(e_locs)]
+    named_hit <- sum(vapply(g_locs, function(g) any(vapply(e_locs, function(h)
+      g == h || grepl(paste0("\\b", g, "\\b"), h) || grepl(paste0("\\b", h, "\\b"), g), logical(1))), logical(1)))
+  }
   # a gold cell may carry " || " alternates; the row counts as covered when ANY
   # alternate is found (same convention as the general-fields scorer)
   g_alt <- lapply(gp$result_value, function(x) {
@@ -130,6 +150,12 @@ for (pc in sort(unique(g$project_code))) {
   h_vals <- unique(norm_num(hp$result_value)); h_vals <- h_vals[nzchar(h_vals)]
   val_hit <- sum(vapply(g_alt, function(a) any(a %in% h_vals), logical(1)))
   g_vals <- g_alt
+  read_hit <- NA_integer_
+  if (!is.null(s1rows)) {
+    s_vals <- unique(norm_num(s1rows$result_value[s1rows$project_code_hint == pc]))
+    s_vals <- unique(c(h_vals, s_vals[nzchar(s_vals)]))
+    read_hit <- sum(vapply(g_alt, function(a) any(a %in% s_vals), logical(1)))
+  }
 
   # align each gold row to its best pipeline row
   lvl_ok <- sub_ok <- ben_ok <- n_aligned <- 0
@@ -171,9 +197,9 @@ for (pc in sort(unique(g$project_code))) {
   }
   summary_rows[[pc]] <- data.frame(
     project = pc, rows_gold = nrow(gp), rows_pipe = nrow(hp),
-    gold_locs = length(g_locs), locs_covered = loc_hit,
+    gold_locs = length(g_locs), locs_covered = loc_hit, locs_named = named_hit,
     extra_pipe_locs = length(setdiff(h_locs, g_locs)),
-    gold_values = length(g_vals), values_covered = val_hit,
+    gold_values = length(g_vals), values_covered = val_hit, values_read = read_hit,
     rows_aligned = n_aligned,
     level_agree = lvl_ok, subsector_agree = sub_ok, beneficiary_agree = ben_ok,
     stringsAsFactors = FALSE)
@@ -200,4 +226,10 @@ cat(sprintf(paste0(
   100 * sum(S$values_covered) / max(1, sum(S$gold_values)),
   sum(S$rows_aligned), sum(S$rows_gold),
   sum(S$level_agree), sum(S$subsector_agree), sum(S$beneficiary_agree)))
+if (!is.null(s1rows)) cat(sprintf(paste0("        gold result values PRESENT in Session 1 %d/%d (%.0f%%)",
+  " - the rest were never read;\n        the gap to the %d kept is the choice of each site's main results\n"),
+  sum(S$values_read, na.rm = TRUE), sum(S$gold_values),
+  100 * sum(S$values_read, na.rm = TRUE) / max(1, sum(S$gold_values)), sum(S$values_covered)))
+if (!is.null(enum)) cat(sprintf("        gold locations named anywhere by the model %d/%d (%.0f%%)\n",
+  sum(S$locs_named, na.rm = TRUE), sum(S$gold_locs), 100 * sum(S$locs_named, na.rm = TRUE) / max(1, sum(S$gold_locs))))
 cat("\nwritten:", sf, "\n         ", af, "\n")

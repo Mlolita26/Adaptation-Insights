@@ -15,6 +15,7 @@ source(file.path(REPO, "R", "00_shared", "paths.R"))
 source(file.path(REPO, "R", "00_shared", "actor_names.R"))
 source(file.path(REPO, "R", "00_shared", "clean_fields.R"))
 source(file.path(REPO, "R", "00_shared", "results_rank.R"))
+source(file.path(REPO, "R", "00_shared", "loc_rules.R"))
 
 reg  <- actor_registry(TEMPLATE_XLSX)
 syn  <- read.csv(file.path(REPO, "catalogues", "actor_synonyms.csv"), stringsAsFactors = FALSE, encoding = "UTF-8")
@@ -282,6 +283,138 @@ check("'7,520.000' is 7520", g("7,520.000") == "7520")
 check("'1,352.000' is 1352", g("1,352.000") == "1352")
 check("'1.352.000' (two dot groups, French style) is 1352000", g("1.352.000") == "1352000")
 check("'202,658.000' is 202658", g("202,658.000") == "202658")
+
+cat("location sheet: main results per site (29 Sep 2026)\n")
+ch <- choose_headline(list(R("1000", "farmers trained", "farmers"), R("250", "hectares restored", "ha"), R("30", "yield increase", "%"),
+  R("12", "boreholes drilled", "boreholes"), R("40", "groups formed", "groups"), R("7", "km of canal", "km"), R("3", "plans adopted", "plans")), n = 5L)
+check("choose_headline fills five slots when asked", length(ch$top) == 5)
+check("the first three slots keep their order (reach, physical, effect)", identical(vals(ch)[1:3], c("1000", "250", "30")))
+d <- data.frame(project_code_hint = "CPX", document = "worldbank_x.pdf",
+  locations_stated = c(rep("Kiboga", 7), "Mubende", "Mubende", "Hoima"),
+  intervention_stated = c(rep("training and inputs", 7), "seed distribution", "a longer description of the irrigation works", "roads"),
+  result_stated = c("farmers trained", "hectares restored", "yield increase", "boreholes drilled", "groups formed", "km of canal", "plans adopted", "", "", "budget spent"),
+  result_value = c("1000", "250", "30", "12", "40", "7", "3", "", "", "500000"),
+  result_unit_stated = c("farmers", "ha", "%", "boreholes", "groups", "km", "plans", "", "", "USD"),
+  page = as.character(1:10), value_type = c(rep("achieved", 9), "achieved"), category = "", stringsAsFactors = FALSE)
+m <- select_main_results(d, n = 5L)
+check("a site with seven results keeps five main rows", sum(m$locations_stated == "Kiboga") == 5)
+check("the two dropped results are noted on the first kept row", grepl("further results at this location", m$main_notes[m$locations_stated == "Kiboga"][1]))
+check("a site without results keeps one row, the fullest", sum(m$locations_stated == "Mubende") == 1 && grepl("irrigation", m$intervention_stated[m$locations_stated == "Mubende"]))
+check("a site whose only result is money keeps the row without the value", sum(m$locations_stated == "Hoima") == 1 && m$result_value[m$locations_stated == "Hoima"] == "")
+
+cat("money in local currencies (29 Sep 2026)\n")
+check("a kwacha sale is money, not a result", nzchar(result_reject_reason("3400000", "MK", "realised a total of MK3,400,000 from soybeans")))
+check("a shilling figure is money, not a result", nzchar(result_reject_reason("250000", "KES", "value of the water pan")))
+check("income in kwacha stays a result (income is exempt)", !nzchar(result_reject_reason("3400000", "MK", "average household income")))
+check("'random sample of 300 households' is not caught by 'rand'", !grepl(CURRENCY_RE, "random sample of 300 households"))
+check("the gate drops a kwacha figure from a site's results", {
+  rl <- results_gate(list(R("3400000", "sale proceeds MK3,400,000", "MK"), R("22", "farmers aggregated soybeans", "farmers")), "afdb_pcr")
+  length(rl) == 1 && rl[[1]]$value == "22" })
+
+cat("location sheet rules (29 Sep 2026, after the first pilot score)\n")
+check("'4 market gardening cooperatives' counts cooperatives", det_target("market gardening cooperatives") == "cooperative")
+check("'66 households engaged in fish farming' counts households", det_target("households engaged in fish farming") == "household")
+check("a group of 200 farmers comprising 100 women and 50 youths is a farmer group", det_target("a group of 200 farmers comprising 100 women and 50 youths") == "farmer group")
+check("202,658 farmers of which 113,660 female are farmers", det_target("Farmers 202,658 of which 113,660 female farmers") == "smallholder farmer")
+check("'200 women trained in fish processing' stays women", det_target("200 women were trained in fish processing") == "women (female-headed households)")
+check("'the wider population' is the community (superseded the 29 Sep empty answer)", det_target("the wider population") == "community")
+check("'nbr' becomes the counted noun", loc_unit_fix("nbr", "Pastoralists and Agro-pastoralists trained (nbr) 7,520.000") == "pastoralists and agro-pastoralists trained")
+check("'Number of Federal, Regional and Woreda Staff trained' gives the staff", loc_unit_fix("nbr", "Number of Federal, Regional and Woreda Staff trained") == "federal regional and woreda staff trained")
+check("'mtd' is tons", loc_unit_fix("mtd", "Volume of certified seeds delivered") == "tons")
+check("a real unit is left alone", loc_unit_fix("hectares", "area restored") == "hectares")
+check("a bare count with a long statement falls back to 'number'", loc_unit_fix("number", "an extremely long statement about many different things that were counted at the same time by the team") == "number")
+check("a yield with a delivery word is an outcome", det_level("Increased yield in cereal production: 3.6 mt/ha against seeds delivered") == "outcome")
+check("'hectares' alone now means an output: the unit decides where the wording does not", det_level("1352 ha") == "output")
+check("'rangeland rehabilitated' is an output", det_level("rangeland area rehabilitated and improved | 1352 ha") == "output")
+check("coastal risk management is not fisheries", det_subsector("coastal risk management | mangrove restoration and weather stations") == "land use")
+check("fish farming is fisheries", det_subsector("fish farming | households engaged in fish farming") == "farming system-fish")
+check("'other vulnerable households' is a sub-group (tier 4)", rr_reach_tier(R("68446", "Number of direct beneficiaries (cumulative): other vulnerable households", "other vulnerable households")) == 4L)
+ch <- choose_headline(list(R("581028", "total number of people reached", "people"), R("128169", "total households reached", "households"),
+  R("68446", "direct beneficiaries: other vulnerable households", "other vulnerable households"), R("2233", "sub-grants approved and completed", "sub-grants"),
+  R("5914", "additional area under climate-resilient crops", "ha"), R("722.53", "secondary and ancillary canals rehabilitated", "canals"),
+  R("71", "share of beneficiaries reporting improved resilience", "%")), n = 5L)
+check("Barotse: five main results are people, area, effect, canals, households", identical(vals(ch), c("581028", "5914", "71", "722.53", "128169")))
+
+cat("proposed location codes are stable across runs (29 Sep 2026)\n")
+# the rule under test: a place already in the review file keeps its code, so a
+# second run of the same documents does not mint CP01.11 for CP01.4's place
+local({
+  PREV <- data.frame(location_name = c("Brakna", "Trarza", "Brakna"),
+                     location_id = c("CP01.4", "CP01.2", "CP02.7"),
+                     location_country = c("Mauritania", "Mauritania", "Mauritania"),
+                     first_seen_project = c("CP01", "CP01", "CP02"),
+                     stringsAsFactors = FALSE)
+  nrm <- function(x) trimws(tolower(gsub("[^a-z0-9]+", " ", tolower(x))))
+  prev_code <- function(name, pcode, ctry) {
+    same <- nrm(PREV$location_name) == nrm(name) & PREV$first_seen_project == pcode
+    if (nzchar(ctry) && any(same & tolower(trimws(PREV$location_country)) == ctry))
+      same <- same & tolower(trimws(PREV$location_country)) == ctry
+    if (any(same)) PREV$location_id[which(same)[1]] else ""
+  }
+  check("a re-run reuses the code the review file already holds", prev_code("Brakna", "CP01", "mauritania") == "CP01.4")
+  check("the same name in another project keeps that project's code", prev_code("Brakna", "CP02", "mauritania") == "CP02.7")
+  check("a place never proposed gets no code from the review file", prev_code("Gorgol", "CP01", "mauritania") == "")
+})
+
+cat("location site rules, third pass (29 Sep 2026)\n")
+check("a water pan is cross cutting, not a farming system", det_subsector("Water harvesting technologies for crop and livestock production | water pan constructed") == "cross cutting")
+check("a borehole is cross cutting", det_subsector("borehole developed for the village") == "cross cutting")
+check("an irrigation scheme stays with crops", det_subsector("irrigation scheme rehabilitated for rice production") == "farming system-crop")
+check("dune fixing is land use", det_subsector("Dune fixing to protect the village") == "land use")
+check("rangeland rehabilitation is land use", det_subsector("rangeland area rehabilitated and improved") == "land use")
+check("'direct beneficiaries' names the community", det_target("direct beneficiaries") == "community")
+check("'2,245 residents' names the community", det_target("residents served by the water pan") == "community")
+check("a narrower group still wins over the community", det_target("smallholder farmers reached") == "smallholder farmer")
+check("a bare number is not a statement", !has_words("1 194"))
+check("a real statement has words", has_words("150 bags of maize sold"))
+
+cat("the result level follows what was counted (29 Sep 2026)\n")
+check("'4 market gardens' is an output, not a process", det_level("4 | market gardens") == "output")
+check("'plans developed' stays a process (the project team's own activity)", det_level("87 Adaptation Action Plans developed | Adaptation Action Plans") == "process")
+check("a bare share of a delivered quantity is an output", det_level("%") == "output")
+check("a share of beneficiaries satisfied is an outcome", det_level("63.3% of beneficiaries satisfied with the water pan | %") == "outcome")
+check("a yield per hectare is an outcome", det_level("maize yield rose to 3.6 | mt/ha") == "outcome")
+check("'2245 residents served' is an output", det_level("Completed | direct beneficiaries") == "output")
+check("'inspections conducted' stays a process", det_level("72 inspections were conducted | inspections conducted") == "process")
+check("an unknown unit still yields no level", det_level("luh") == "")
+
+cat("faults found on the real Barotse rows (29 Sep 2026)\n")
+check("'percentage of targeted councils' is a result, not a percent-of-target figure",
+      rr_eligible(R("71", "Percentage of targeted councils, wards and community groups with improved resilience", "%")))
+check("'% of target achieved' is still rejected", !rr_eligible(R("98", "Progress: 98% of target achieved", "%")))
+check("'of the target' is still rejected", !rr_eligible(R("98", "reached 98 percent of the target", "%")))
+check("'56 enterprise grants implemented' is an institutional count, not people",
+      rr_category(R("56", "Number of enterprise grants implemented = 56", "enterprise grants implemented")) == "institutional")
+check("'50,386 person-days of labour' is not a count of people",
+      rr_category(R("50386", "Person-days of labor generated through cash-for-works", "person-days of labor generated")) == "other")
+check("a grant to farmers is still people", rr_category(R("300", "farmers receiving grants", "farmers")) == "people")
+local({
+  rl <- list(R("581028", "The project reached 581,028 direct beneficiaries", "total number of people"),
+             R("128169", "The project reached 128,169 direct beneficiary households", "total households"),
+             R("53783", "Number of direct beneficiaries (cumulative): women-headed households", "women-headed household"),
+             R("68446", "Number of direct beneficiaries (cumulative): other vulnerable households", "other vulnerable households"),
+             R("71", "Percentage of targeted councils, wards and community groups with improved resilience", "%"),
+             R("2233", "A total of 2,233 sub-grants were awarded and completed", "sub-grants approved and completed"),
+             R("56", "Number of enterprise grants implemented = 56", "enterprise grants implemented"),
+             R("722.53", "A total of 722 secondary and ancillary canals were rehabilitated", "secondary and ancillary canals rehabilitated"),
+             R("5914", "The additional area under climate-resilient crops", "ha"),
+             R("50386", "Person-days of labor generated through cash-for-works", "person-days of labor generated"))
+  ch <- choose_headline(results_gate(rl, "wb_icr"), n = 5L)
+  check("the Barotse sub-basin keeps the five results the reading reference chose",
+        identical(vals(ch), c("581028", "5914", "71", "722.53", "128169")))
+})
+
+cat("plain digits: no thousands separator reaches a slot (29 Sep 2026)\n")
+gv <- function(v, fm = "") { g <- results_gate(list(R(v, "fertilizer delivered", "mt")), fm); if (length(g)) g[[1]]$value else "" }
+check("'10,226' becomes 10226 without a family", gv("10,226") == "10226")
+check("'10,226' becomes 10226 in an AfDB report", gv("10,226", "afdb_pcr") == "10226")
+check("'581,028' becomes 581028", gv("581,028") == "581028")
+check("a decimal value keeps its decimals", gv("3.6") == "3.6")
+check("'1.352.000' is still read as 1352000 in an AfDB report", gv("1.352.000", "afdb_pcr") == "1352000")
+check("two rows quoting the same figure collapse to one slot", {
+  ch <- choose_headline(results_gate(list(R("10,226", "Urea distributed", "mt"), R("10226", "Urea distributed", "mt"),
+                                          R("500", "boreholes drilled", "boreholes")), "afdb_pcr"), n = 3L)
+  sum(vals(ch) == "10226") == 1 })
 
 cat(sprintf("\n%d cases, %d failed\n", n, fails))
 if (fails > 0L) quit(status = 1L)

@@ -32,7 +32,7 @@ RR_PEOPLE <- paste0(
   "families|jobs|emplois|employ|users|clients|students|pupils|staff|agripreneur|",
   "entrepreneur|smallholder|returnees|refugees|communit(y|ies) members|managers|\\bmales?\\b|\\bfemales?\\b")
 RR_INDIRECT <- "indirect|population of the|population in the|catchment population|potential beneficiar|population living"
-RR_SUBGROUP <- "female|women|femmes|\\bmen\\b|\\bmales?\\b|youth|jeunes|girls|boys|headed|of which|\\bdont\\b|disaggregat"
+RR_SUBGROUP <- "female|women|femmes|\\bmen\\b|\\bmales?\\b|youth|jeunes|girls|boys|headed|of which|\\bdont\\b|disaggregat|\\bother (vulnerable|households?|groups?|beneficiar)"
 RR_BOTH_SEXES <- "males? and females?|females? and males?|men and women|women and men|hommes et femmes|femmes et hommes|by gender|by sex"
 RR_AREA <- "\\bha\\b|hectare|\\bacres?\\b|square (metre|meter|kilomet)|\\bkm2\\b|\\bsq\\.? ?m\\b|superficie"
 RR_RATE_UNIT <- "^%|percent|pour ?cent|t/ha|kg/ha|per ha|per hectare|/ha\\b|per cow|per day|per capita|litres? per|q/ha|quintal|\\bmho\\b"
@@ -50,13 +50,18 @@ RR_STRUCTURE <- paste0(
   "storage|facilit|infrastructure|structures?|units?|ponds?|nurser|kilns?|ovens?|stoves?|sites?|",
   "canals?|roads?|pipelines?|dykes?|dikes?|weirs?|seedlings|trees|plants\\b|hangars|demonstration|",
   "landing|cages?|reservoirs?|tanks?|standpipes?|water points?|hafirs?|clinics?|posts?")
+# a grant, a sub-grant or a loan awarded is an institutional count, not a
+# count of people, whatever Session 1 guessed (29 Sep 2026)
+RR_GRANTS <- "\\b(sub-?grants?|grants?|loans?|vouchers?|subsidies|subsidy)\\b"
+# a person-day is a volume of work, not a person reached
+RR_WORKDAYS <- "person-?days?|man-?days?|labou?r days?|workdays?"
 RR_INSTITUTIONAL <- paste0(
   "\\bplans?\\b|policy|policies|strateg|regulation|\\blaws?\\b|decree|agreements?|signatures?|",
   "committees?|comités?|platforms?|associations?|cooperatives?|groups?|organi[sz]ations?|",
   "institutions?|systems? (established|operational)|events?|workshops?|sessions|manuals?|studies|",
   "technolog(y|ies)|business plans?|profiles?|frameworks?")
 RR_PROCESS <- paste0(
-  "percent(age)? of target|% of target|of (the )?target|realized|realised|achievement rate|",
+  "percent(age)? of targets?\\b|% of targets?\\b|of (the )?targets?\\b|realized|realised|achievement rate|",
   "progress towards|disbursement|commitment rate|reports? (produced|delivered)|meetings? held|",
   "missions?|audits?|grievances?|^% ?(achieved|realized|realised)|",
   "surveyed|respondents?|interviewed|sample size|focus groups?|votes?|enumerators?|questionnaire|",
@@ -74,6 +79,8 @@ RR_GENERIC_UNIT <- "^(number|nbr|no\\.?|n|count|total|units?|\\(number\\)|number
 rr_category <- function(r) {
   m <- rr_txt(r, "metric_stated"); u <- rr_txt(r, "unit_stated"); mu <- paste(m, u)
   cat0 <- rr_txt(r, "category")
+  if (grepl(RR_WORKDAYS, mu)) return("other")
+  if (grepl(RR_GRANTS, u) && !grepl(RR_PEOPLE, u)) return("institutional")
   generic <- grepl(RR_GENERIC_UNIT, u)
   if (grepl(RR_RATE_UNIT, u) || grepl("t/ha|kg/ha|per ha|per hectare|q/ha|litres? per|per cow|\\bmho\\b", mu)) return("effect")
   if (!generic) {
@@ -172,6 +179,14 @@ rr_eligible <- function(r) {
 results_gate <- function(rl, family_module = "", pages_txt = NULL) {
   if (!length(rl)) return(rl)
   fm <- if (is.null(family_module) || !length(family_module) || is.na(family_module[1])) "" else as.character(family_module[1])
+  # the team asked for plain digits: a thousands separator never survives, in
+  # any family ("10,226" is 10226). A French-style "1.352.000" is handled by
+  # the African Development Bank branch below, so only commas go here.
+  rl <- lapply(rl, function(r) {
+    v <- trimws(as.character(r$value %||% ""))
+    if (grepl("^[0-9]{1,3}(,[0-9]{3})+$", v)) r$value <- gsub(",", "", v, fixed = TRUE)
+    r
+  })
   if (identical(fm, "afdb_pcr")) {
     # AfDB tables print every number with three decimals and a comma for
     # thousands: "7,520.000" is 7,520, "1,352.000" is 1,352, "30.000" is 30 and
@@ -233,7 +248,7 @@ results_gate <- function(rl, family_module = "", pages_txt = NULL) {
 }
 
 # ---- the chooser -------------------------------------------------------------
-choose_headline <- function(rl) {
+choose_headline <- function(rl, n = 3L) {
   if (!length(rl)) return(list(top = list(), rest = list()))
   ok <- vapply(rl, rr_eligible, logical(1))
   pool <- rl[ok]
@@ -298,7 +313,7 @@ choose_headline <- function(rl) {
 
   # fill: whole-project figures first, outcome level, quoted in the summary,
   # document order; sub-groups, shares and indirect figures last
-  while (length(top) < 3L) {
+  while (length(top) < n) {
     cand <- which(freev())
     if (!length(cand)) break
     weak <- vapply(cand, function(i) {
@@ -306,11 +321,69 @@ choose_headline <- function(rl) {
       share[i] || (cats[i] == "people" && rr_reach_tier(r) >= 4L) ||
         (cats[i] == "effect" && rr_is_subgroup_share(r))
     }, logical(1))
-    o <- order(weak, lvl[cand], !insum[cand], ord[cand])
+    # The first slot already holds the site's reach figure, so the fill takes
+    # the physical achievements next, then any further people count, then the
+    # institutional and unclassified ones (Barotse: 722 canals rehabilitated
+    # before 50,386 person-days and 2,233 sub-grants) - 29 Sep 2026
+    crank <- c(area = 1L, production = 1L, volume = 1L, animals = 1L, length = 1L,
+               structure = 1L, people = 2L, effect = 3L, institutional = 4L, other = 5L)[cats[cand]]
+    crank[is.na(crank)] <- 5L
+    o <- order(weak, crank, lvl[cand], !insum[cand], ord[cand])
     top[[length(top) + 1L]] <- take(cand[o[1]])
   }
 
   rest_i <- which(!used)
   rest <- pool[rest_i[order(lvl[rest_i], !insum[rest_i], ord[rest_i])]]
   list(top = top, rest = rest)
+}
+
+# ---- the location sheet: main results per site --------------------------------
+# Lolita, 29 Sep 2026: the location sheet holds the MAIN results of each site,
+# one row per result, up to n (five) and one is fine, chosen with the same rule
+# as the general sheet but tied to the site. Every other quantitative result the
+# document gives for the site goes to the notes of the first kept row. A site
+# with interventions but no quantitative result keeps one row, the fullest.
+# d is the Session 1 row table (locations_stated, result_value, result_stated,
+# result_unit_stated, page, project_code_hint, document, and since loc-v1.5
+# value_type and category). Returns d with kept rows and a main_notes column.
+select_main_results <- function(d, n = 5L) {
+  if (!nrow(d)) { d$main_notes <- character(0); return(d) }
+  gcol <- function(nm) if (nm %in% names(d)) as.character(d[[nm]]) else rep("", nrow(d))
+  key <- paste(gcol("project_code_hint"), tolower(trimws(gcol("locations_stated"))))
+  keep <- rep(FALSE, nrow(d)); notes <- rep("", nrow(d)); scrub <- rep(FALSE, nrow(d))
+  val <- gcol("result_value"); rs <- gcol("result_stated"); ru <- gcol("result_unit_stated")
+  pg <- gcol("page"); doc <- tolower(gcol("document")); iv <- gcol("intervention_stated")
+  vt <- gcol("value_type"); ct <- gcol("category")
+  for (k in unique(key)) {
+    idx <- which(key == k)
+    has <- idx[nzchar(val[idx])]; none <- idx[!nzchar(val[idx])]
+    chosen <- integer(0)
+    if (length(has)) {
+      fm <- if (any(grepl("afdb", doc[idx]))) "afdb_pcr" else ""
+      rl <- lapply(has, function(i) list(value = val[i], metric_stated = paste(rs[i], ru[i]),
+        unit_stated = ru[i], indicator_level = "", status = "achieved", value_type = if (nzchar(vt[i])) vt[i] else "achieved",
+        category = ct[i], project_total = "unknown", in_summary = "no", scope = "", page = pg[i], .row = i))
+      rl <- results_gate(rl, fm)
+      ch <- choose_headline(rl, n = n)
+      chosen <- vapply(ch$top, function(r) as.integer(r$.row), integer(1))
+      # the gate may have cleaned a value (AfDB three decimals): write it back
+      for (r in ch$top) val[as.integer(r$.row)] <- as.character(r$value)
+      keep[chosen] <- TRUE
+      rest <- setdiff(has, chosen)
+      if (length(rest) && length(chosen))
+        notes[chosen[1]] <- paste0("further results at this location: ",
+          paste(paste0(val[rest], " ", ru[rest], " (p", pg[rest], ")"), collapse = "; "))
+    }
+    if (!length(chosen)) {
+      if (length(none)) keep[none[which.max(nchar(iv[none]))]] <- TRUE
+      else { keep[has[1]] <- TRUE; scrub[has[1]] <- TRUE }
+    }
+  }
+  d$result_value <- val
+  d$main_notes <- notes
+  if (any(scrub)) {
+    d$result_value[scrub] <- ""; d$result_stated[scrub] <- ""; d$result_unit_stated[scrub] <- ""
+    d$main_notes[scrub] <- "its quantitative results were not achieved values (targets, money or process figures); row kept for the intervention"
+  }
+  d[keep, , drop = FALSE]
 }
