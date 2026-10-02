@@ -113,8 +113,16 @@ for (src in SOURCES) {
   if (length(gone)) bad("screened rows whose file is gone: ", length(gone),
                         " e.g. ", gone[1])
   else good("every screened row still has its file (", nrow(s), " rows)")
+  # Files in parked folders are a recorded decision, not a screening backlog:
+  # the progress-document family is an open question for the team, and
+  # proposal_stage holds documents excluded by type. Count them separately so
+  # the backlog figure means what it says.
+  PARKED_RE <- "progress_reports|proposal_stage"
   unscreened <- setdiff(disk, s$filename)
-  cat("       unscreened files on disk: ", length(unscreened), "\n", sep = "")
+  parked <- unscreened[grepl(PARKED_RE, disk_folder[unscreened])]
+  todo   <- setdiff(unscreened, parked)
+  cat("       unscreened: ", length(todo), " to screen + ", length(parked),
+      " parked by design\n", sep = "")
 
   ## download log --------------------------------------------------------
   if (!is.null(dl)) {
@@ -142,7 +150,7 @@ for (src in SOURCES) {
     in_scope = sum(s$verdict_ruled == "in scope"),
     out = sum(s$verdict_ruled == "out of scope"),
     unsure = sum(s$verdict_ruled == "unsure"),
-    unscreened = length(unscreened),
+    to_screen = length(todo), parked = length(parked),
     ledger = if (is.null(led)) NA_integer_ else nrow(led),
     stringsAsFactors = FALSE)
 }
@@ -152,7 +160,7 @@ tot <- do.call(rbind, summary_rows)
 print(tot, row.names = FALSE)
 cat("\ncorpus:", sum(tot$disk), "files on disk |", sum(tot$screened), "screened |",
     sum(tot$in_scope), "in scope |", sum(tot$unsure), "unsure |",
-    sum(tot$unscreened), "unscreened\n")
+    sum(tot$to_screen), "awaiting screening |", sum(tot$parked), "parked by design\n")
 
 cat("\n=== gate ===\n")
 cat(if (fails == 0) "PASS" else "FAIL", " - ", fails, " failure(s), ", warns, " warning(s)\n", sep = "")
