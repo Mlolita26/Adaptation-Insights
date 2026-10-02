@@ -117,5 +117,42 @@ if (file.exists(pdf) && requireNamespace("pdftools", quietly = TRUE)) {
   check("gef_5580: the document's content survives", grepl("Mauritania", pre, fixed = TRUE))
 } else check("gef_5580_Terminal_Evaluation.pdf present", FALSE)
 
+## ---- World Bank SECTORS AND THEMES taxonomy -------------------------------
+# Assigned at appraisal, printed as label/percentage pairs, and counted as
+# climate evidence by anything that reads the raw text. Two adjudicators
+# reading different batches traced false positives to it independently.
+synthetic <- paste(
+  "The project trained 1,692 farmers in improved production techniques.",
+  "SECTORS AND THEMES",
+  "Sectors",
+  "Agriculture, Fishing and Forestry",
+  "  22",
+  "Themes",
+  "Disaster Risk Management",
+  "33",
+  "Flood and Drought Risk Management",
+  "33",
+  "Climate change",
+  "33",
+  "Adaptation",
+  "33",
+  "I. PROJECT CONTEXT",
+  "Rainfall in the project zone has become increasingly erratic since 2015.",
+  sep = "\n")
+pre <- pretreat_text(synthetic)
+check("wb taxonomy: the heading is removed", !grepl("SECTORS AND THEMES", pre, fixed = TRUE))
+check("wb taxonomy: its climate rows are removed",
+      !grepl("Flood and Drought Risk Management", pre, fixed = TRUE))
+check("wb taxonomy: narrative BEFORE the block survives",
+      grepl("1,692 farmers", pre, fixed = TRUE))
+check("wb taxonomy: narrative AFTER the block survives",
+      grepl("increasingly erratic", pre, fixed = TRUE))
+check("wb taxonomy: the next real heading survives",
+      grepl("PROJECT CONTEXT", pre, fixed = TRUE))
+# and a document with no such block must be left alone
+plain <- "Drought in 2016 reduced maize yields.\nFarmers adopted drought-tolerant seed."
+check("wb taxonomy: a document without the block is untouched",
+      identical(pretreat_text(plain), plain))
+
 cat("\n", if (fails == 0) "ALL TESTS PASS" else paste(fails, "TEST(S) FAILED"), "\n")
 if (fails > 0) quit(save = "no", status = 1)

@@ -38,11 +38,48 @@ AFDB_BOILER_RE  <- "type\\s*\\(\\s*e\\.?\\s*g\\.?[.,]?\\s*gender\\s*,\\s*climate
 AFDB_FRAG1_RE   <- "type\\s*\\(\\s*e\\.?\\s*g\\.?[.,]?\\s*gender\\s*,?"
 
 ## ---- the pre-pass ----------------------------------------------------------
+# The World Bank completion report opens with a "SECTORS AND THEMES" block:
+# a taxonomy assigned at appraisal, printed as label/percentage pairs. A
+# Cote d'Ivoire e-agriculture report whose body never names a climate hazard
+# still prints "Disaster Risk Management 33 / Flood and Drought Risk
+# Management 33 / Climate change 33 / Adaptation 33". Two adjudicators
+# reading different batches independently traced false positives to it.
+# Like the AfDB template label, it is classification metadata, not evidence
+# of what the project did, so it is removed before anything counts terms or
+# reads the document.
+#
+# The block runs from the SECTORS AND THEMES heading to the next all-capitals
+# heading, and is bounded to 120 lines so a malformed extraction cannot eat
+# the document.
+WB_TAXONOMY_START <- "^\\s*SECTORS\\s+AND\\s+THEMES\\s*$"
+WB_TAXONOMY_END   <- "^\\s*(?:[IVX]+\\.\\s+)?[A-Z][A-Z0-9 ,&'./-]{5,}\\s*$"
+
+strip_wb_taxonomy <- function(txt) {
+  lines <- strsplit(txt, "\n", fixed = TRUE)[[1]]
+  if (!length(lines)) return(txt)
+  starts <- grep(WB_TAXONOMY_START, lines, perl = TRUE)
+  if (!length(starts)) return(txt)
+  drop <- rep(FALSE, length(lines))
+  for (s in starts) {
+    last <- min(s + 120L, length(lines))
+    e <- NA_integer_
+    if (s + 1L <= last) {
+      tail_idx <- seq.int(s + 1L, last)
+      ends <- tail_idx[grepl(WB_TAXONOMY_END, lines[tail_idx], perl = TRUE)]
+      if (length(ends)) e <- ends[1] - 1L
+    }
+    if (is.na(e)) e <- last
+    drop[seq.int(s, e)] <- TRUE
+  }
+  paste(lines[!drop], collapse = "\n")
+}
+
 pretreat_text <- function(txt) {
   if (is.null(txt) || length(txt) == 0 || is.na(txt[1]) || !nzchar(txt[1])) return("")
   txt <- txt[1]
   # contiguous boilerplate label (docx extractions, narrow layouts)
   txt <- gsub(AFDB_BOILER_RE, "", txt, ignore.case = TRUE, perl = TRUE)
+  txt <- strip_wb_taxonomy(txt)
 
   lines <- strsplit(txt, "\n", fixed = TRUE)[[1]]
   if (!length(lines)) return("")
