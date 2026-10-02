@@ -65,6 +65,14 @@ for (i in seq_len(n)) {
     set_rule(i, "unsure", "covers several projects: needs a focus project before extraction")
   }
 }
+# 5b. parked progress documents: the folder is the decision of record. The
+#     progress-document family is an open question for the template owner
+#     (00_Knowledge/11_open_questions.md, 18 Sep 2026), so anything living in
+#     a progress_reports folder stays "unsure" whatever the model said.
+parked <- grepl("progress_reports", sc$folder, fixed = TRUE)
+verdict[parked] <- "unsure"
+rule[parked] <- "progress document (parked folder); family pending a team decision"
+
 # 6. a person's decision wins over everything above. review/scope_screen_overrides.csv
 #    holds one row per decided document: source, filename, verdict (in scope /
 #    out of scope / unsure), note, by. This is the accepted / rejected loop
