@@ -121,15 +121,33 @@ sentence_evidence <- function(txt) {
 # candidates under correct exclusions (an Ethiopian pastoral project from
 # 2009 scores high on every term and is still out, on the window).
 pick <- sc$verdict_ruled %in% c("out of scope", "unsure")
-timeframe <- grepl("^out on timeframe|timeframe:|dated .*outside",
-                   paste(sc$reason, sc$rule_applied), ignore.case = TRUE)
-geography <- grepl("^out(side)? on (scope|geograph)|no african country",
-                   trimws(sc$reason), ignore.case = TRUE)
+# Trust the DATE, and only the corrected date. Two mistakes to avoid, both
+# found by the holdout:
+#   - the reason text is stale. gef_5580's reason still reads "dated 2026"
+#     although year_overrides.csv corrected it to 2019 from the pipeline's own
+#     date file, so a regex on the reason text excluded a document that is
+#     inside the window. Read publication_year, which the rules have already
+#     corrected, never the sentence.
+#   - geography is NOT a fact here, it is a claim. The CIF development-impacts
+#     case studies were excluded for naming "no African country", yet page 239
+#     is a Niger agriculture case study. Excluding documents because the model
+#     said they are not African would make the check circular, so geography
+#     exclusions are scanned like any other judgement.
 yr <- suppressWarnings(as.integer(sc$publication_year))
 out_of_window <- !is.na(yr) & (yr < 2015 | yr > 2025)
-pick <- pick & !timeframe & !geography & !out_of_window
+timeframe <- rep(FALSE, nrow(sc))
+geography <- rep(FALSE, nrow(sc))
+# Parked progress documents are not a judgement either: whether the family
+# counts at all is an open question for the template owner, so their exclusion
+# is a recorded decision awaiting a person, not a mistake to detect. Leaving
+# them in buried the real candidates under GCF annual performance reports,
+# which score high on every term by their nature.
+parked <- grepl("progress_reports|proposal_stage|tracking_tools",
+                sc$folder, fixed = FALSE)
+pick <- pick & !timeframe & !geography & !out_of_window & !parked
 cat("excluded from the scan: timeframe", sum(timeframe), "| geography",
-    sum(geography), "| dated outside the window", sum(out_of_window), "\n")
+    sum(geography), "| dated outside the window", sum(out_of_window),
+    "| parked", sum(parked), "\n")
 if (!is.null(ONLY)) pick <- pick & sc$source %in% strsplit(ONLY, ",")[[1]]
 rows <- sc[pick, ]
 if (!is.na(LIMIT)) rows <- head(rows, LIMIT)
@@ -195,7 +213,12 @@ cat("\nwritten:", OUT, "-", nrow(out), "rows\n")
 #      once. This is the shape of every World Bank error the audit found, and
 #      a density rule cannot see it. One true sentence satisfies the
 #      protocol's intervention criterion, so one is enough to deserve a read.
-cand <- out[out$note == "" & out$agri >= 40 & out$risk >= 1, ]
+# A short document can be saturated with agriculture and still have a low raw
+# count: gef_5280 is a 15k-character portal sheet with 26 agriculture terms,
+# which is 17 per 10k, denser than most full evaluations. Raw count alone
+# missed it, so density counts too.
+cand <- out[out$note == "" & out$risk >= 1 &
+            (out$agri >= 40 | out$agri_per10k >= 8), ]
 cand$tier <- ifelse(cand$cooccur >= 2, "A", "B")
 cand <- cand[order(cand$tier, -cand$cooccur, -cand$agri), ]
 write.csv(cand, CAND, row.names = FALSE, fileEncoding = "UTF-8")
