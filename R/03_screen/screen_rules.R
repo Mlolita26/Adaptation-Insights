@@ -164,9 +164,15 @@ sc$verdict_ruled <- verdict
 #    left alone (the audit found the reason, not the verdict, is sometimes the
 #    honest half); the row is listed for the Phase 4c re-ask, mirroring the
 #    bare-word mechanism.
+#    The opening-word test was too narrow: the Phase 4c re-read produced
+#    reasons like "Out on intervention: ... In scope: Benin named; sector is
+#    agriculture (primary focus)", where the concession sits mid-sentence. A
+#    reason that says "in scope" ANYWHERE under an out verdict is a
+#    contradiction worth a person's eye, so match anywhere.
 reason_trim <- trimws(sc$reason)
-contra <- (grepl("^in scope", reason_trim, ignore.case = TRUE) |
-           grepl("all four criteria are met", reason_trim, ignore.case = TRUE)) &
+contra <- (grepl("\\bin scope\\b", reason_trim, ignore.case = TRUE) |
+           grepl("all four criteria are met", reason_trim, ignore.case = TRUE) |
+           grepl("criteria are (all )?met", reason_trim, ignore.case = TRUE)) &
           sc$verdict_ruled == "out of scope"
 
 ra <- ifelse(bare & !nzchar(rule), "reason is a bare word: re-ask",
