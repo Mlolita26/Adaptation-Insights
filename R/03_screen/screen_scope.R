@@ -54,6 +54,7 @@ REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..
                       mustWork = TRUE)
 source(file.path(REPO, "R", "00_shared", "paths.R"))
 source(file.path(REPO, "R", "00_shared", "doc_families.R"))
+source(file.path(REPO, "R", "03_screen", "screen_text.R"))   # extraction + deterministic pre-pass
 
 if (!nzchar(Sys.getenv("OPENAI_API_KEY")))
   for (.p in c(file.path(Sys.getenv("OneDrive"), "Documents", ".Renviron"),
@@ -99,17 +100,23 @@ TYPES <- c("implementation completion report", "terminal evaluation",
 YN <- c("yes", "no", "unclear")
 
 ## ---- read a whole document, long-path safe --------------------------------
+# Extraction (pdf / docx / legacy doc) and the deterministic pre-pass live in
+# screen_text.R. The pre-pass strips the GEF portal machine footer (the
+# "M/D/YYYY   Page N of M" lines that put publication_year 2026 on 12
+# documents) and the AfDB PCR boilerplate label that manufactured sham
+# climate_risk_quotes, BEFORE the model reads anything.
 read_all <- function(path) {
   p <- path
   if (nchar(p) > 250) {
-    short <- file.path(tempdir(), paste0("s", abs(sum(utf8ToInt(p))) %% 1e8, ".pdf"))
+    ext <- tolower(tools::file_ext(p)); if (!nzchar(ext)) ext <- "pdf"
+    short <- file.path(tempdir(), paste0("s", abs(sum(utf8ToInt(p))) %% 1e8, ".", ext))
     ok <- suppressWarnings(file.copy(paste0("\\\\?\\", gsub("/", "\\\\", p)),
                                      short, overwrite = TRUE))
     if (!ok) ok <- suppressWarnings(file.copy(p, short, overwrite = TRUE))
     if (!ok) return("")
     p <- short
   }
-  txt <- tryCatch(paste(pdf_text(p), collapse = "\n"), error = function(e) "")
+  txt <- pretreat_text(extract_document_text(p))
   if (nchar(txt) > MAX_CHARS)
     txt <- paste0(substr(txt, 1, round(MAX_CHARS * 0.75)), "\n...[middle omitted]...\n",
                   substr(txt, nchar(txt) - round(MAX_CHARS * 0.25) + 1, nchar(txt)))
@@ -243,7 +250,10 @@ for (s in names(SCAN)) {
   for (rel in SCAN[[s]]) {
     d <- file.path(DOCS_ROOT, rel)
     if (!dir.exists(d)) next
-    for (f in list.files(d, pattern = "\\.(pdf|PDF)$"))
+    # pdf, docx and legacy doc are all read; xlsx and zip stay out (zips are
+    # unpacked at retrieval, xlsx are indicator workbooks). The PDF-only glob
+    # left 53 files - 27 of them narrative Word TEs/MTRs - never screened.
+    for (f in list.files(d, pattern = "\\.(pdf|docx|doc)$", ignore.case = TRUE))
       docs[[length(docs) + 1]] <- list(source = s, folder = rel, file = f,
                                        path = file.path(d, f))
   }
@@ -264,11 +274,18 @@ guess_of <- if (file.exists(CENSUS)) {
   setNames(cen$family, paste(cen$source, cen$filename))
 } else character(0)
 
+# Already-judged keys come from the part file being written AND from the main
+# judgement list: a --out= shard that only knew its own rows would re-pay for
+# every document already in scope_screen.csv, and the newest-wins merge would
+# then overwrite settled rows. (A --reask run still resets this below: a
+# re-ask replaces the earlier judgement by design.)
 done <- character(0)
-if (file.exists(OUT)) {
-  prev <- tryCatch(read.csv(OUT, stringsAsFactors = FALSE, colClasses = "character"),
+MAIN <- file.path(REVIEW_DIR, "scope_screen.csv")
+for (.f in unique(c(OUT, MAIN))) {
+  if (!file.exists(.f)) next
+  prev <- tryCatch(read.csv(.f, stringsAsFactors = FALSE, colClasses = "character"),
                    error = function(e) NULL)
-  if (!is.null(prev) && nrow(prev)) done <- paste(prev$source, prev$filename)
+  if (!is.null(prev) && nrow(prev)) done <- c(done, paste(prev$source, prev$filename))
 }
 if (nzchar(REASK) && file.exists(REASK)) {
   ra <- read.csv(REASK, stringsAsFactors = FALSE, colClasses = "character")
@@ -303,7 +320,9 @@ for (i in seq_along(docs)) {
   row$source <- d$source; row$folder <- d$folder; row$filename <- d$file
   row$chars <- nchar(txt)
   if (nchar(txt) < 500) {
-    row$verdict <- "unsure"; row$note <- "no usable text layer; needs a person or OCR"
+    row$verdict <- "unsure"
+    row$note <- if (grepl("\\.doc$", d$file, ignore.case = TRUE) && nchar(txt) == 0)
+      "needs conversion: legacy .doc" else "no usable text layer; needs a person or OCR"
   } else {
     guess <- unname(guess_of[paste(d$source, d$file)])
     guess <- if (length(guess) && !is.na(guess) && guess %in% FAMILY_IDS && guess != "generic") guess else ""
