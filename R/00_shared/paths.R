@@ -38,9 +38,15 @@ CORPUS_DIRS <- c(
 SCAN_DIRS <- list(
   worldbank = c("Worldbank/Docs/2015_2026", "Worldbank/Docs/pre_2015",
                 "Worldbank/Docs/to_screen", "Worldbank/Docs/screened_out"),
+  # tracking_tools holds GEF's AMAT/PMAT indicator workbooks. The GEF
+  # catalogue labels them "Terminal Evaluation", so 73 spreadsheets sat in
+  # the corpus under names claiming they were evaluations. They are parked,
+  # not deleted, and stay in the census for the same reason as every other
+  # parked file.
   gef       = c("gef/Docs/evaluation_docs/2015_2026",
                 "gef/Docs/evaluation_docs/pre_2015",
-                "gef/Docs/evaluation_docs/undated", "gef/Docs/to_screen"),
+                "gef/Docs/evaluation_docs/undated", "gef/Docs/to_screen",
+                "gef/Docs/tracking_tools"),
   # progress_reports and proposal_stage were missing here, so 228 GCF files
   # sat outside the census and the screener entirely. A parked file must still
   # be known to the pipeline, per the note above, or it is simply invisible.

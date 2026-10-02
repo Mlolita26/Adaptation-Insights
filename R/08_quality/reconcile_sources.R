@@ -117,7 +117,7 @@ for (src in SOURCES) {
   # the progress-document family is an open question for the team, and
   # proposal_stage holds documents excluded by type. Count them separately so
   # the backlog figure means what it says.
-  PARKED_RE <- "progress_reports|proposal_stage"
+  PARKED_RE <- "progress_reports|proposal_stage|tracking_tools"
   unscreened <- setdiff(disk, s$filename)
   parked <- unscreened[grepl(PARKED_RE, disk_folder[unscreened])]
   todo   <- setdiff(unscreened, parked)
