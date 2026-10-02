@@ -274,7 +274,11 @@ match_one_loc <- function(name, pcode, doc) {
   key <- paste0(tolower(name), "|", ctry)
   if (!is.null(proposals[[key]])) return(list(code = proposals[[key]]$location_id, how = "proposed"))
   earlier <- prev_code(name, pcode, ctry)
-  code <- if (nzchar(earlier)) earlier else paste0(pcode, ".", next_no(pcode))
+  # safe_name() on the prefix only: a corpus project code carries a "source:"
+  # prefix, and a location_id reaching the registry as "cif:foo.pdf.3" would be
+  # permanent. first_seen_project below keeps the real code, so prev_code()
+  # still matches.
+  code <- if (nzchar(earlier)) earlier else paste0(safe_name(pcode), ".", next_no(pcode))
   proposals[[key]] <<- data.frame(
     location_name = trimws(name), location_id = code,
     location_type = map_loc_type(loc_level(doc, name)),
@@ -299,9 +303,12 @@ for (i in seq_len(nrow(rows))) {
 }
 
 ## ── controlled vocabularies: deterministic pass then ONE batched LLM call ──
-SUBSECTORS <- c("agri-food", "farming system-crop", "farming system-livestock",
-                "farming system-mixed", "farming system-fish", "land use",
-                "cross cutting")
+# The option lists live in R/00_shared/vocab_lists.R from 30 Sep 2026, so the
+# QC workbook builder offers consultants the same values harmonisation chose
+# from. The definitions below stay here: only this script sends them to the
+# model. Fingerprints are unchanged, so every recorded decision still hits.
+source(file.path(REPO, "R", "00_shared", "vocab_lists.R"))
+SUBSECTORS <- OPT$subsector
 SUB_DEFS <- paste(
   "1) agri-food: food production and distribution systems (processing,",
   "value chains, markets, food security programming);",
@@ -315,15 +322,11 @@ SUB_DEFS <- paste(
   "(finance, insurance, policy, capacity building across sectors).")
 
 
-TARGETS <- c("agribusiness", "artisanal fisher", "children", "community",
-  "cooperative", "elderly", "farm laborer", "farmer association",
-  "farmer group", "household", "indigenous peoples", "low-income households",
-  "marginalized group", "migrant", "pastoralist/herder", "people with disabilities/ disability",
-  "producer", "producer organization", "smallholder farmer", "subsistence farmer",
-  "vulnerable population", "women (female-headed households)",
-  "women's group/organization", "youth")
+# this was a character-for-character copy of the general sheet's beneficiary
+# list; both sheets now read the one definition
+TARGETS <- OPT$beneficiary
 
-RESULT_LEVELS <- c("input", "process", "output", "outcome", "impact")
+RESULT_LEVELS <- OPT$result_level
 LEVEL_DEFS <- paste(
   "1) input: resources, means and investments mobilized to conduct",
   "interventions; 2) process: activities or tasks carried out by the project",
@@ -615,6 +618,10 @@ join_gen <- function(pcode, field) {
 }
 
 ## ── assemble the template sheet ────────────────────────────────────────────
+# An evidence column is carried through only if Session 1 actually produced it,
+# so an older s1loc file still harmonises instead of erroring on a missing name.
+ev_col <- function(nm) if (nm %in% names(rows)) as.character(rows[[nm]]) else rep("", nrow(rows))
+
 out <- data.frame(
   row_id = seq_len(nrow(rows)),
   project_code  = rows$project_code_hint,
@@ -640,6 +647,20 @@ out <- data.frame(
     ifelse(nzchar(rows$loc_match) & grepl("proposed|ambiguous", rows$loc_match),
            paste0("location ", rows$loc_match, "; "), ""),
     sub("^; ", "", rows$notes_extra)))),
+  # ---- evidence, kept beside the values (30 Sep 2026) --------------------
+  # This frame is hand-built, and until now it quietly dropped the page, the
+  # document and the row flags that Session 1 had produced. A location row
+  # therefore reached a reviewer with nothing saying where it came from, and
+  # the general sheet at least had its quotes in the diagnostics file. These
+  # columns sit after the template's own, so the sheet still pastes into the
+  # template unchanged.
+  page = ev_col("page"),
+  document = ev_col("document"),
+  row_flags = ev_col("row_flags"),
+  loc_match = ev_col("loc_match"),
+  locations_stated = ev_col("locations_stated"),
+  target_beneficiary_stated = ev_col("target_beneficiary_stated"),
+  prompt_version = ev_col("prompt_version"),
   check.names = FALSE, stringsAsFactors = FALSE)
 
 stamp <- paste0(MODEL_TAG, "_", format(Sys.time(), "%Y%m%d_%H%M"))

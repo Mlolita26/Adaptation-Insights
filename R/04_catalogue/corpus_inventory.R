@@ -299,13 +299,43 @@ saveWorkbook(wb, OUT_XLSX, overwrite = TRUE)
 # openxlsx leaves relationship entries that point at drawing parts it never
 # writes. Excel ignores them; strict readers (openpyxl, some validators) stop
 # on them. Drop every relationship whose target is missing.
+#
+# TWO BUGS FIXED HERE, 2 Oct 2026, after this function corrupted the workbook
+# it was meant to tidy:
+#
+#   1. `parts` came from list.files() WITHOUT all.files = TRUE, which skips
+#      names beginning with a dot. The package's root relationship part is
+#      called `_rels/.rels`, so it was never in the list and the rezip wrote a
+#      workbook without it. That part is what tells Excel where the workbook
+#      is, so Excel reported the file as corrupt and offered to recover it.
+#      Every regeneration since 25 Sep produced an unopenable file.
+#   2. The sweep only read xl/worksheets/_rels. [Content_Types].xml declared
+#      six /xl/drawings/drawingN.xml parts that openxlsx never wrote, and a
+#      declared part that does not exist is itself a validity error.
+#
+# Both are now covered, and the function refuses to write a package that is
+# missing its root part rather than shipping a broken file quietly.
 tidy_xlsx <- function(path) {
   if (!requireNamespace("zip", quietly = TRUE)) return(invisible(FALSE))
   tmp <- file.path(tempdir(), "xlsx_tidy"); unlink(tmp, recursive = TRUE); dir.create(tmp)
   utils::unzip(path, exdir = tmp)
-  parts <- list.files(tmp, recursive = TRUE)
+  # all.files = TRUE: without it `_rels/.rels` is silently left out
+  parts <- list.files(tmp, recursive = TRUE, all.files = TRUE, no.. = TRUE)
   rels <- list.files(file.path(tmp, "xl", "worksheets", "_rels"), full.names = TRUE)
   n <- 0
+  # a content type for a part that was never written is a validity error
+  ct <- file.path(tmp, "[Content_Types].xml")
+  if (file.exists(ct)) {
+    txt <- readChar(ct, file.info(ct)$size, useBytes = TRUE)
+    ms <- gregexpr('<Override [^>]*/>', txt)[[1]]
+    if (ms[1] != -1) for (e in regmatches(txt, list(ms))[[1]]) {
+      part <- sub('.*PartName="/?([^"]+)".*', "\\1", e)
+      if (!file.exists(file.path(tmp, part))) {
+        txt <- sub(e, "", txt, fixed = TRUE); n <- n + 1
+      }
+    }
+    writeChar(txt, ct, eos = NULL, useBytes = TRUE)
+  }
   for (rp in rels) {
     txt <- readChar(rp, file.info(rp)$size, useBytes = TRUE)
     ms <- gregexpr('<Relationship [^>]*/>', txt)[[1]]
@@ -317,6 +347,13 @@ tidy_xlsx <- function(path) {
       if (!file.exists(full)) { txt <- sub(e, "", txt, fixed = TRUE); n <- n + 1 }
     }
     writeChar(txt, rp, eos = NULL, useBytes = TRUE)
+  }
+  # never ship a package without its root relationship part: that is the
+  # failure this function used to cause
+  if (!any(parts == "_rels/.rels")) {
+    warning("tidy_xlsx: _rels/.rels missing from the unpacked parts; ",
+            "leaving ", basename(path), " exactly as openxlsx wrote it")
+    return(invisible(0L))
   }
   if (n) zip::zip(path, files = parts, root = tmp, mode = "mirror", include_directories = FALSE)
   invisible(n)

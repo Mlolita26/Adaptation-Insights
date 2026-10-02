@@ -41,7 +41,30 @@ SCAN_DIRS <- list(
   gef       = c("gef/Docs/evaluation_docs/2015_2026",
                 "gef/Docs/evaluation_docs/pre_2015",
                 "gef/Docs/evaluation_docs/undated", "gef/Docs/to_screen"),
-  gcf       = c("gcf/Docs/evaluation_docs", "gcf/Docs/to_screen"),
+  # progress_reports and proposal_stage were missing here, so 228 GCF files
+  # sat outside the census and the screener entirely. A parked file must still
+  # be known to the pipeline, per the note above, or it is simply invisible.
+  gcf       = c("gcf/Docs/evaluation_docs", "gcf/Docs/to_screen",
+                "gcf/Docs/progress_reports", "gcf/Docs/proposal_stage"),
   afdb      = c("afdb/Docs/2015_2026", "afdb/Docs/to_screen", "afdb/Docs/undated"),
   af        = c("af/Docs/evaluation_docs", "af/Docs/progress_reports", "af/Docs/to_screen"),
   cif       = c("cif/Docs/evaluation_docs", "cif/Docs/to_screen"))
+
+# ── filename-safe identifiers ───────────────────────────────────────────────
+# A project_code is built as "source:project_id" or "source:filename.pdf"
+# (run_corpus.R), and a colon is illegal in a Windows path. Both extraction
+# scripts interpolate the code straight into the raw-JSON filename, so every
+# corpus document would fail on its first write. Base R only, so the
+# extraction scripts can source this file without pulling in stringr.
+# A no-op for codes that are already clean, such as the pilot's P001.
+safe_name <- function(x, max_len = 80) {
+  x <- as.character(x)
+  x[is.na(x)] <- ""
+  x <- iconv(x, to = "ASCII//TRANSLIT", sub = "")
+  x[is.na(x)] <- ""
+  x <- gsub("[^A-Za-z0-9_-]", "_", x)
+  x <- gsub("_+", "_", x)
+  x <- gsub("^_+|_+$", "", x)
+  x <- substr(x, 1, max_len)
+  ifelse(nchar(x) == 0, "unnamed", x)
+}

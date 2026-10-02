@@ -61,12 +61,17 @@
     if (!is.null(d) && nzchar(d))
       return(normalizePath(file.path(d, ".."), mustWork = FALSE))
   }, error = function(e) NULL)
+  # Return the PIPELINE ROOT, the directory that contains R/. The caller
+  # appends "R/00_shared" itself. This branch used to go up only one level
+  # from R/01_retrieve/, giving R/, so the caller looked in R/R/00_shared,
+  # never found 00_config.R and died on a missing PATHS. That is why this
+  # scraper had never produced anything.
   tryCatch({
     args <- commandArgs(trailingOnly = FALSE)
     fa   <- grep("^--file=", args, value = TRUE)
     if (length(fa))
       return(normalizePath(
-        file.path(dirname(sub("^--file=", "", fa[1])), ".."),
+        file.path(dirname(sub("^--file=", "", fa[1])), "..", ".."),
         mustWork = FALSE))
   }, error = function(e) NULL)
   wd <- getwd()
@@ -199,13 +204,29 @@ dportal_fetch_docs <- function(aid) {
     if (is.null(dlinks) || length(dlinks) == 0) return(list())
 
     purrr::compact(purrr::map(dlinks, function(dl) {
-      cat_code  <- dl[["/category"]][[1]][["@code"]]  %||% NA_character_
-      if (!is.na(cat_code) && cat_code == "A12") return(NULL)  # web links only
+      # IATI document-link/category is MULTI-VALUED and the codes are not
+      # ordered by usefulness: a real IFAD record carries A02,A03,A04,A05,A06
+      # and the evaluation code can sit anywhere in that list. Reading only
+      # the first one filed final evaluations as "objectives" and broke the
+      # DOC_CATEGORY_PRIORITY ranking below. Take the best-ranked code across
+      # all of them, and keep the full list for the catalogue.
+      cats <- purrr::map_chr(dl[["/category"]] %||% list(),
+                             ~ .x[["@code"]] %||% NA_character_)
+      cats <- cats[!is.na(cats) & nzchar(cats)]
+      if (!length(cats)) cats <- NA_character_
+      ranks <- vapply(cats, function(cc) {
+        r <- IFAD_DOC_PRIORITY[cc]
+        if (is.na(r)) 99L else as.integer(r)
+      }, integer(1), USE.NAMES = FALSE)
+      cat_code <- cats[which.min(ranks)]
+      # a link that is ONLY a web page carries no document
+      if (all(cats %in% "A12")) return(NULL)
       list(
-        pdf_url   = dl[["@url"]]                              %||% NA_character_,
-        cat_code  = cat_code,
-        doc_title = dl[["/title/narrative"]][[1]][[""] ]      %||% NA_character_,
-        format    = dl[["@format"]]                           %||% NA_character_
+        pdf_url    = dl[["@url"]]                             %||% NA_character_,
+        cat_code   = cat_code,
+        cat_all    = paste(cats, collapse = ","),
+        doc_title  = dl[["/title/narrative"]][[1]][[""] ]     %||% NA_character_,
+        format     = dl[["@format"]]                          %||% NA_character_
       )
     }))
   }, error = function(e) {
