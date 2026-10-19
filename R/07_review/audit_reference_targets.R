@@ -149,7 +149,7 @@ res <- rbind(g, h)
 if (is.null(res)) { cat("nothing to report\n"); quit(save = "no") }
 
 dir.create(REVIEW_DIR, recursive = TRUE, showWarnings = FALSE)
-out <- file.path(GOLD_DIR, "reference_target_check.csv")
+out <- file.path(REPO, "outputs", "extraction", "reference_target_check.csv")
 write.csv(res, out, row.names = FALSE, na = "")
 cat("\nwritten:", out, "\n")
 cat("figures checked:", nrow(res), "\n")

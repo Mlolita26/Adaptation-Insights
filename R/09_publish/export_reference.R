@@ -110,7 +110,7 @@ addWorksheet(wb, "about")
 writeData(wb, "about", about, headerStyle = hdr)
 setColWidths(wb, "about", cols = 1:2, widths = c(30, 120))
 
-out <- file.path(GOLD_DIR, "gold_reference.xlsx")
+out <- file.path(REPO, "outputs", "extraction", "gold_reference.xlsx")
 writable <- function(p) {
   if (!file.exists(p)) return(TRUE)
   con <- suppressWarnings(try(file(p, "ab"), silent = TRUE))

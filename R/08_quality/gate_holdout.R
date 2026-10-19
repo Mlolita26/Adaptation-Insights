@@ -85,7 +85,7 @@ if (nrow(missed)) {
         missed$expected[i], "| basis:", substr(missed$basis[i], 1, 110), "\n")
 }
 
-out <- file.path(GOLD_DIR, "holdout_score.csv")
+out <- file.path(REPO, "outputs", "extraction", "holdout_score.csv")
 write.csv(h[, c("source", "filename", "confidence", "expected", "verdict_now",
                 "flagged", "pass", "basis")], out, row.names = FALSE, fileEncoding = "UTF-8")
 cat("\nwritten:", out, "\n")

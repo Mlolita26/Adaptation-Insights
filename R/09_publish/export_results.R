@@ -114,7 +114,7 @@ if (!is.na(f)) {
   write_book(d, "project_data_location-specific",
              extra_cols = c("row_flags", "loc_match", "document", "prompt_version",
                             "page", "locations_stated", "target_beneficiary_stated"),
-             out_file = file.path(GOLD_DIR, "location_records_latest.xlsx"),
+             out_file = file.path(REPO, "outputs", "extraction", "location_records_latest.xlsx"),
              src = f,
              review_rule = function(x) has(x, "notes") | has(x, "row_flags"))
 } else cat("no harmonised location run found\n")
@@ -146,7 +146,7 @@ if (!is.na(f)) {
   } else list()
   write_book(d, "project_data_general", extra_sheets = extra, raw_sheets = raw,
              extra_cols = c("document", "prompt_version"),
-             out_file = file.path(GOLD_DIR, "extracted_records_latest.xlsx"),
+             out_file = file.path(REPO, "outputs", "extraction", "extracted_records_latest.xlsx"),
              src = f,
              review_rule = function(x) {
                fl <- grep("_flag$", names(x), value = TRUE)

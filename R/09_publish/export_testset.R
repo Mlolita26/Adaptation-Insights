@@ -41,8 +41,12 @@ cp(file.path(CAT, "holdout_reference.csv"),  "reference_holdout_general.csv","te
 # are working files and are not in the repo.
 cat("\npipeline extraction for the same documents\n")
 suppressMessages(library(openxlsx))
-GEN <- file.path(GOLD_DIR, "extracted_records_latest.xlsx")
-LOC <- file.path(GOLD_DIR, "location_records_latest.xlsx")
+# gold_pilot now holds plain CSVs, one folder for the human extraction and
+# one for the machine's, instead of multi-sheet workbooks nobody could read
+# without opening Excel.
+AI_GEN  <- file.path(GOLD_DIR, "ai", "gold_general.csv")
+AI_HOLD <- file.path(GOLD_DIR, "ai", "holdout_general.csv")
+AI_LOC  <- file.path(GOLD_DIR, "ai", "gold_locations.csv")
 
 grab <- function(xlsx, sheet, to, what) {
   if (!file.exists(xlsx)) { cat("  MISSING workbook:", basename(xlsx), "\n"); return(invisible(FALSE)) }
@@ -55,8 +59,9 @@ grab <- function(xlsx, sheet, to, what) {
   invisible(TRUE)
 }
 # both sets in one file, matching reference_general.csv
-gl <- read.xlsx(GEN, sheet = "project_data_general"); gl[] <- lapply(gl, as.character)
-ho <- read.xlsx(GEN, sheet = "holdout");              ho[] <- lapply(ho, as.character)
+rdcsv <- function(p) { d <- read.csv(p, stringsAsFactors = FALSE, colClasses = "character"); d[is.na(d)] <- ""; d }
+gl <- rdcsv(AI_GEN)
+ho <- rdcsv(AI_HOLD)
 for (col in setdiff(names(gl), names(ho))) ho[[col]] <- ""
 ho <- ho[, names(gl), drop = FALSE]
 gl$set <- "gold"; ho$set <- "holdout"
@@ -66,8 +71,7 @@ write.csv(pg, file.path(OUT, "pipeline_general.csv"), row.names = FALSE, fileEnc
 cat(sprintf("  %-34s %4d rows  %2d cols   %s
 ", "pipeline_general.csv",
             nrow(pg), ncol(pg), "pipeline output, both sets"))
-grab(LOC, "project_data_location-specific", "pipeline_gold_locations.csv",
-     "pipeline output, gold, location level")
+cp(AI_LOC, "pipeline_gold_locations.csv", "pipeline output, gold, location level")
 
 ## ---- one reference file, both sets, with a column saying which ------------
 # Gold and holdout hold the same kind of record. They differ only in how they
