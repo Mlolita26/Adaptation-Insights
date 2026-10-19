@@ -73,7 +73,7 @@ SRC    <- opt("source")
 LIMIT  <- suppressWarnings(as.integer(opt("limit", "0")))
 OUT    <- file.path(SCREEN_DIR, opt("out", "scope_screen.csv"))   # --out=working/scope_screen_parts/x.csv for shards
 SHARD  <- opt("shard", "")            # --shard=2/4 : take every 4th document starting at the 2nd
-REASK  <- opt("reask", "")            # --reask=04_Screening/backup/inputs/scope_screen_reask.csv : judge these again
+REASK  <- opt("reask", "")            # --reask=04_Screening/inputs/decisions/scope_screen_reask.csv : judge these again
 dir.create(dirname(OUT), recursive = TRUE, showWarnings = FALSE)
 
 ## ---- the accepted year window ---------------------------------------------
@@ -259,7 +259,7 @@ for (s in names(SCAN)) {
   }
 }
 # one document, one record: aliases found by 02_dedup are not screened
-ALIASES <- file.path(SCREEN_DIR, "backup", "inputs", "duplicates.csv")
+ALIASES <- file.path(SCREEN_DIR, "inputs", "decisions", "duplicates.csv")
 skip <- if (file.exists(ALIASES)) {
   a <- read.csv(ALIASES, stringsAsFactors = FALSE, colClasses = "character")
   paste(a$drop_source, a$drop_file)
@@ -268,7 +268,7 @@ docs <- Filter(function(d) !(paste(d$source, d$file) %in% skip), docs)
 if (length(skip)) cat("skipping", length(skip), "duplicate aliases from", basename(ALIASES), "\n")
 
 # the rule-based family from the census (02_dedup/doc_census.R), if it has run
-CENSUS <- file.path(SCREEN_DIR, "backup", "inputs", "family_census.csv")
+CENSUS <- file.path(SCREEN_DIR, "inputs", "decisions", "family_census.csv")
 guess_of <- if (file.exists(CENSUS)) {
   cen <- read.csv(CENSUS, stringsAsFactors = FALSE, colClasses = "character")
   setNames(cen$family, paste(cen$source, cen$filename))

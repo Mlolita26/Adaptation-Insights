@@ -15,7 +15,7 @@
 # - reproduces the file byte for byte.
 #
 #   Rscript R/03_screen/seed_year_overrides.R
-#   -> 04_Screening/backup/inputs/year_overrides.csv
+#   -> 04_Screening/inputs/decisions/year_overrides.csv
 #      (source, filename, publication_year, evidence)
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
@@ -24,7 +24,7 @@ source(file.path(REPO, "R", "00_shared", "paths.R"))
 
 SCREEN <- file.path(SCREEN_DIR, "scope_screen.csv")
 DATES  <- file.path(REPO, "catalogues", "gef", "gef_evaluation_dates.csv")
-OUT    <- file.path(SCREEN_DIR, "backup", "inputs", "year_overrides.csv")
+OUT    <- file.path(SCREEN_DIR, "inputs", "decisions", "year_overrides.csv")
 
 sc <- read.csv(SCREEN, stringsAsFactors = FALSE, colClasses = "character", encoding = "UTF-8")
 sc[is.na(sc)] <- ""

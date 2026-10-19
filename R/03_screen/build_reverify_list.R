@@ -25,9 +25,9 @@
 #
 #   Rscript R/03_screen/build_reverify_list.R
 #   Rscript R/03_screen/build_reverify_list.R --exclude-done   # resume: drop
-#       keys already judged in 04_Screening/backup/working/scope_screen_parts/reverify_*.csv
+#       keys already judged in 04_Screening/inputs/working/scope_screen_parts/reverify_*.csv
 #
-# Writes 04_Screening/backup/reports/scope_screen_reask_full.csv (source, filename) and prints the
+# Writes 04_Screening/inputs/reports/scope_screen_reask_full.csv (source, filename) and prints the
 # shard command to run.
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
@@ -36,10 +36,10 @@ source(file.path(REPO, "R", "00_shared", "paths.R"))
 args <- commandArgs(trailingOnly = TRUE)
 
 SCREEN <- file.path(SCREEN_DIR, "scope_screen.csv")
-OVR    <- file.path(SCREEN_DIR, "backup", "inputs", "scope_screen_overrides.csv")
-SUP    <- file.path(SCREEN_DIR, "backup", "inputs", "supersedes.csv")
+OVR    <- file.path(SCREEN_DIR, "inputs", "decisions", "scope_screen_overrides.csv")
+SUP    <- file.path(SCREEN_DIR, "inputs", "decisions", "supersedes.csv")
 EXTRA  <- file.path(REPO, "audit", "2026-10_completeness", "cif_rescreen.csv")
-OUT    <- file.path(SCREEN_DIR, "backup", "reports", "scope_screen_reask_full.csv")
+OUT    <- file.path(SCREEN_DIR, "inputs", "reports", "scope_screen_reask_full.csv")
 
 sc <- read.csv(SCREEN, stringsAsFactors = FALSE, colClasses = "character")
 sc[is.na(sc)] <- ""
@@ -105,7 +105,7 @@ if (file.exists(EXTRA)) {
 }
 
 if ("--exclude-done" %in% args) {
-  parts <- Sys.glob(file.path(SCREEN_DIR, "backup", "working", "scope_screen_parts", "reverify_*.csv"))
+  parts <- Sys.glob(file.path(SCREEN_DIR, "inputs", "working", "scope_screen_parts", "reverify_*.csv"))
   done <- unlist(lapply(parts, function(p) {
     d <- tryCatch(read.csv(p, stringsAsFactors = FALSE, colClasses = "character"),
                   error = function(e) NULL)

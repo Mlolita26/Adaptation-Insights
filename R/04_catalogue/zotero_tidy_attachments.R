@@ -16,7 +16,7 @@
 #
 #   Rscript R/04_catalogue/zotero_tidy_attachments.R --dry    list what would move
 #   Rscript R/04_catalogue/zotero_tidy_attachments.R          move to trash
-#   -> 04_Screening/backup/reports/zotero_tidy_attachments_log.csv
+#   -> 04_Screening/inputs/reports/zotero_tidy_attachments_log.csv
 
 suppressPackageStartupMessages({ library(httr); library(jsonlite) })
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)

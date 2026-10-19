@@ -90,7 +90,7 @@ if (file.exists(dx)) {
 ## ---- 5. year_overrides seeding is deterministic ---------------------------------
 RSCRIPT <- file.path(R.home("bin"), "Rscript.exe")
 SEED <- file.path(REPO, "R", "03_screen", "seed_year_overrides.R")
-YOVR <- file.path(SCREEN_DIR, "backup", "inputs", "year_overrides.csv")
+YOVR <- file.path(SCREEN_DIR, "inputs", "decisions", "year_overrides.csv")
 invisible(system2(RSCRIPT, shQuote(SEED), stdout = TRUE, stderr = TRUE))
 h1 <- unname(tools::md5sum(YOVR))
 invisible(system2(RSCRIPT, shQuote(SEED), stdout = TRUE, stderr = TRUE))
