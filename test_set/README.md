@@ -91,10 +91,21 @@ accepts or rejects before it becomes permanent.
 
 ## How the answers were made
 
-A manual extraction of the ten projects, done from the source documents by the
-template owner. It was then audited field by field against those same
+**The two halves were made differently, and it matters.**
+
+The ten **gold** answers are a hand extraction, done from the source documents
+by the template owner. It was then audited field by field against those same
 documents, and corrections were applied under rules agreed with her. Roughly
 240 fields were checked; about 77% were confirmed with page evidence.
+
+The ten **holdout** answers were not made by hand. They are an independent
+reading of the documents, done before any pipeline output existed and not
+produced by the pipeline itself. That makes them a fair test of the pipeline,
+because the two are independent, but it is not a human answer key. Two
+automated readings can share a blind spot in a way two people would not, so
+treat holdout agreement as a cross-check rather than as accuracy.
+
+The `reference_made_by` column says which of the two every row is.
 
 **Known residual disagreements are recorded**, not hidden. Where the manual
 answer and a later reading disagreed, the ruling and the reason are in

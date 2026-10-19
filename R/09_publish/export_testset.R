@@ -90,8 +90,15 @@ if (file.exists(gg) && file.exists(hh)) {
   b <- b[, names(a), drop = FALSE]
   a$set <- "gold"; b$set <- "holdout"
   a$tuned_on <- "yes"; b$tuned_on <- "no"
+  # Who wrote the answer. The gold ten were extracted by hand; the holdout ten
+  # are an independent reading, made before any pipeline output existed and not
+  # produced by the pipeline. Without this column the file looks like one
+  # hand-made reference, which is what the README used to claim.
+  a$reference_made_by <- "hand extraction"
+  b$reference_made_by <- "independent reading, not the pipeline"
   both <- rbind(a, b)
-  both <- both[, c("set", "tuned_on", setdiff(names(both), c("set", "tuned_on")))]
+  both <- both[, c("set", "tuned_on", "reference_made_by",
+                   setdiff(names(both), c("set", "tuned_on", "reference_made_by")))]
   write.csv(both, file.path(OUT, "reference_general.csv"),
             row.names = FALSE, fileEncoding = "UTF-8")
   cat(sprintf("
