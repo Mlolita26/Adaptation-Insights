@@ -19,3 +19,17 @@ location registry come from the workbook `paths.R` points at. The pipeline also
 carries its own copy of seven vocabularies in `R/00_shared/vocab_lists.R`,
 fingerprinted so a change invalidates cached decisions. If a list changes,
 change it in one place and regenerate.
+
+## The workbooks
+
+`template_27Aug2026.xlsx` and `template_02Oct2026.xlsx` are the workbooks
+themselves. Four scripts read a workbook directly, so a clone without one
+cannot run harmonisation, location scoring or the actor audit. The committed
+copies carry short names: `git clone` fails on Windows with the original
+names, because the path exceeds the limit during checkout and the working
+tree is left incomplete.
+
+`paths.R` uses the OneDrive master when it is reachable, so edits by the
+template owner take effect at once, and the committed copy otherwise. The
+code currently reads the 27 August workbook; the option lists come from the
+2 October one.

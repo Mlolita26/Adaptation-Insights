@@ -24,7 +24,12 @@ ARCHIVE_DIR  <- file.path(GL_ROOT, "99_Archive")
 # wins when it is reachable, so edits by the template owner take effect
 # immediately; the committed copy is the fallback for anyone who has only the
 # repository. Refresh it with R/00_shared/export_template.R on each release.
-TEMPLATE_FILE <- "EvidenceSynthesis_GreyLiterature_AfricanAgricultureAdaptation_UpdatedTemplate_27Aug2026.xlsx"
+# The master keeps its full name on OneDrive. The committed copy is named
+# short on purpose: git clone fails on Windows with the full name, because
+# the path exceeds the limit during checkout and the working tree is left
+# incomplete.
+TEMPLATE_FILE      <- "EvidenceSynthesis_GreyLiterature_AfricanAgricultureAdaptation_UpdatedTemplate_27Aug2026.xlsx"
+TEMPLATE_FILE_REPO <- "template_27Aug2026.xlsx"
 
 # The repository root, found without relying on how the caller was invoked:
 # walk up from the working directory until R/00_shared/paths.R is underneath.
@@ -40,7 +45,7 @@ REPO_ROOT <- local({
 TEMPLATE_XLSX <- local({
   master <- file.path(TEMPLATE_DIR, TEMPLATE_FILE)
   if (file.exists(master)) master
-  else file.path(REPO_ROOT, "template", TEMPLATE_FILE)
+  else file.path(REPO_ROOT, "template", TEMPLATE_FILE_REPO)
 })
 PILOT_DIR     <- file.path(DOCS_ROOT, "pilot")   # gold set, holdout set, candidate pool
 GOLD_DOCS_DIR <- file.path(PILOT_DIR, "gold_set_P001-P010")
