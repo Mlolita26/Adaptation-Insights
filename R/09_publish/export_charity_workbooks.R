@@ -31,7 +31,7 @@ source(file.path(REPO, "R", "00_shared", "paths.R"))
 
 CP   <- file.path(RESULTS_DIR, "charity_pilot")
 MAN  <- file.path(PILOT_DIR, "charity_pilot", "manifest.csv")
-OUT  <- file.path(GL_ROOT, "06_Quality_Check", "Charity Pilot")
+OUT  <- CP                      # everything for this pilot lives in one folder
 dir.create(OUT, recursive = TRUE, showWarnings = FALSE)
 
 GEN_SHEET <- "project_data_general"
@@ -47,9 +47,30 @@ rd <- function(p) {
   d[is.na(d)] <- ""
   d
 }
-gen <- rd(file.path(CP, "pipeline_harmonized.csv"))
-loc <- rd(file.path(CP, "pipeline_locations.csv"))
-man <- read.csv(MAN, stringsAsFactors = FALSE)
+# The three inputs below were the working CSVs of the measurement run. They
+# have been removed, the folder now holding the workbooks rather than the
+# material they were built from. Each therefore falls back to the AI answers
+# workbook, which carries the same rows in the same shape: regenerating from
+# its own output is idempotent, and leaves the two comparison workbooks, which
+# are the record of the measurement, untouched.
+AI <- file.path(CP, "charity_pilot_AI_answers.xlsx")
+
+from_csv_or_book <- function(csv, sheet, what) {
+  p <- file.path(CP, csv)
+  if (file.exists(p)) return(rd(p))
+  if (!file.exists(AI)) stop("neither ", csv, " nor ", basename(AI), " is present")
+  cat("  ", what, ": from ", basename(AI), " (", sheet, ")\n", sep = "")
+  d <- read.xlsx(AI, sheet = sheet)
+  d[] <- lapply(d, as.character); d[is.na(d)] <- ""
+  d
+}
+gen <- from_csv_or_book("pipeline_harmonized.csv", GEN_SHEET,  "general")
+loc <- from_csv_or_book("pipeline_locations.csv",  LOC_SHEET,  "locations")
+man <- if (file.exists(MAN)) read.csv(MAN, stringsAsFactors = FALSE) else {
+  cat("   documents: from ", basename(AI), " (documents)\n", sep = "")
+  d <- read.xlsx(AI, sheet = "documents")
+  data.frame(project_code = d$project_code, pdf = d$document, stringsAsFactors = FALSE)
+}
 
 # template order, template columns only; a column the pipeline does not carry
 # is written empty rather than dropped, so the sheet keeps its shape.
