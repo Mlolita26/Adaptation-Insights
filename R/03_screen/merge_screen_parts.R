@@ -1,7 +1,7 @@
 # merge_screen_parts.R - fold parallel screening shards into scope_screen.csv.
 #
 # screen_scope.R can run as several processes at once, each writing its own
-# file under review/scope_screen_parts/ (--out=scope_screen_parts/x.csv,
+# file under 04_Screening/working/scope_screen_parts/ (--out=working/scope_screen_parts/x.csv,
 # --shard=k/n). This folds those files into the one scope_screen.csv the rest
 # of the pipeline reads: one row per (source, filename), the newest wins,
 # columns in the screener's order. The part files are left in place so a
@@ -16,7 +16,7 @@ REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..
 source(file.path(REPO, "R", "00_shared", "paths.R"))
 
 MAIN  <- file.path(SCREEN_DIR, "scope_screen.csv")
-PARTS <- list.files(file.path(SCREEN_DIR, "scope_screen_parts"), pattern = "\\.csv$",
+PARTS <- list.files(file.path(SCREEN_DIR, "working", "scope_screen_parts"), pattern = "\\.csv$",
                     full.names = TRUE)
 rd <- function(f) {
   d <- tryCatch(read.csv(f, stringsAsFactors = FALSE, colClasses = "character",

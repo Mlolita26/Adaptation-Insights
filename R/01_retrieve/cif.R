@@ -296,7 +296,7 @@ CIF_CORPUS_DIR <- file.path(dirname(PROJECT_ROOT), "03_Documents", SOURCE_NAME,
                             "Docs", "evaluation_docs")
 
 # World Bank ICRs already in the corpus (via the worldbank scraper; screened
-# in review/scope_screen.csv) for closed PPCR projects on the CIF register
+# in 04_Screening/scope_screen.csv) for closed PPCR projects on the CIF register
 CIF_KNOWN_ICRS <- tibble::tribble(
   ~mdb_project_id, ~country_re,  ~title_re,
   "P127254",       "Zambia",     "strengthening climate resilience",

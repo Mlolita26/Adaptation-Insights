@@ -1,7 +1,7 @@
 # zotero_from_screening.R - the screening decides what is in Zotero and with
 # which status; the source catalogues supply the metadata.
 #
-# Input: review/scope_screen.csv (one judged document per row; verdict_ruled
+# Input: 04_Screening/scope_screen.csv (one judged document per row; verdict_ruled
 # when screen_rules.R has run) and review/family_census.csv (family and the
 # identifiers read from the cover). The six source builders in
 # zotero_upload.R still run, but as a POOL of metadata keyed by filename:

@@ -25,9 +25,9 @@
 #
 #   Rscript R/03_screen/build_reverify_list.R
 #   Rscript R/03_screen/build_reverify_list.R --exclude-done   # resume: drop
-#       keys already judged in review/scope_screen_parts/reverify_*.csv
+#       keys already judged in 04_Screening/working/scope_screen_parts/reverify_*.csv
 #
-# Writes review/scope_screen_reask_full.csv (source, filename) and prints the
+# Writes 04_Screening/reports/scope_screen_reask_full.csv (source, filename) and prints the
 # shard command to run.
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
@@ -36,10 +36,10 @@ source(file.path(REPO, "R", "00_shared", "paths.R"))
 args <- commandArgs(trailingOnly = TRUE)
 
 SCREEN <- file.path(SCREEN_DIR, "scope_screen.csv")
-OVR    <- file.path(SCREEN_DIR, "scope_screen_overrides.csv")
-SUP    <- file.path(SCREEN_DIR, "supersedes.csv")
+OVR    <- file.path(SCREEN_DIR, "inputs", "scope_screen_overrides.csv")
+SUP    <- file.path(SCREEN_DIR, "inputs", "supersedes.csv")
 EXTRA  <- file.path(REPO, "audit", "2026-10_completeness", "cif_rescreen.csv")
-OUT    <- file.path(SCREEN_DIR, "scope_screen_reask_full.csv")
+OUT    <- file.path(SCREEN_DIR, "reports", "scope_screen_reask_full.csv")
 
 sc <- read.csv(SCREEN, stringsAsFactors = FALSE, colClasses = "character")
 sc[is.na(sc)] <- ""
@@ -105,7 +105,7 @@ if (file.exists(EXTRA)) {
 }
 
 if ("--exclude-done" %in% args) {
-  parts <- Sys.glob(file.path(SCREEN_DIR, "scope_screen_parts", "reverify_*.csv"))
+  parts <- Sys.glob(file.path(SCREEN_DIR, "working", "scope_screen_parts", "reverify_*.csv"))
   done <- unlist(lapply(parts, function(p) {
     d <- tryCatch(read.csv(p, stringsAsFactors = FALSE, colClasses = "character"),
                   error = function(e) NULL)
@@ -121,5 +121,5 @@ cat("\nre-ask list:", nrow(out), "documents ->", OUT, "\n")
 print(table(out$source))
 cat("\nrun as shards, e.g. 4 ways:\n")
 cat("  Rscript R/03_screen/screen_scope.R --reask=", OUT,
-    " --out=scope_screen_parts/reverify_1.csv --shard=1/4\n", sep = "")
+    " --out=working/scope_screen_parts/reverify_1.csv --shard=1/4\n", sep = "")
 cat("then: Rscript R/03_screen/merge_screen_parts.R && Rscript R/03_screen/screen_rules.R\n")

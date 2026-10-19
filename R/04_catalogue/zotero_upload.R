@@ -4,7 +4,7 @@
 # One Zotero "report" item per corpus document, organised in collections
 #   {Institution} / included | to screen | screened out | duplicates
 # Since 18 Sep 2026 the SCREENING decides membership and status: every
-# document judged in review/scope_screen.csv is an item, with status from
+# document judged in 04_Screening/scope_screen.csv is an item, with status from
 # its verdict (in scope -> included, unsure -> to screen, out of scope ->
 # screened out). The six source builders below supply the metadata (title,
 # URL, report number, Call Number, doc tags) as a pool that

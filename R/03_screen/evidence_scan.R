@@ -45,8 +45,8 @@ opt <- function(k, d = NULL) {
 }
 ONLY  <- opt("source")
 LIMIT <- suppressWarnings(as.integer(opt("limit", NA)))
-OUT   <- file.path(SCREEN_DIR, "evidence_scan.csv")
-CAND  <- file.path(SCREEN_DIR, "adjudication_candidates.csv")
+OUT   <- file.path(SCREEN_DIR, "reports", "evidence_scan.csv")
+CAND  <- file.path(SCREEN_DIR, "inputs", "adjudication_candidates.csv")
 
 SCREEN <- file.path(SCREEN_DIR, "scope_screen.csv")
 sc <- read.csv(SCREEN, stringsAsFactors = FALSE, colClasses = "character")

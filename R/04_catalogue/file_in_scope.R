@@ -75,7 +75,7 @@ if (length(skipped)) {
 if (length(demote)) {
   cat("\nfiled but no longer in scope (", length(demote), ") - reported, NOT moved:\n", sep = "")
   for (d in head(demote, 20)) cat(sprintf("  %-9s %-56s %s\n", d[1], substr(d[2], 1, 56), d[3]))
-  out <- file.path(SCREEN_DIR, "filed_but_not_in_scope.csv")
+  out <- file.path(SCREEN_DIR, "reports", "filed_but_not_in_scope.csv")
   write.csv(do.call(rbind.data.frame, c(demote, stringsAsFactors = FALSE)) |>
               setNames(c("source", "filename", "verdict_ruled")),
             out, row.names = FALSE, fileEncoding = "UTF-8")
