@@ -19,7 +19,7 @@ DOCS_ROOT    <- file.path(GL_ROOT, "03_Documents")    # the corpus (per source)
 # folder was screening material that had nothing to do with extraction.
 SCREEN_DIR   <- file.path(GL_ROOT, "04_Screening")
 
-RESULTS_DIR  <- file.path(GL_ROOT, "04_Extraction_Results")  # team-facing outputs
+RESULTS_DIR  <- file.path(GL_ROOT, "05_Extraction_Results")  # team-facing outputs
 REVIEW_DIR   <- file.path(RESULTS_DIR, "review")      # extraction's own to-do lists
 SCORES_DIR   <- file.path(RESULTS_DIR, "scores")
 
@@ -57,7 +57,7 @@ REPO_ROOT <- local({
     if (file.exists(file.path(d, "R", "00_shared", "paths.R"))) return(d)
     p <- dirname(d); if (identical(p, d)) break; d <- p
   }
-  file.path(GL_ROOT, "05_Pipeline")       # the usual location
+  file.path(GL_ROOT, "07_Pipeline")       # the usual location
 })
 
 TEMPLATE_XLSX <- local({

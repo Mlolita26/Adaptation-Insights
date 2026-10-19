@@ -37,7 +37,7 @@ ZOTERO_BASE <- glue("https://api.zotero.org/{LIBRARY_TYPE}/{LIBRARY_ID}")
 
 GL   <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
 GOLD <- file.path(GL, "03_Documents/pilot/gold_set_P001-P010")
-HMAN <- file.path(GL, "05_Pipeline/outputs/extraction/holdout/holdout_manifest.csv")
+HMAN <- file.path(GL, "07_Pipeline/outputs/extraction/holdout/holdout_manifest.csv")
 PARENT_NAME  <- "Pilot test set (reference answers)"
 GOLD_NAME    <- "Gold P001-P010"
 HOLDOUT_NAME <- "Holdout H001-H010"

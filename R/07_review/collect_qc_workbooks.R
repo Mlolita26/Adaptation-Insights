@@ -14,7 +14,7 @@
 #   done/       the consultant has finished it     (collected)
 #   qc/         a reviewer has checked it after    (collected)
 #
-# Writes, under 04_Extraction_Results:
+# Writes, under 05_Extraction_Results:
 #   qc_corrected_general.csv / qc_corrected_locations.csv  the merged result
 #   qc_change_log.csv               every cell that changed, and who changed it
 #   qc_offlist_values.csv           values typed outside the controlled list

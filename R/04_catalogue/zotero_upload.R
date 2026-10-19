@@ -653,7 +653,7 @@ main <- function() {
           for (f in res$failed) cli_alert_danger("  adopt failed: {f$message}")
         Sys.sleep(1)
       }
-      log_path <- file.path(GL, "04_Extraction_Results/review/zotero_reconciliation_log.csv")
+      log_path <- file.path(GL, "05_Extraction_Results/review/zotero_reconciliation_log.csv")
       readr::write_csv(bind_rows(recon_log), log_path,
                        append = file.exists(log_path))
       cli_alert_success("adoptions logged to {log_path}")

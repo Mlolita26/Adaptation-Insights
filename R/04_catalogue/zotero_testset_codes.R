@@ -41,7 +41,7 @@ stopifnot(nzchar(API_KEY), nzchar(LIBRARY_ID))
 BASE <- glue("https://api.zotero.org/{LIBRARY_TYPE}/{LIBRARY_ID}")
 
 GL   <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Literature"
-HMAN <- file.path(GL, "05_Pipeline/outputs/extraction/holdout/holdout_manifest.csv")
+HMAN <- file.path(GL, "07_Pipeline/outputs/extraction/holdout/holdout_manifest.csv")
 PARENT_NAME  <- "Pilot test set (reference answers)"
 GOLD_NAME    <- "Gold P001-P010"
 HOLDOUT_NAME <- "Holdout H001-H010"

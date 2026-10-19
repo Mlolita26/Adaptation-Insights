@@ -5,7 +5,7 @@
 # project_data_location-specific columns:
 #   - location codes matched against the template's location_codes registry
 #     (677 entries; codes are reused across projects), unmatched locations
-#     become PROPOSALS in 04_Extraction_Results/review/proposed_new_locations.csv
+#     become PROPOSALS in 05_Extraction_Results/review/proposed_new_locations.csv
 #     with a suggested code {project_code}.{next number} and empty
 #     coordinates for the team to fill ("pipeline proposes, team decides",
 #     protocol §5). Nothing here is estimated: a value the document does not

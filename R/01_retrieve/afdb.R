@@ -78,7 +78,7 @@ if (!exists("PATHS")) {
   .shared <- .afdb_find_shared()
   if (is.null(.shared))
     stop("afdb.R: cannot locate R/00_shared/00_config.R from ", getwd(),
-         " — run from the 05_Pipeline root or source the shared setup first",
+         " — run from the 07_Pipeline root or source the shared setup first",
          call. = FALSE)
   source(file.path(.shared, "00_config.R"))
   source(file.path(.shared, "01_utils.R"))

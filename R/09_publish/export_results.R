@@ -1,7 +1,7 @@
 ##############################################################################
-# export_results.R — publish the newest pipeline run into 04_Extraction_Results
+# export_results.R — publish the newest pipeline run into 05_Extraction_Results
 #
-# The pipeline writes timestamped CSVs into 05_Pipeline/outputs/ (working
+# The pipeline writes timestamped CSVs into 07_Pipeline/outputs/ (working
 # files, gitignored). Nobody should have to dig there. This script copies the
 # newest run of each kind into the team folder as one readable Excel file per
 # sheet of the template, in the template's own column order.
@@ -88,8 +88,8 @@ write_book <- function(rows, sheet_name, extra_cols, out_file, src, review_rule,
              "generated", "regenerate with", "note"),
     value = c(sheet_name, nrow(main), nrow(review), basename(src),
               format(Sys.time(), "%Y-%m-%d %H:%M"),
-              "Rscript 05_Pipeline/R/09_publish/export_results.R",
-              "columns follow the 27 Aug 2026 template exactly; working files stay in 05_Pipeline/outputs/"),
+              "Rscript 07_Pipeline/R/09_publish/export_results.R",
+              "columns follow the 27 Aug 2026 template exactly; working files stay in 07_Pipeline/outputs/"),
     stringsAsFactors = FALSE))
   locked <- !writable(out_file)
   if (locked) out_file <- sub("\\.xlsx$", format(Sys.time(), "_%Y%m%d_%H%M.xlsx"), out_file)

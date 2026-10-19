@@ -26,7 +26,7 @@
 # appear near target wording, is flagged.
 #
 #   Rscript R/07_review/audit_reference_targets.R
-#   -> 04_Extraction_Results/gold_pilot/reference_target_check.csv
+#   -> 05_Extraction_Results/gold_pilot/reference_target_check.csv
 ##############################################################################
 
 suppressPackageStartupMessages({ library(pdftools) })

@@ -178,7 +178,7 @@ add("new_by_country", newc, c(34, 22))
 add("about", data.frame(what = c("generated", "registry rows", "proposals audited",
                                  "regenerate with", "note"),
   value = c(format(Sys.time(), "%Y-%m-%d %H:%M"), nrow(REG), nrow(A),
-            "Rscript 05_Pipeline/R/07_review/audit_proposed_locations.R",
+            "Rscript 07_Pipeline/R/07_review/audit_proposed_locations.R",
             "verdicts are suggestions - only ALREADY IN REGISTRY is decided by an exact or alias match"),
   stringsAsFactors = FALSE), c(20, 90))
 f <- file.path(REVIEW_DIR, "proposed_new_locations_AUDIT.xlsx")

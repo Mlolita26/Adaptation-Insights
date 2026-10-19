@@ -1,7 +1,7 @@
 # export_charity_workbooks.R - the Charity pilot as two workbooks a person can
 # open, instead of thirty files a script can read.
 #
-# 04_Extraction_Results/charity_pilot holds the working material of a
+# 05_Extraction_Results/charity_pilot holds the working material of a
 # measurement: the reference, the raw pipeline output, the harmonised output,
 # three score files and two comparison workbooks. That is the right shape for
 # checking the pipeline and the wrong shape for asking a colleague to extract

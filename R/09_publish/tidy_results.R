@@ -1,4 +1,4 @@
-# tidy_results.R - move superseded machine output out of 04_Extraction_Results
+# tidy_results.R - move superseded machine output out of 05_Extraction_Results
 # into 99_Archive, so the folder shows current material.
 #
 # Nothing is deleted. Every file is moved, and every move is written to a
@@ -75,7 +75,7 @@ if (any(named)) {
 base <- normalizePath(RESULTS_DIR, winslash = "/", mustWork = TRUE)
 rel  <- sub(paste0("^", gsub("([.|()\\^{}+$*?\\[\\]])", "\\\\\\1", base), "/"), "", pick)
 
-cli_h1("Tidy 04_Extraction_Results")
+cli_h1("Tidy 05_Extraction_Results")
 cli_alert_info("to move: {length(pick)} files")
 cli_alert_info("destination: {DEST}")
 
@@ -106,7 +106,7 @@ for (i in seq_along(pick)) {
 man$moved <- file.exists(file.path(DEST, rel))
 write.csv(man, file.path(DEST, "MANIFEST.csv"), row.names = FALSE)
 writeLines(c(
-  "# Archived from 04_Extraction_Results",
+  "# Archived from 05_Extraction_Results",
   "",
   paste("Moved", moved, "files on", format(Sys.Date(), "%d %B %Y"), "by R/09_publish/tidy_results.R."),
   "",

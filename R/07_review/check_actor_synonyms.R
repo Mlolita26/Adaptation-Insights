@@ -140,7 +140,7 @@ add("about", data.frame(
             sprintf("%d/%d", sum(pos$ok), nrow(pos)),
             sprintf("%d/%d", sum(neg$ok), nrow(neg)),
             format(Sys.time(), "%Y-%m-%d %H:%M"),
-            "Rscript 05_Pipeline/R/07_review/check_actor_synonyms.R"),
+            "Rscript 07_Pipeline/R/07_review/check_actor_synonyms.R"),
   stringsAsFactors = FALSE), c(20, 70))
 saveWorkbook(wb, f, overwrite = TRUE)
 cat("\nwritten:", f, "\n")
