@@ -8,27 +8,39 @@ against a known answer.
 
 | File | Rows | What it is |
 |---|---|---|
-| `reference_gold_general.csv` | 10 | The answers, project level, P001–P010 |
-| `reference_gold_locations.csv` | 60 | The answers, location level |
+| `reference_general.csv` | 20 | The answers, project level. Both sets, with a `set` column |
+| `reference_gold_locations.csv` | 60 | The answers, location level (gold only) |
 | `reference_gold_results.csv` | 56 | Result values with their metric, unit and page |
-| `reference_holdout_general.csv` | 10 | The answers for ten holdout documents, H001–H010 |
-| `pipeline_gold_general.csv` | 10 | What this pipeline extracted, project level |
+| `pipeline_general.csv` | 20 | What this pipeline extracted, project level, both sets |
 | `pipeline_gold_locations.csv` | 239 | What this pipeline extracted, location level |
-| `pipeline_holdout_general.csv` | 10 | Pipeline output for the holdout |
 | `documents.csv` | 20 | Which PDF each project code refers to |
 
 The PDFs are in the Zotero group library under **Pilot test set (reference
 answers)**, in two sub-collections, `Gold P001-P010` and `Holdout H001-H010`.
 Filenames there match `documents.csv`.
 
-## Gold and holdout are different on purpose
+## Gold and holdout
 
-The **gold** projects are the ones the extraction prompts were developed on.
-Scores on them are optimistic by construction.
+Both sets hold the same kind of record. They differ in how they have been
+used, which is why the `set` and `tuned_on` columns exist.
 
-The **holdout** documents were never used for tuning. They are the honest
-measure of how the pipeline does on something it has not seen. Keep them that
-way: if you tune against the holdout, there is nothing left to measure with.
+The ten **gold** projects are the documents the extraction prompts were
+developed against. When the pipeline got something wrong on them, the prompt
+was changed and the run repeated. A score on these documents is higher than
+the pipeline would achieve on new material.
+
+The ten **holdout** documents were not used while anything was being changed.
+A score on them estimates performance on a document the pipeline has not seen.
+
+Report the two scores separately. A single number covering both describes
+neither.
+
+Using a holdout document to improve a system is not reversible. After that it
+can no longer measure performance on unseen material, and a replacement set
+has to be drawn and answered from scratch.
+
+There is no location-level reference for the holdout. Location scoring uses
+the gold set only.
 
 ## Reading the answer files
 

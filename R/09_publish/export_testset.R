@@ -54,10 +54,50 @@ grab <- function(xlsx, sheet, to, what) {
   cat(sprintf("  %-34s %4d rows  %2d cols   %s\n", to, nrow(d), ncol(d), what))
   invisible(TRUE)
 }
-grab(GEN, "project_data_general", "pipeline_gold_general.csv",    "pipeline output, gold, project level")
-grab(GEN, "holdout",              "pipeline_holdout_general.csv", "pipeline output, holdout, project level")
+# both sets in one file, matching reference_general.csv
+gl <- read.xlsx(GEN, sheet = "project_data_general"); gl[] <- lapply(gl, as.character)
+ho <- read.xlsx(GEN, sheet = "holdout");              ho[] <- lapply(ho, as.character)
+for (col in setdiff(names(gl), names(ho))) ho[[col]] <- ""
+ho <- ho[, names(gl), drop = FALSE]
+gl$set <- "gold"; ho$set <- "holdout"
+pg <- rbind(gl, ho); pg[is.na(pg)] <- ""
+pg <- pg[, c("set", setdiff(names(pg), "set"))]
+write.csv(pg, file.path(OUT, "pipeline_general.csv"), row.names = FALSE, fileEncoding = "UTF-8")
+cat(sprintf("  %-34s %4d rows  %2d cols   %s
+", "pipeline_general.csv",
+            nrow(pg), ncol(pg), "pipeline output, both sets"))
 grab(LOC, "project_data_location-specific", "pipeline_gold_locations.csv",
      "pipeline output, gold, location level")
+
+## ---- one reference file, both sets, with a column saying which ------------
+# Gold and holdout hold the same kind of record. They differ only in how they
+# have been used: the prompts were developed against the gold documents, and
+# never against the holdout. One file is easier to load; the `set` column
+# keeps the distinction, which is what the measurement depends on. Scores for
+# the two sets are reported separately, because a single number mixing them
+# describes neither.
+gg <- file.path(OUT, "reference_gold_general.csv")
+hh <- file.path(OUT, "reference_holdout_general.csv")
+if (file.exists(gg) && file.exists(hh)) {
+  a <- read.csv(gg, stringsAsFactors = FALSE, colClasses = "character")
+  b <- read.csv(hh, stringsAsFactors = FALSE, colClasses = "character")
+  a[is.na(a)] <- ""; b[is.na(b)] <- ""
+  for (col in setdiff(names(a), names(b))) b[[col]] <- ""   # GESI_project
+  b <- b[, names(a), drop = FALSE]
+  a$set <- "gold"; b$set <- "holdout"
+  a$tuned_on <- "yes"; b$tuned_on <- "no"
+  both <- rbind(a, b)
+  both <- both[, c("set", "tuned_on", setdiff(names(both), c("set", "tuned_on")))]
+  write.csv(both, file.path(OUT, "reference_general.csv"),
+            row.names = FALSE, fileEncoding = "UTF-8")
+  cat(sprintf("
+  %-34s %4d rows  %2d cols   both sets in one file
+",
+              "reference_general.csv", nrow(both), ncol(both)))
+  file.remove(gg, hh)
+  cat("  (the two separate files are replaced by it)
+")
+}
 
 ## ---- which document each project code refers to -----------------------------
 man <- file.path(REPO, "outputs", "extraction", "pilot_manifest.csv")
