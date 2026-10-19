@@ -12,7 +12,7 @@
 # provenance: they are session rulings written directly into the column by the
 # 2 Oct scope reviews. screen_rules.R recomputes verdict_ruled from scratch,
 # so re-running it would erase them. This script harvests every ruled value
-# the rules cannot reproduce into 04_Screening/inputs/scope_screen_overrides.csv (the
+# the rules cannot reproduce into 04_Screening/backup/inputs/scope_screen_overrides.csv (the
 # designed home for decisions), so rules re-runs are safe forever after.
 #
 # Steps:
@@ -34,10 +34,10 @@ REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..
 source(file.path(REPO, "R", "00_shared", "paths.R"))
 
 SCREEN <- file.path(SCREEN_DIR, "scope_screen.csv")
-OVR    <- file.path(SCREEN_DIR, "inputs", "scope_screen_overrides.csv")
+OVR    <- file.path(SCREEN_DIR, "backup", "inputs", "scope_screen_overrides.csv")
 KEYS   <- file.path(REPO, "audit", "2026-10_completeness", "gcf_shifted_keys.csv")
-SNAP   <- file.path(SCREEN_DIR, "working", "backup", "ruled_snapshot_2026-10-02.csv")
-BK     <- file.path(SCREEN_DIR, "working", "backup", "scope_screen_2026-10-02.csv")
+SNAP   <- file.path(SCREEN_DIR, "backup", "working", "snapshots", "ruled_snapshot_2026-10-02.csv")
+BK     <- file.path(SCREEN_DIR, "backup", "working", "snapshots", "scope_screen_2026-10-02.csv")
 stopifnot(file.exists(SCREEN), file.exists(BK), file.exists(KEYS))
 
 FIELDS <- c("source", "folder", "filename", "verdict", "verdict_model", "reason",

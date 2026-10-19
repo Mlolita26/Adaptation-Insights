@@ -27,7 +27,7 @@ build_from_screening <- function(pool) {
   v <- if ("verdict_ruled" %in% names(sv)) sv$verdict_ruled else sv$verdict
   status_of <- c("in scope" = "included", "unsure" = "to screen", "out of scope" = "screened out")
 
-  cen_p <- file.path(GL, "04_Screening", "inputs", "family_census.csv")
+  cen_p <- file.path(GL, "04_Screening", "backup", "inputs", "family_census.csv")
   cen <- NULL
   if (file.exists(cen_p)) {
     cen <- read.csv(cen_p, stringsAsFactors = FALSE, colClasses = "character", encoding = "UTF-8")

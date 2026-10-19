@@ -21,7 +21,7 @@ nb <- suppressWarnings(as.integer(sub("^--batches=", "",
         grep("^--batches=", args, value = TRUE)[1])))
 if (is.na(nb)) nb <- 6
 
-CAND <- file.path(SCREEN_DIR, "inputs", "adjudication_candidates.csv")
+CAND <- file.path(SCREEN_DIR, "backup", "inputs", "adjudication_candidates.csv")
 SC   <- file.path(SCREEN_DIR, "scope_screen.csv")
 OUTD <- file.path(REVIEW_DIR, "adjudication_batches")
 dir.create(OUTD, recursive = TRUE, showWarnings = FALSE)

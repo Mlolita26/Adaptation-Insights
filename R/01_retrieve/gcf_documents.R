@@ -110,7 +110,7 @@ run_gcf_documents_scraper <- function() {
 
   # PATHS$root is 07_Pipeline; screening sits beside it under the
   # Grey Literature root
-  asmt <- file.path(dirname(PATHS$root), "04_Screening", "reports",
+  asmt <- file.path(dirname(PATHS$root), "04_Screening", "backup", "reports",
                     "gcf_portfolio_assessment.csv")
   if (!file.exists(asmt)) {
     cli::cli_alert_danger("gcf_portfolio_assessment.csv not found; run the portfolio assessment first")

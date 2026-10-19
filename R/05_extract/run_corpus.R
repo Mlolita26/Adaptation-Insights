@@ -81,7 +81,7 @@ pid_for <- local({
 # the document family from the census (02_dedup/doc_census.R): what the
 # extractor routes on. Empty when the census has not seen the file.
 fam_for <- local({
-  f <- file.path(dirname(REPO), "04_Screening", "inputs", "family_census.csv")
+  f <- file.path(dirname(REPO), "04_Screening", "backup", "inputs", "family_census.csv")
   lk <- if (file.exists(f)) {
     cen <- read.csv(f, stringsAsFactors = FALSE, colClasses = "character")
     setNames(cen$family, cen$filename)

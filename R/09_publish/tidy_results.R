@@ -11,7 +11,7 @@
 #       gold_pilot/location_records_latest.xlsx.
 #   scores/previous_runs/
 #       already an archive by name; no script refers to it.
-#   04_Screening/working/scope_screen_parts/  EXCEPT reverify_*.csv
+#   04_Screening/backup/working/scope_screen_parts/  EXCEPT reverify_*.csv
 #       screening shards, merged into 04_Screening/scope_screen.csv, which is newer.
 #       The reverify_* shards stay: build_reverify_list.R globs them.
 #   review/adjudication_batches/, review/adjudication_results/
@@ -46,7 +46,7 @@ pick <- c(pick, list.files(sc, pattern = "^(score|align)_locations_gpt-5-[a-z]+_
 pr <- file.path(sc, "previous_runs")
 if (dir.exists(pr)) pick <- c(pick, list.files(pr, full.names = TRUE, recursive = TRUE))
 
-sp <- file.path(SCREEN_DIR, "working", "scope_screen_parts")
+sp <- file.path(SCREEN_DIR, "backup", "working", "scope_screen_parts")
 if (dir.exists(sp)) {
   f <- list.files(sp, full.names = TRUE)
   pick <- c(pick, f[!grepl("^reverify_", basename(f))])   # build_reverify_list.R globs these
