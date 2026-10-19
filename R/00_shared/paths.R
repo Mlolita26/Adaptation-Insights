@@ -32,7 +32,7 @@ QC_DIR       <- file.path(GL_ROOT, "06_Quality_Check")
 # The two extraction pilots, each gathered in one folder. Nothing else has
 # been extracted: the published workbooks hold the ten gold projects and the
 # ten holdout documents, not the corpus.
-GOLD_DIR     <- file.path(RESULTS_DIR, "gold_pilot")
+PILOT_RESULTS <- file.path(RESULTS_DIR, "pilot")   # gold/ and holdout/, side by side
 CHARITY_DIR  <- file.path(RESULTS_DIR, "charity_pilot")
 ARCHIVE_DIR  <- file.path(GL_ROOT, "99_Archive")
 

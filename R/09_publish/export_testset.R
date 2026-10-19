@@ -44,9 +44,9 @@ suppressMessages(library(openxlsx))
 # gold_pilot now holds plain CSVs, one folder for the human extraction and
 # one for the machine's, instead of multi-sheet workbooks nobody could read
 # without opening Excel.
-AI_GEN  <- file.path(GOLD_DIR, "ai", "gold_general.csv")
-AI_HOLD <- file.path(GOLD_DIR, "ai", "holdout_general.csv")
-AI_LOC  <- file.path(GOLD_DIR, "ai", "gold_locations.csv")
+AI_GEN  <- file.path(PILOT_RESULTS, "gold", "ai_general.csv")
+AI_HOLD <- file.path(PILOT_RESULTS, "holdout", "ai_general.csv")
+AI_LOC  <- file.path(PILOT_RESULTS, "gold", "ai_locations.csv")
 
 grab <- function(xlsx, sheet, to, what) {
   if (!file.exists(xlsx)) { cat("  MISSING workbook:", basename(xlsx), "\n"); return(invisible(FALSE)) }
