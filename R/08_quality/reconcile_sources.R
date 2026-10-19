@@ -60,7 +60,7 @@ cat("\n=== corpus reconciliation,", format(Sys.time(), "%Y-%m-%d %H:%M"), "===\n
 
 # OneDrive sync conflict copies anywhere in the tree are a silent data hazard
 conflicts <- c(Sys.glob(file.path(DOCS_ROOT, "**", "*-DESKTOP-*")),
-               Sys.glob(file.path(REVIEW_DIR, "*-DESKTOP-*")),
+               Sys.glob(file.path(VOCAB_DIR, "*-DESKTOP-*")),
                Sys.glob(file.path(REPO, "catalogues", "**", "*-DESKTOP-*")))
 cat("\n[global]\n")
 if (length(conflicts)) bad("OneDrive conflict copies present: ", length(conflicts),

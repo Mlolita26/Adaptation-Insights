@@ -116,7 +116,7 @@ for (i in which(!neg$ok))
               neg$why[i]))
 
 ## ---- 3. report -------------------------------------------------------------
-f <- file.path(REVIEW_DIR, "actor_synonyms_AUDIT.xlsx")
+f <- file.path(VOCAB_DIR, "actor_synonyms_AUDIT.xlsx")
 wb <- createWorkbook()
 hdr <- createStyle(textDecoration = "bold", fgFill = "#EEEEEE", border = "bottom")
 add <- function(nm, df, widths = NULL) {

@@ -82,7 +82,7 @@ for (i in seq_len(nrow(dup))) {
   Sys.sleep(0.3)
 }
 log <- do.call(rbind, log)
-LOG <- file.path(REVIEW_DIR, "zotero_tidy_attachments_log.csv")
+LOG <- file.path(VOCAB_DIR, "zotero_tidy_attachments_log.csv")
 if (file.exists(LOG)) log <- rbind(read.csv(LOG, stringsAsFactors = FALSE, colClasses = "character"), log)
 write.csv(log, LOG, row.names = FALSE)
 cat("\nmoved to trash:", sum(log$result == "moved to trash"), "| log:", LOG, "\n",

@@ -20,8 +20,6 @@ DOCS_ROOT    <- file.path(GL_ROOT, "03_Documents")    # the corpus (per source)
 SCREEN_DIR   <- file.path(GL_ROOT, "04_Screening")
 
 RESULTS_DIR  <- file.path(GL_ROOT, "05_Extraction_Results")  # team-facing outputs
-REVIEW_DIR   <- file.path(RESULTS_DIR, "review")      # extraction's own to-do lists
-SCORES_DIR   <- file.path(RESULTS_DIR, "scores")
 
 # Quality check is the stage after extraction: the workbooks a consultant
 # fills in, and what comes back from them. The workbooks used to be written
@@ -59,6 +57,15 @@ REPO_ROOT <- local({
   }
   file.path(GL_ROOT, "07_Pipeline")       # the usual location
 })
+
+# Vocabulary work: the terms the machine proposes and the audit workbooks a
+# person checks them in. It lives in the repository, not on OneDrive, so a
+# hand-maintained file like location_aliases.csv is version-controlled.
+VOCAB_DIR    <- file.path(REPO_ROOT, "catalogues", "vocabulary")
+
+# Score files from a run. Scratch: the published comparison for each pilot
+# sits in 05_Extraction_Results/pilot/<set>/ai_score.csv.
+SCORES_DIR   <- file.path(REPO_ROOT, "outputs", "scores")
 
 TEMPLATE_XLSX <- local({
   master <- file.path(TEMPLATE_DIR, TEMPLATE_FILE)

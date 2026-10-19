@@ -148,7 +148,7 @@ h <- audit_set(file.path(REPO, "catalogues", "holdout_reference.csv"),
 res <- rbind(g, h)
 if (is.null(res)) { cat("nothing to report\n"); quit(save = "no") }
 
-dir.create(REVIEW_DIR, recursive = TRUE, showWarnings = FALSE)
+dir.create(VOCAB_DIR, recursive = TRUE, showWarnings = FALSE)
 out <- file.path(REPO, "outputs", "extraction", "reference_target_check.csv")
 write.csv(res, out, row.names = FALSE, na = "")
 cat("\nwritten:", out, "\n")

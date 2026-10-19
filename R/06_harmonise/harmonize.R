@@ -284,7 +284,7 @@ resolve_actors <- function(all_names, context = NULL) {
       # organisation. The location side already does this; this side did not.
       prev <- unlist(lapply(
         c(file.path(OUT_DIR, "proposed_new_actors.csv"),
-          file.path(REVIEW_DIR, "proposed_new_actors.csv")), function(f) {
+          file.path(VOCAB_DIR, "proposed_new_actors.csv")), function(f) {
           if (!file.exists(f)) return(character(0))
           d <- tryCatch(read.csv(f, stringsAsFactors = FALSE), error = function(e) NULL)
           if (is.null(d) || !"suggested_code" %in% names(d)) character(0)

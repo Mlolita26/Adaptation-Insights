@@ -147,7 +147,7 @@ REG$norm_country <- tolower(trimws(REG$location_country))
 # Registries and documents name the same place in different languages. Rows are
 # name|alias (both directions are tried). Team-editable; missing file is fine.
 ALIAS <- local({
-  p <- file.path(REVIEW_DIR, "location_aliases.csv")
+  p <- file.path(VOCAB_DIR, "location_aliases.csv")
   if (!file.exists(p)) return(NULL)
   a <- read.csv(p, stringsAsFactors = FALSE, colClasses = "character")
   a[is.na(a)] <- ""
@@ -205,7 +205,7 @@ loc_level <- function(doc, name) {
 # same documents mints new codes while the review file keeps the old ones, and
 # the sheet ends up with codes that resolve to nothing.
 PREV_PROP <- local({
-  f <- file.path(REVIEW_DIR, "proposed_new_locations.csv")
+  f <- file.path(VOCAB_DIR, "proposed_new_locations.csv")
   if (!file.exists(f))
     return(data.frame(location_name = character(0), location_id = character(0),
                       location_country = character(0), first_seen_project = character(0),
@@ -385,7 +385,7 @@ llm_choose <- function(items, vocab, defs, what) {
   all
 }
 
-CAND_LOG <- file.path(REVIEW_DIR, "candidate_vocab_log.csv")
+CAND_LOG <- file.path(VOCAB_DIR, "candidate_vocab_log.csv")
 log_candidate <- function(field, value, context) {
   row <- data.frame(date = format(Sys.Date()), field = field, candidate = value,
                     context = substr(context, 1, 160), stringsAsFactors = FALSE)
@@ -586,7 +586,7 @@ if (!is.null(prop)) {
       "coordinates to be entered in QC - the document does not give them"))
   }
   # append to the shared review file, dedup by name+country+project
-  PROP_CSV <- file.path(REVIEW_DIR, "proposed_new_locations.csv")
+  PROP_CSV <- file.path(VOCAB_DIR, "proposed_new_locations.csv")
   if (file.exists(PROP_CSV)) {
     old <- read.csv(PROP_CSV, stringsAsFactors = FALSE, colClasses = "character")
     key <- function(d) tolower(paste(d$location_name, d$location_country, d$first_seen_project))

@@ -305,7 +305,7 @@ if (LIMIT > 0 && length(docs) > LIMIT) docs <- docs[seq_len(LIMIT)]
 cat("to judge:", length(docs), "documents |", length(done), "already done |", MODEL, "\n")
 if (!length(docs)) quit(save = "no")
 
-dir.create(REVIEW_DIR, recursive = TRUE, showWarnings = FALSE)
+dir.create(VOCAB_DIR, recursive = TRUE, showWarnings = FALSE)
 FIELDS <- c("source", "folder", "filename", "verdict", "verdict_model", "reason",
             "family", "family_rule", "family_agrees",
             "doc_type", "doc_kind_stated", "publication_year", "project_name",

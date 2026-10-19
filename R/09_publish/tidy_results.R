@@ -22,7 +22,7 @@
 # What is deliberately NOT moved, having been checked:
 #   review/backup/            repair_scope_screen.R reads two files from it
 #   review/headline_results_survey/   a finished survey, cited by the pilot READMEs
-#   everything a script names under RESULTS_DIR, REVIEW_DIR or SCORES_DIR
+#   everything a script names under RESULTS_DIR, VOCAB_DIR or SCORES_DIR
 #
 #   Rscript R/09_publish/tidy_results.R --dry
 #   Rscript R/09_publish/tidy_results.R
@@ -52,7 +52,7 @@ if (dir.exists(sp)) {
   pick <- c(pick, f[!grepl("^reverify_", basename(f))])   # build_reverify_list.R globs these
 }
 for (d in c("adjudication_batches", "adjudication_results")) {
-  p <- file.path(REVIEW_DIR, d)
+  p <- file.path(VOCAB_DIR, d)
   if (dir.exists(p)) pick <- c(pick, list.files(p, full.names = TRUE, recursive = TRUE))
 }
 

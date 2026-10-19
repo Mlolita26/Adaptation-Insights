@@ -23,7 +23,7 @@ if (is.na(nb)) nb <- 6
 
 CAND <- file.path(SCREEN_DIR, "inputs", "decisions", "adjudication_candidates.csv")
 SC   <- file.path(SCREEN_DIR, "scope_screen.csv")
-OUTD <- file.path(REVIEW_DIR, "adjudication_batches")
+OUTD <- file.path(VOCAB_DIR, "adjudication_batches")
 dir.create(OUTD, recursive = TRUE, showWarnings = FALSE)
 
 cand <- read.csv(CAND, stringsAsFactors = FALSE, colClasses = "character")
