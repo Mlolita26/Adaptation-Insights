@@ -108,9 +108,9 @@ run_gcf_documents_scraper <- function() {
   LIMIT <- suppressWarnings(as.integer(opt("--limit", NA)))
   REFS  <- trimws(strsplit(opt("--refs", ""), ",")[[1]]); REFS <- REFS[nzchar(REFS)]
 
-  # PATHS$root is 07_Pipeline; the review folder sits beside it under the
+  # PATHS$root is 07_Pipeline; screening sits beside it under the
   # Grey Literature root
-  asmt <- file.path(dirname(PATHS$root), "05_Extraction_Results", "review",
+  asmt <- file.path(dirname(PATHS$root), "04_Screening", "reports",
                     "gcf_portfolio_assessment.csv")
   if (!file.exists(asmt)) {
     cli::cli_alert_danger("gcf_portfolio_assessment.csv not found; run the portfolio assessment first")

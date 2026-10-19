@@ -210,7 +210,7 @@ overview_notes <- data.frame(note = c(
   "not_pdf: Word and Excel files (counted inside files_on_disk).",
   "duplicates_moved_out: copies moved to 03_Documents/duplicates with the register there.",
   "in_zotero: screened documents whose file is attached in the Zotero group library (match on file name).",
-  sprintf("Screening file: %s (%d judgements). Generated %s.", file.path("05_Extraction_Results", "review", "scope_screen.csv"), nrow(sc), format(Sys.time(), "%Y-%m-%d %H:%M"))))
+  sprintf("Screening file: %s (%d judgements). Generated %s.", file.path("04_Screening", "scope_screen.csv"), nrow(sc), format(Sys.time(), "%Y-%m-%d %H:%M"))))
 
 # scenario 1: strict agriculture (the rule as it stands)
 s1_src <- add_total(by_src(docs, function(d) data.frame(source = SRC_LABEL[[d$source[1]]],
