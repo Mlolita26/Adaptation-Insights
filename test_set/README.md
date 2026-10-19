@@ -19,6 +19,12 @@ The PDFs are in the Zotero group library under **Pilot test set (reference
 answers)**, in two sub-collections, `Gold P001-P010` and `Holdout H001-H010`.
 Filenames there match `documents.csv`.
 
+Each record in those two collections carries its project code in Zotero's
+**Loc. in Archive** field. To show it as a column, right-click the column
+headings in the middle pane and tick "Loc. in Archive". The same code is also
+on each record as a tag, `pilot:P001`, so the tag selector filters by it.
+`R/04_catalogue/zotero_testset_codes.R` writes both and can be re-run.
+
 ## Gold and holdout
 
 Both sets hold the same kind of record. They differ in how they have been
