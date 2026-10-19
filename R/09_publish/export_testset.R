@@ -1,0 +1,81 @@
+# export_testset.R - the pilot test set as one tidy folder for collaborators.
+#
+# Two things, side by side, which is what makes it usable:
+#   reference_*   the answers for the ten gold projects and the ten holdout
+#                 documents
+#   pipeline_*    what this pipeline extracted for the same documents
+# Scoring is then reference vs pipeline, and anyone can see both halves.
+#
+# Only one copy of each answer table is published here. The reading-based
+# 308-row location file stays on OneDrive: it is a separate AI-read coverage
+# benchmark, not an answer key, and having two files called "the gold
+# locations" is how people end up scoring against the wrong one.
+#
+#   Rscript R/09_publish/export_testset.R
+
+full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
+REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
+source(file.path(REPO, "R", "00_shared", "paths.R"))
+
+CAT <- file.path(REPO, "catalogues")
+OUT <- file.path(REPO, "test_set")
+dir.create(OUT, recursive = TRUE, showWarnings = FALSE)
+
+cp <- function(from, to, what) {
+  if (!file.exists(from)) { cat("  MISSING:", basename(from), "\n"); return(invisible(FALSE)) }
+  d <- read.csv(from, stringsAsFactors = FALSE, colClasses = "character")
+  d[is.na(d)] <- ""
+  write.csv(d, file.path(OUT, to), row.names = FALSE, fileEncoding = "UTF-8")
+  cat(sprintf("  %-34s %4d rows  %2d cols   %s\n", to, nrow(d), ncol(d), what))
+  invisible(TRUE)
+}
+
+cat("reference answers\n")
+cp(file.path(CAT, "gold_v1_general.csv"),    "reference_gold_general.csv",   "ten gold projects, project level")
+cp(file.path(CAT, "gold_v1_locations.csv"),  "reference_gold_locations.csv", "ten gold projects, location level")
+cp(file.path(CAT, "gold_v1_results.csv"),    "reference_gold_results.csv",   "result values with metric, unit, page")
+cp(file.path(CAT, "holdout_reference.csv"),  "reference_holdout_general.csv","ten holdout documents, project level")
+
+## ---- what the pipeline extracted for the same documents --------------------
+# The published workbooks are the stable copy; the run folders under outputs/
+# are working files and are not in the repo.
+cat("\npipeline extraction for the same documents\n")
+suppressMessages(library(openxlsx))
+GEN <- file.path(RESULTS_DIR, "extracted_records_latest.xlsx")
+LOC <- file.path(RESULTS_DIR, "location_records_latest.xlsx")
+
+grab <- function(xlsx, sheet, to, what) {
+  if (!file.exists(xlsx)) { cat("  MISSING workbook:", basename(xlsx), "\n"); return(invisible(FALSE)) }
+  sheets <- getSheetNames(xlsx)
+  if (!sheet %in% sheets) { cat("  no sheet", sheet, "in", basename(xlsx), "\n"); return(invisible(FALSE)) }
+  d <- read.xlsx(xlsx, sheet = sheet)
+  d[] <- lapply(d, as.character); d[is.na(d)] <- ""
+  write.csv(d, file.path(OUT, to), row.names = FALSE, fileEncoding = "UTF-8")
+  cat(sprintf("  %-34s %4d rows  %2d cols   %s\n", to, nrow(d), ncol(d), what))
+  invisible(TRUE)
+}
+grab(GEN, "project_data_general", "pipeline_gold_general.csv",    "pipeline output, gold, project level")
+grab(GEN, "holdout",              "pipeline_holdout_general.csv", "pipeline output, holdout, project level")
+grab(LOC, "project_data_location-specific", "pipeline_gold_locations.csv",
+     "pipeline output, gold, location level")
+
+## ---- which document each project code refers to -----------------------------
+man <- file.path(REPO, "outputs", "extraction", "pilot_manifest.csv")
+hman <- file.path(REPO, "outputs", "extraction", "holdout", "holdout_manifest.csv")
+rows <- list()
+for (f in c(man, hman)) {
+  if (!file.exists(f)) next
+  d <- read.csv(f, stringsAsFactors = FALSE)
+  rows[[length(rows) + 1]] <- data.frame(
+    code = d$project_code,
+    document = basename(d$pdf),
+    focus = if ("focus" %in% names(d)) d$focus else "",
+    set = if (grepl("holdout", f)) "holdout" else "gold",
+    stringsAsFactors = FALSE)
+}
+if (length(rows)) {
+  m <- do.call(rbind, rows)
+  write.csv(m, file.path(OUT, "documents.csv"), row.names = FALSE, fileEncoding = "UTF-8")
+  cat(sprintf("\n  %-34s %4d rows             which PDF each code refers to\n", "documents.csv", nrow(m)))
+}
+cat("\nwritten to:", OUT, "\n")
