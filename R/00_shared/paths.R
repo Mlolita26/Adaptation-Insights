@@ -18,8 +18,30 @@ REVIEW_DIR   <- file.path(RESULTS_DIR, "review")      # human to-do lists
 SCORES_DIR   <- file.path(RESULTS_DIR, "scores")
 ARCHIVE_DIR  <- file.path(GL_ROOT, "99_Archive")
 
-TEMPLATE_XLSX <- file.path(TEMPLATE_DIR,
-  "EvidenceSynthesis_GreyLiterature_AfricanAgricultureAdaptation_UpdatedTemplate_27Aug2026.xlsx")
+# The template workbook. Four scripts read it directly (harmonise, locations,
+# the location scorer, the actor audit), so a clone without it cannot run
+# them. A copy is therefore committed under template/. The OneDrive master
+# wins when it is reachable, so edits by the template owner take effect
+# immediately; the committed copy is the fallback for anyone who has only the
+# repository. Refresh it with R/00_shared/export_template.R on each release.
+TEMPLATE_FILE <- "EvidenceSynthesis_GreyLiterature_AfricanAgricultureAdaptation_UpdatedTemplate_27Aug2026.xlsx"
+
+# The repository root, found without relying on how the caller was invoked:
+# walk up from the working directory until R/00_shared/paths.R is underneath.
+REPO_ROOT <- local({
+  d <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+  for (i in 1:6) {
+    if (file.exists(file.path(d, "R", "00_shared", "paths.R"))) return(d)
+    p <- dirname(d); if (identical(p, d)) break; d <- p
+  }
+  file.path(GL_ROOT, "05_Pipeline")       # the usual location
+})
+
+TEMPLATE_XLSX <- local({
+  master <- file.path(TEMPLATE_DIR, TEMPLATE_FILE)
+  if (file.exists(master)) master
+  else file.path(REPO_ROOT, "template", TEMPLATE_FILE)
+})
 PILOT_DIR     <- file.path(DOCS_ROOT, "pilot")   # gold set, holdout set, candidate pool
 GOLD_DOCS_DIR <- file.path(PILOT_DIR, "gold_set_P001-P010")
 
