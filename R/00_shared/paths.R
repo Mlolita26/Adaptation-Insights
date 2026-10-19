@@ -23,6 +23,12 @@ RESULTS_DIR  <- file.path(GL_ROOT, "04_Extraction_Results")  # team-facing outpu
 REVIEW_DIR   <- file.path(RESULTS_DIR, "review")      # extraction's own to-do lists
 SCORES_DIR   <- file.path(RESULTS_DIR, "scores")
 
+# Quality check is the stage after extraction: the workbooks a consultant
+# fills in, and what comes back from them. The workbooks used to be written
+# into the pipeline's scratch directory, where the people who have to fill
+# them in would never find them.
+QC_DIR       <- file.path(GL_ROOT, "06_Quality_Check")
+
 # The two extraction pilots, each gathered in one folder. Nothing else has
 # been extracted: the published workbooks hold the ten gold projects and the
 # ten holdout documents, not the corpus.

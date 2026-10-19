@@ -16,9 +16,9 @@
 #
 # Writes, under 04_Extraction_Results:
 #   qc_corrected_general.csv / qc_corrected_locations.csv  the merged result
-#   review/qc_change_log.csv        every cell that changed, and who changed it
-#   review/qc_offlist_values.csv    values typed outside the controlled list
-#   review/qc_vocab_corrections.csv vocabulary choices a person overruled
+#   qc_change_log.csv               every cell that changed, and who changed it
+#   qc_offlist_values.csv           values typed outside the controlled list
+#   qc_vocab_corrections.csv        vocabulary choices a person overruled
 #   qc_overview.xlsx                one row per project, for spotting outliers
 #
 #   Rscript R/07_review/collect_qc_workbooks.R [--root <dir>] [--run <file>] [--dry]
@@ -43,7 +43,7 @@ opt  <- function(flag, default = "") {
 }
 DRY  <- any(args == "--dry")
 OUT_EXTRACT <- Sys.getenv("EXTRACT_OUT_DIR", file.path(REPO, "outputs", "extraction"))
-ROOT <- opt("--root", Sys.getenv("QC_ROOT", file.path(REPO, "outputs", "qc")))
+ROOT <- opt("--root", Sys.getenv("QC_ROOT", QC_DIR))
 
 rd <- function(f) {
   d <- read.csv(f, stringsAsFactors = FALSE, colClasses = "character", check.names = FALSE)
@@ -239,11 +239,11 @@ w <- function(df, path, what) {
   cat(sprintf("  %-34s %4d rows  %s\n", what, nrow(df), if (DRY) "(--dry)" else path))
 }
 cat("\nwriting:\n")
-w(GEN, file.path(RESULTS_DIR, "qc_corrected_general.csv"), "corrected general")
-w(LOC, file.path(RESULTS_DIR, "qc_corrected_locations.csv"), "corrected locations")
-w(CHG, file.path(REVIEW_DIR, "qc_change_log.csv"), "change log")
-w(OFF, file.path(REVIEW_DIR, "qc_offlist_values.csv"), "values outside the list")
-w(VC,  file.path(REVIEW_DIR, "qc_vocab_corrections.csv"), "vocabulary corrections")
+w(GEN, file.path(QC_DIR, "qc_corrected_general.csv"), "corrected general")
+w(LOC, file.path(QC_DIR, "qc_corrected_locations.csv"), "corrected locations")
+w(CHG, file.path(QC_DIR, "qc_change_log.csv"), "change log")
+w(OFF, file.path(QC_DIR, "qc_offlist_values.csv"), "values outside the list")
+w(VC,  file.path(QC_DIR, "qc_vocab_corrections.csv"), "vocabulary corrections")
 
 ## ---- durable vocabulary fixes ----------------------------------------------
 if (!is.null(VC) && !DRY) {
@@ -269,7 +269,7 @@ if (!is.null(GEN) && !DRY) {
   qc_sheet(wb, "projects", GEN)
   if (!is.null(CHG)) qc_sheet(wb, "changes", CHG)
   if (!is.null(OFF)) qc_sheet(wb, "off_list", OFF)
-  f <- file.path(RESULTS_DIR, "qc_overview.xlsx")
+  f <- file.path(QC_DIR, "qc_overview.xlsx")
   tryCatch({ saveWorkbook(wb, f, overwrite = TRUE); cat("  overview:", f, "\n") },
            error = function(e) cat("  overview NOT written (open in Excel?):",
                                    conditionMessage(e), "\n"))

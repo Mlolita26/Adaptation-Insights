@@ -78,7 +78,7 @@ LOCF <- newest_in(file.path(dirname(GEN), "locations"), "^locations_harmonized_.
 if (is.na(LOCF)) LOCF <- newest_in(file.path(OUT_EXTRACT, "locations"),
                                    "^locations_harmonized_.*\\.csv$")
 
-OUTDIR <- opt("--out", file.path(REPO, "outputs", "qc", RUN_ID))
+OUTDIR <- opt("--out", file.path(QC_DIR, RUN_ID))
 
 cat("run:      ", GEN, "\n  run id: ", RUN_ID, "\n")
 cat("locations:", if (is.na(LOCF)) "(none found - workbooks get a general sheet only)" else LOCF, "\n")
