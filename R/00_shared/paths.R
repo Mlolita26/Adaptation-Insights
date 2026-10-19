@@ -13,9 +13,21 @@ GL_ROOT    <- "C:/Users/mlolita/OneDrive - CGIAR/WP2_Evidence Synthesis/Grey Lit
 PROTOCOL_DIR <- file.path(GL_ROOT, "01_Protocol")     # protocol + QC docx
 TEMPLATE_DIR <- file.path(GL_ROOT, "02_Template")     # Lucy's template + working DBs
 DOCS_ROOT    <- file.path(GL_ROOT, "03_Documents")    # the corpus (per source)
+# Screening comes before extraction and is its own stage: the scope ledger,
+# the queues a person still has to rule on, and the Zotero ingestion logs.
+# It used to sit under the extraction results, where two thirds of the review
+# folder was screening material that had nothing to do with extraction.
+SCREEN_DIR   <- file.path(GL_ROOT, "04_Screening")
+
 RESULTS_DIR  <- file.path(GL_ROOT, "04_Extraction_Results")  # team-facing outputs
-REVIEW_DIR   <- file.path(RESULTS_DIR, "review")      # human to-do lists
+REVIEW_DIR   <- file.path(RESULTS_DIR, "review")      # extraction's own to-do lists
 SCORES_DIR   <- file.path(RESULTS_DIR, "scores")
+
+# The two extraction pilots, each gathered in one folder. Nothing else has
+# been extracted: the published workbooks hold the ten gold projects and the
+# ten holdout documents, not the corpus.
+GOLD_DIR     <- file.path(RESULTS_DIR, "gold_pilot")
+CHARITY_DIR  <- file.path(RESULTS_DIR, "charity_pilot")
 ARCHIVE_DIR  <- file.path(GL_ROOT, "99_Archive")
 
 # The template workbook. Four scripts read it directly (harmonise, locations,

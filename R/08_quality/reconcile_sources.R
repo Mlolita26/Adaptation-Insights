@@ -8,7 +8,7 @@
 #   site inventory  = catalogues/<src>/attestation.csv  (what the site lists)
 #   disk            = 03_Documents/<folders in SCAN_DIRS>
 #   download log    = outputs/download_log.csv (+ shards)
-#   screening       = 04_Extraction_Results/review/scope_screen.csv
+#   screening       = 04_Screening/scope_screen.csv
 #   doc index       = catalogues/doc_index.csv (in-scope files only)
 #
 # A difference is acceptable ONLY if the ledger gives it a disposition. The
@@ -32,7 +32,7 @@ only <- opt("source")
 SOURCES <- names(SCAN_DIRS)
 if (!is.null(only)) SOURCES <- intersect(SOURCES, strsplit(only, ",")[[1]])
 
-SCREEN <- file.path(REVIEW_DIR, "scope_screen.csv")
+SCREEN <- file.path(SCREEN_DIR, "scope_screen.csv")
 sc <- read.csv(SCREEN, stringsAsFactors = FALSE, colClasses = "character")
 sc[is.na(sc)] <- ""
 

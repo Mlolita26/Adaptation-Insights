@@ -35,11 +35,11 @@ REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..
 source(file.path(REPO, "R", "00_shared", "paths.R"))
 args <- commandArgs(trailingOnly = TRUE)
 
-SCREEN <- file.path(REVIEW_DIR, "scope_screen.csv")
-OVR    <- file.path(REVIEW_DIR, "scope_screen_overrides.csv")
-SUP    <- file.path(REVIEW_DIR, "supersedes.csv")
+SCREEN <- file.path(SCREEN_DIR, "scope_screen.csv")
+OVR    <- file.path(SCREEN_DIR, "scope_screen_overrides.csv")
+SUP    <- file.path(SCREEN_DIR, "supersedes.csv")
 EXTRA  <- file.path(REPO, "audit", "2026-10_completeness", "cif_rescreen.csv")
-OUT    <- file.path(REVIEW_DIR, "scope_screen_reask_full.csv")
+OUT    <- file.path(SCREEN_DIR, "scope_screen_reask_full.csv")
 
 sc <- read.csv(SCREEN, stringsAsFactors = FALSE, colClasses = "character")
 sc[is.na(sc)] <- ""
@@ -105,7 +105,7 @@ if (file.exists(EXTRA)) {
 }
 
 if ("--exclude-done" %in% args) {
-  parts <- Sys.glob(file.path(REVIEW_DIR, "scope_screen_parts", "reverify_*.csv"))
+  parts <- Sys.glob(file.path(SCREEN_DIR, "scope_screen_parts", "reverify_*.csv"))
   done <- unlist(lapply(parts, function(p) {
     d <- tryCatch(read.csv(p, stringsAsFactors = FALSE, colClasses = "character"),
                   error = function(e) NULL)

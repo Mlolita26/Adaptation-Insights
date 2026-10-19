@@ -27,7 +27,7 @@ REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..
 source(file.path(REPO, "R", "00_shared", "paths.R"))
 DRY <- "--dry" %in% commandArgs(trailingOnly = TRUE)
 
-SCREEN <- file.path(REVIEW_DIR, "scope_screen.csv")
+SCREEN <- file.path(SCREEN_DIR, "scope_screen.csv")
 sc <- read.csv(SCREEN, stringsAsFactors = FALSE, colClasses = "character")
 sc[is.na(sc)] <- ""
 
@@ -75,7 +75,7 @@ if (length(skipped)) {
 if (length(demote)) {
   cat("\nfiled but no longer in scope (", length(demote), ") - reported, NOT moved:\n", sep = "")
   for (d in head(demote, 20)) cat(sprintf("  %-9s %-56s %s\n", d[1], substr(d[2], 1, 56), d[3]))
-  out <- file.path(REVIEW_DIR, "filed_but_not_in_scope.csv")
+  out <- file.path(SCREEN_DIR, "filed_but_not_in_scope.csv")
   write.csv(do.call(rbind.data.frame, c(demote, stringsAsFactors = FALSE)) |>
               setNames(c("source", "filename", "verdict_ruled")),
             out, row.names = FALSE, fileEncoding = "UTF-8")

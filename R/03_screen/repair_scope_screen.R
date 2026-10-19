@@ -33,11 +33,11 @@ full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
 source(file.path(REPO, "R", "00_shared", "paths.R"))
 
-SCREEN <- file.path(REVIEW_DIR, "scope_screen.csv")
-OVR    <- file.path(REVIEW_DIR, "scope_screen_overrides.csv")
+SCREEN <- file.path(SCREEN_DIR, "scope_screen.csv")
+OVR    <- file.path(SCREEN_DIR, "scope_screen_overrides.csv")
 KEYS   <- file.path(REPO, "audit", "2026-10_completeness", "gcf_shifted_keys.csv")
-SNAP   <- file.path(REVIEW_DIR, "backup", "ruled_snapshot_2026-10-02.csv")
-BK     <- file.path(REVIEW_DIR, "backup", "scope_screen_2026-10-02.csv")
+SNAP   <- file.path(SCREEN_DIR, "backup", "ruled_snapshot_2026-10-02.csv")
+BK     <- file.path(SCREEN_DIR, "backup", "scope_screen_2026-10-02.csv")
 stopifnot(file.exists(SCREEN), file.exists(BK), file.exists(KEYS))
 
 FIELDS <- c("source", "folder", "filename", "verdict", "verdict_model", "reason",

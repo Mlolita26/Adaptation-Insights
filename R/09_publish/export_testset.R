@@ -41,8 +41,8 @@ cp(file.path(CAT, "holdout_reference.csv"),  "reference_holdout_general.csv","te
 # are working files and are not in the repo.
 cat("\npipeline extraction for the same documents\n")
 suppressMessages(library(openxlsx))
-GEN <- file.path(RESULTS_DIR, "extracted_records_latest.xlsx")
-LOC <- file.path(RESULTS_DIR, "location_records_latest.xlsx")
+GEN <- file.path(GOLD_DIR, "extracted_records_latest.xlsx")
+LOC <- file.path(GOLD_DIR, "location_records_latest.xlsx")
 
 grab <- function(xlsx, sheet, to, what) {
   if (!file.exists(xlsx)) { cat("  MISSING workbook:", basename(xlsx), "\n"); return(invisible(FALSE)) }

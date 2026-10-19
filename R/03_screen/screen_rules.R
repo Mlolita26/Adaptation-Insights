@@ -40,8 +40,8 @@ source(file.path(REPO, "R", "00_shared", "paths.R"))
 source(file.path(REPO, "R", "00_shared", "doc_families.R"))
 source(file.path(REPO, "R", "03_screen", "screen_text.R"))   # is_boilerplate_quote
 
-SCREEN <- file.path(REVIEW_DIR, "scope_screen.csv")
-CENSUS <- file.path(REVIEW_DIR, "family_census.csv")
+SCREEN <- file.path(SCREEN_DIR, "scope_screen.csv")
+CENSUS <- file.path(SCREEN_DIR, "family_census.csv")
 sc <- read.csv(SCREEN, stringsAsFactors = FALSE, colClasses = "character", encoding = "UTF-8")
 sc[is.na(sc)] <- ""
 n <- nrow(sc)
@@ -55,7 +55,7 @@ cat("judgements:", n, "\n")
 #    the year rule, so the window is judged - and scope_screen.csv rewritten -
 #    with the recovered year. Idempotent: the override value is stable, so a
 #    second run replaces like with like.
-YOVR <- file.path(REVIEW_DIR, "year_overrides.csv")
+YOVR <- file.path(SCREEN_DIR, "year_overrides.csv")
 year_fixed <- rep(FALSE, n)
 if (file.exists(YOVR)) {
   yo <- read.csv(YOVR, stringsAsFactors = FALSE, colClasses = "character", encoding = "UTF-8")
@@ -124,7 +124,7 @@ rule[parked] <- "progress document (parked folder); family pending a team decisi
 #     sector and intervention must be judged on the evaluation, not a 5-19
 #     page portal sheet. Applied before the human overrides, so a recorded
 #     decision on the sheet still wins.
-SUP <- file.path(REVIEW_DIR, "supersedes.csv")
+SUP <- file.path(SCREEN_DIR, "supersedes.csv")
 if (file.exists(SUP)) {
   sp <- read.csv(SUP, stringsAsFactors = FALSE, colClasses = "character", encoding = "UTF-8")
   sp[is.na(sp)] <- ""
@@ -142,7 +142,7 @@ if (file.exists(SUP)) {
 #    holds one row per decided document: source, filename, verdict (in scope /
 #    out of scope / unsure), note, by. This is the accepted / rejected loop
 #    in the workflow diagram.
-OVR <- file.path(REVIEW_DIR, "scope_screen_overrides.csv")
+OVR <- file.path(SCREEN_DIR, "scope_screen_overrides.csv")
 if (file.exists(OVR)) {
   ov <- read.csv(OVR, stringsAsFactors = FALSE, colClasses = "character", encoding = "UTF-8")
   ov <- ov[ov$verdict %in% c("in scope", "out of scope", "unsure"), ]
@@ -228,18 +228,18 @@ portal_sheets <- sc[portal, c("source", "folder", "filename", "chars",
 ## ---- write ---------------------------------------------------------------------
 write.csv(sc, SCREEN, row.names = FALSE, na = "", fileEncoding = "UTF-8")
 reask <- sc[bare, c("source", "folder", "filename", "verdict", "reason", "family")]
-write.csv(reask, file.path(REVIEW_DIR, "scope_screen_reask.csv"), row.names = FALSE, fileEncoding = "UTF-8")
-write.csv(conf, file.path(REVIEW_DIR, "scope_screen_conflicts.csv"), row.names = FALSE, fileEncoding = "UTF-8")
+write.csv(reask, file.path(SCREEN_DIR, "scope_screen_reask.csv"), row.names = FALSE, fileEncoding = "UTF-8")
+write.csv(conf, file.path(SCREEN_DIR, "scope_screen_conflicts.csv"), row.names = FALSE, fileEncoding = "UTF-8")
 contradictions <- sc[contra, c("source", "folder", "filename", "verdict", "verdict_ruled", "reason")]
-write.csv(contradictions, file.path(REVIEW_DIR, "scope_screen_contradictions.csv"), row.names = FALSE, fileEncoding = "UTF-8")
-write.csv(portal_sheets, file.path(REVIEW_DIR, "scope_screen_portal_sheets.csv"), row.names = FALSE, fileEncoding = "UTF-8")
+write.csv(contradictions, file.path(SCREEN_DIR, "scope_screen_contradictions.csv"), row.names = FALSE, fileEncoding = "UTF-8")
+write.csv(portal_sheets, file.path(SCREEN_DIR, "scope_screen_portal_sheets.csv"), row.names = FALSE, fileEncoding = "UTF-8")
 cat("reason contradicts verdict (Phase 4c re-ask):", nrow(contradictions), "\n")
 if (nrow(contradictions)) print(table(contradictions$source))
 cat("portal-sheet listing:", nrow(portal_sheets), "gef rows\n")
 # the human queue: every unsure document with the model's reason and the rule
 # that made it unsure, so a person can decide without opening the CSV
 unsure <- sc[sc$verdict_ruled == "unsure", c("source", "folder", "filename", "family", "reason", "rule_applied", "doc_type", "publication_year")]
-write.csv(unsure, file.path(REVIEW_DIR, "scope_screen_unsure.csv"), row.names = FALSE, fileEncoding = "UTF-8")
+write.csv(unsure, file.path(SCREEN_DIR, "scope_screen_unsure.csv"), row.names = FALSE, fileEncoding = "UTF-8")
 cat("unsure queue for a person:", nrow(unsure), "\n")
 
 cat("\nverdicts before and after the rules:\n")

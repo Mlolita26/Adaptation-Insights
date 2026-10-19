@@ -8,15 +8,15 @@
 # shard can be resumed; they are ignored by everything else.
 #
 #   Rscript R/03_screen/merge_screen_parts.R
-#   -> 04_Extraction_Results/review/scope_screen.csv
+#   -> 04_Screening/scope_screen.csv
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."),
                       mustWork = TRUE)
 source(file.path(REPO, "R", "00_shared", "paths.R"))
 
-MAIN  <- file.path(REVIEW_DIR, "scope_screen.csv")
-PARTS <- list.files(file.path(REVIEW_DIR, "scope_screen_parts"), pattern = "\\.csv$",
+MAIN  <- file.path(SCREEN_DIR, "scope_screen.csv")
+PARTS <- list.files(file.path(SCREEN_DIR, "scope_screen_parts"), pattern = "\\.csv$",
                     full.names = TRUE)
 rd <- function(f) {
   d <- tryCatch(read.csv(f, stringsAsFactors = FALSE, colClasses = "character",

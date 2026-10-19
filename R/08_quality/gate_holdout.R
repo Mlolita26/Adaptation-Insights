@@ -32,7 +32,7 @@ REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..
 source(file.path(REPO, "R", "00_shared", "paths.R"))
 
 HOLD <- file.path(REPO, "audit", "2026-10_completeness", "holdout", "wrong_exclusions.csv")
-SCREEN <- file.path(REVIEW_DIR, "scope_screen.csv")
+SCREEN <- file.path(SCREEN_DIR, "scope_screen.csv")
 stopifnot(file.exists(HOLD), file.exists(SCREEN))
 
 h  <- read.csv(HOLD,   stringsAsFactors = FALSE, colClasses = "character")
@@ -85,7 +85,7 @@ if (nrow(missed)) {
         missed$expected[i], "| basis:", substr(missed$basis[i], 1, 110), "\n")
 }
 
-out <- file.path(REVIEW_DIR, "holdout_score.csv")
+out <- file.path(GOLD_DIR, "holdout_score.csv")
 write.csv(h[, c("source", "filename", "confidence", "expected", "verdict_now",
                 "flagged", "pass", "basis")], out, row.names = FALSE, fileEncoding = "UTF-8")
 cat("\nwritten:", out, "\n")

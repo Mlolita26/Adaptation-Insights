@@ -45,10 +45,10 @@ opt <- function(k, d = NULL) {
 }
 ONLY  <- opt("source")
 LIMIT <- suppressWarnings(as.integer(opt("limit", NA)))
-OUT   <- file.path(REVIEW_DIR, "evidence_scan.csv")
-CAND  <- file.path(REVIEW_DIR, "adjudication_candidates.csv")
+OUT   <- file.path(SCREEN_DIR, "evidence_scan.csv")
+CAND  <- file.path(SCREEN_DIR, "adjudication_candidates.csv")
 
-SCREEN <- file.path(REVIEW_DIR, "scope_screen.csv")
+SCREEN <- file.path(SCREEN_DIR, "scope_screen.csv")
 sc <- read.csv(SCREEN, stringsAsFactors = FALSE, colClasses = "character")
 sc[is.na(sc)] <- ""
 

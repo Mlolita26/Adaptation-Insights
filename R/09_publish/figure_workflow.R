@@ -109,7 +109,7 @@ segments(17, 36.6, 83, 36.6, col = GREY, lwd = 1.6)
 xs <- c(17, 50, 83)
 for (x in xs) arrow(x, 36.6, x, 33.6)
 
-R1 <- "04_Extraction_Results\\"
+R1 <- "04_Extraction_Results\\gold_pilot\\"
 R2 <- "04_Extraction_Results\\review\\"
 docs(xs[1], 27, 31, 12, c("EXTRACTED DATA"),
      c(paste0(R1, "extracted_records_latest.xlsx"),

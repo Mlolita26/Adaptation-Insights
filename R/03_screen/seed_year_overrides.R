@@ -15,16 +15,16 @@
 # - reproduces the file byte for byte.
 #
 #   Rscript R/03_screen/seed_year_overrides.R
-#   -> 04_Extraction_Results/review/year_overrides.csv
+#   -> 04_Screening/year_overrides.csv
 #      (source, filename, publication_year, evidence)
 
 full <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", ".."), mustWork = TRUE)
 source(file.path(REPO, "R", "00_shared", "paths.R"))
 
-SCREEN <- file.path(REVIEW_DIR, "scope_screen.csv")
+SCREEN <- file.path(SCREEN_DIR, "scope_screen.csv")
 DATES  <- file.path(REPO, "catalogues", "gef", "gef_evaluation_dates.csv")
-OUT    <- file.path(REVIEW_DIR, "year_overrides.csv")
+OUT    <- file.path(SCREEN_DIR, "year_overrides.csv")
 
 sc <- read.csv(SCREEN, stringsAsFactors = FALSE, colClasses = "character", encoding = "UTF-8")
 sc[is.na(sc)] <- ""

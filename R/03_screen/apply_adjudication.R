@@ -26,9 +26,9 @@ REPO <- normalizePath(file.path(dirname(sub("^--file=", "", full[1])), "..", "..
 source(file.path(REPO, "R", "00_shared", "paths.R"))
 DRY <- "--dry" %in% commandArgs(trailingOnly = TRUE)
 
-ADJ <- file.path(REVIEW_DIR, "scope_reverify_adjudication.csv")
-OVR <- file.path(REVIEW_DIR, "scope_screen_overrides.csv")
-SC  <- file.path(REVIEW_DIR, "scope_screen.csv")
+ADJ <- file.path(SCREEN_DIR, "scope_reverify_adjudication.csv")
+OVR <- file.path(SCREEN_DIR, "scope_screen_overrides.csv")
+SC  <- file.path(SCREEN_DIR, "scope_screen.csv")
 stopifnot(file.exists(ADJ), file.exists(OVR))
 
 a  <- read.csv(ADJ, stringsAsFactors = FALSE, colClasses = "character")

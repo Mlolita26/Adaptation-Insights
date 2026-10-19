@@ -8,7 +8,7 @@
 #
 #   scores/{score,align}_locations_gpt-5-*_<timestamp>_vs_*.csv
 #       48 dated run outputs from September, superseded by
-#       location_records_latest.xlsx.
+#       gold_pilot/location_records_latest.xlsx.
 #   scores/previous_runs/
 #       already an archive by name; no script refers to it.
 #   review/scope_screen_parts/  EXCEPT reverify_*.csv
@@ -46,7 +46,7 @@ pick <- c(pick, list.files(sc, pattern = "^(score|align)_locations_gpt-5-[a-z]+_
 pr <- file.path(sc, "previous_runs")
 if (dir.exists(pr)) pick <- c(pick, list.files(pr, full.names = TRUE, recursive = TRUE))
 
-sp <- file.path(REVIEW_DIR, "scope_screen_parts")
+sp <- file.path(SCREEN_DIR, "scope_screen_parts")
 if (dir.exists(sp)) {
   f <- list.files(sp, full.names = TRUE)
   pick <- c(pick, f[!grepl("^reverify_", basename(f))])   # build_reverify_list.R globs these

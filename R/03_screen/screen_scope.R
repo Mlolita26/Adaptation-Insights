@@ -44,7 +44,7 @@
 #
 #   Rscript R/03_screen/screen_scope.R              all sources
 #   Rscript R/03_screen/screen_scope.R --source=cif --limit=20
-#   -> 04_Extraction_Results/review/scope_screen.csv   (resumable; appends)
+#   -> 04_Screening/scope_screen.csv   (resumable; appends)
 ##############################################################################
 
 suppressPackageStartupMessages({ library(ellmer); library(pdftools) })
@@ -71,7 +71,7 @@ opt    <- function(n, d = "") {
 }
 SRC    <- opt("source")
 LIMIT  <- suppressWarnings(as.integer(opt("limit", "0")))
-OUT    <- file.path(REVIEW_DIR, opt("out", "scope_screen.csv"))   # --out=parts/x.csv for parallel shards
+OUT    <- file.path(SCREEN_DIR, opt("out", "scope_screen.csv"))   # --out=parts/x.csv for parallel shards
 SHARD  <- opt("shard", "")            # --shard=2/4 : take every 4th document starting at the 2nd
 REASK  <- opt("reask", "")            # --reask=review/scope_screen_reask.csv : judge these again
 dir.create(dirname(OUT), recursive = TRUE, showWarnings = FALSE)
@@ -259,7 +259,7 @@ for (s in names(SCAN)) {
   }
 }
 # one document, one record: aliases found by 02_dedup are not screened
-ALIASES <- file.path(REVIEW_DIR, "duplicates.csv")
+ALIASES <- file.path(SCREEN_DIR, "duplicates.csv")
 skip <- if (file.exists(ALIASES)) {
   a <- read.csv(ALIASES, stringsAsFactors = FALSE, colClasses = "character")
   paste(a$drop_source, a$drop_file)
@@ -268,7 +268,7 @@ docs <- Filter(function(d) !(paste(d$source, d$file) %in% skip), docs)
 if (length(skip)) cat("skipping", length(skip), "duplicate aliases from", basename(ALIASES), "\n")
 
 # the rule-based family from the census (02_dedup/doc_census.R), if it has run
-CENSUS <- file.path(REVIEW_DIR, "family_census.csv")
+CENSUS <- file.path(SCREEN_DIR, "family_census.csv")
 guess_of <- if (file.exists(CENSUS)) {
   cen <- read.csv(CENSUS, stringsAsFactors = FALSE, colClasses = "character")
   setNames(cen$family, paste(cen$source, cen$filename))
@@ -280,7 +280,7 @@ guess_of <- if (file.exists(CENSUS)) {
 # then overwrite settled rows. (A --reask run still resets this below: a
 # re-ask replaces the earlier judgement by design.)
 done <- character(0)
-MAIN <- file.path(REVIEW_DIR, "scope_screen.csv")
+MAIN <- file.path(SCREEN_DIR, "scope_screen.csv")
 for (.f in unique(c(OUT, MAIN))) {
   if (!file.exists(.f)) next
   prev <- tryCatch(read.csv(.f, stringsAsFactors = FALSE, colClasses = "character"),
