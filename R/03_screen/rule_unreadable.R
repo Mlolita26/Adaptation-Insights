@@ -74,9 +74,14 @@ print(table(u$source, ext))
 new <- sc[0, , drop = FALSE]
 new[seq_len(nrow(u)), ] <- ""
 new$source <- u$source; new$folder <- u$folder; new$filename <- u$filename
+# verdict_model holds the MODEL'S VERDICT, not the name of what produced it
+# (screen_rules.R:82 reads it as the base verdict). Putting a provenance
+# string there put "rule, not read" into the verdict column for all 78 rows.
+# The provenance goes in `note`.
 new$verdict <- "out of scope"; new$verdict_ruled <- "out of scope"
+new$verdict_model <- "out of scope"
 new$reason <- reason; new$rule_applied <- reason
-new$verdict_model <- "rule, not read"
+new$note <- "ruled by rule_unreadable.R; the screener does not read this file type"
 if ("doc_type" %in% names(new)) new$doc_type <- ifelse(ext %in% c("xlsx", "xls"), "indicator workbook", ext)
 
 if (DRY) {
