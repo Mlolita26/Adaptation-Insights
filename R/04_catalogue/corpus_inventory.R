@@ -84,7 +84,11 @@ sector_group <- function(reason) {
 ## ---- 1. walk 03_Documents -------------------------------------------------------
 all_files <- list.files(DOCS_ROOT, recursive = TRUE, full.names = FALSE)
 all_files <- all_files[!grepl("^~\\$", basename(all_files))]
-all_files <- all_files[!basename(all_files) %in% c("Corpus_Inventory.xlsx", "README.md", "duplicates_register.xlsx")]
+# The inventory itself, and any dated copy of it, are not corpus documents.
+# Matching the exact name let Corpus_Inventory_BEFORE_REPAIR_20261002.xlsx be
+# counted as an evaluation in the files sheet.
+all_files <- all_files[!grepl("^(Corpus_Inventory|duplicates_register)", basename(all_files)) &
+                       basename(all_files) != "README.md"]
 top <- sub("/.*$", "", all_files)
 src_map <- c(Worldbank = "worldbank", gef = "gef", gcf = "gcf", afdb = "afdb", af = "af", cif = "cif",
              pilot = "pilot", duplicates = "duplicates")

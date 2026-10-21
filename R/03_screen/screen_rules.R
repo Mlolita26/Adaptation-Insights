@@ -110,13 +110,52 @@ for (i in seq_len(n)) {
     set_rule(i, "unsure", "covers several projects: needs a focus project before extraction")
   }
 }
-# 5b. parked progress documents: the folder is the decision of record. The
-#     progress-document family is an open question for the template owner
-#     (00_Knowledge/11_open_questions.md, 18 Sep 2026), so anything living in
-#     a progress_reports folder stays "unsure" whatever the model said.
-parked <- grepl("progress_reports", sc$folder, fixed = TRUE)
-verdict[parked] <- "unsure"
-rule[parked] <- "progress document (parked folder); family pending a team decision"
+# 5b. progress documents are out, by the protocol's first criterion:
+#     "The document evaluates what was done: a completion report, a terminal
+#     or mid term evaluation, a performance evaluation. Proposals, appraisals
+#     and progress reports are out." (AI_Extraction_Protocol.docx, source type)
+#
+#     This used to mark them "unsure" pending a team decision, on the reading
+#     that the protocol's wording might allow them. It does not: it names them
+#     in the same sentence as proposals and appraisals. 217 of the 293 unsure
+#     documents were sitting on that question.
+#
+#     Matched two ways, because the folder is not reliable on its own: 27
+#     World Bank ISRs, GEF PIRs and AF PPRs are filed in ordinary corpus
+#     folders, 6 of them previously counted as in scope.
+#     The family detector alone is not enough to exclude on. It labels GEF
+#     mid-term reviews and terminal evaluations wb_isr or gef_pir: 18 of the
+#     27 family matches outside the parked folders are named
+#     Mid-Term_Review or Terminal_Evaluation, which the protocol names as IN
+#     scope. One of them, gef_4645_Mid-Term_Review.pdf, is H004 in the
+#     holdout set. So a family match only counts when the filename agrees,
+#     and a family match the filename contradicts is left alone and listed
+#     for a person in scope_screen_family_disputed.csv.
+PROGRESS_FAMILIES <- c("wb_isr", "gef_pir", "af_ppr")
+EVAL_NAME <- "terminal[_ ]evaluation|mid[-_ ]?term|completion|final[_ ]evaluation|PPER|PCR|ICR"
+PROG_NAME <- "implementation[_ ]report|performance[_ ]report|progress"
+
+in_parked_folder <- grepl("progress_reports", sc$folder, fixed = TRUE)
+fam_says_progress <- sc$family %in% PROGRESS_FAMILIES
+name_says_eval <- grepl(EVAL_NAME, sc$filename, ignore.case = TRUE)
+name_says_prog <- grepl(PROG_NAME, sc$filename, ignore.case = TRUE)
+
+parked   <- in_parked_folder | (fam_says_progress & name_says_prog & !name_says_eval)
+disputed <- fam_says_progress & !in_parked_folder & name_says_eval & !name_says_prog
+
+verdict[parked] <- "out of scope"
+rule[parked] <- ifelse(in_parked_folder[parked],
+                       "progress document (parked folder); protocol source type excludes progress reports",
+                       paste0("progress document (family ", sc$family[parked],
+                              ", filename agrees); protocol source type excludes progress reports"))
+
+if (any(disputed)) {
+  d <- sc[disputed, c("source", "folder", "filename", "family", "verdict", "verdict_ruled")]
+  d$note <- "family detector says progress, filename says an in-scope evaluation type; left as judged"
+  write.csv(d, file.path(SCREEN_DIR, "inputs", "reports", "scope_screen_family_disputed.csv"),
+            row.names = FALSE, fileEncoding = "UTF-8")
+  cat("family/filename disputes left for a person:", sum(disputed), "\n")
+}
 
 # 5c. superseded documents: review/supersedes.csv (source, filename,
 #     superseded_by, note) lists GEF portal summary sheets whose full agency
