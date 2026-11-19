@@ -1,0 +1,85 @@
+﻿location_id,name,type,country,admin1,latitude,longitude,position
+P0010.1,Intermediate Gheris basin,basin,Morocco,,31.21,-5.187,approx
+P0010.2,Maïder basin,basin,Morocco,,31.0851454,-5.4007,register
+P0010.3,Alnif,territorial collectivity (CT),Morocco,Tinghir,31.423,-5.862,within
+P0010.4,Mcissi,territorial collectivity (CT),Morocco,,31.508,-5.36,approx
+P0010.5,Ferkla Soufla,territorial collectivity (CT),Morocco,,30.916,-5.432,approx
+P0010.6,Tighfert,locality,Morocco,,31.331,-4.949,approx
+P0010.7,Izilf,oasis/perimeter,Morocco,,31.352,-5.624,approx
+P0010.8,Sidi Ali,territorial collectivity (CT),Morocco,,30.856,-5.114,approx
+P0010.9,Ferkla El Oulia,territorial collectivity (CT),Morocco,,31.6,-5.158,approx
+P0010.10,Hssiya,territorial collectivity (CT),Morocco,,31.313,-5.392,approx
+P0010.11,Tazarine,territorial collectivity (CT),Morocco,,31.017,-5.263,approx
+P0010.12,Ait Boudaoud,territorial collectivity (CT),Morocco,,31.391,-5.141,approx
+P0010.13,Taghbalet,territorial collectivity (CT),Morocco,,31.165,-5.533,approx
+P0010.14,Tinjdad,territorial collectivity (CT),Morocco,,31.058,-5.04,approx
+P0010.15,Errachidia,province,Morocco,,31.132,-4.211,unit
+P0010.16,Tinghir,province,Morocco,,31.32,-5.657,unit
+P0011.1,Ethiopia,country,Ethiopia,,8.622,39.633,country
+P0012.1,Comoros,country,Comoros,,-12.227,44.411,country
+P0013.1,Marsabit,county,Kenya,,2.856,37.714,unit
+P0013.2,Isiolo,county,Kenya,,1.041,38.738,unit
+P0013.3,Tana River,county,Kenya,,-1.537,39.55,unit
+P0013.4,Garissa,county,Kenya,,-0.524,40.325,unit
+P0013.5,Wajir,county,Kenya,,1.921,40.028,unit
+P0013.6,Mandera,county,Kenya,,3.282,40.665,unit
+P0013.7,West Pokot,county,Kenya,,1.889,35.21,unit
+P0013.8,Baringo,county,Kenya,,0.718,36.018,unit
+P0013.9,Laikipia,county,Kenya,,0.288,36.794,unit
+P0013.10,Machakos,county,Kenya,,-1.276,37.397,unit
+P0013.11,Nyeri,county,Kenya,,-0.315,36.928,unit
+P0013.12,Tharaka Nithi,county,Kenya,,-0.191,37.962,unit
+P0013.13,Lamu,county,Kenya,,-2.063,40.542,unit
+P0013.14,Taita Taveta,county,Kenya,,-3.419,38.366,unit
+P0013.15,Kajiado,county,Kenya,,-2.118,36.783,unit
+P0013.16,Busia,county,Kenya,,0.376,34.264,unit
+P0013.17,Siaya,county,Kenya,,-0.052,34.205,unit
+P0013.18,Nyandarua,county,Kenya,,-0.39,36.495,unit
+P0013.19,Bomet,county,Kenya,,-0.7,35.235,unit
+P0013.20,Kericho,county,Kenya,,-0.236,35.499,unit
+P0013.21,Kakamega,county,Kenya,,0.499,34.801,unit
+P0013.22,Uasin Gishu,county,Kenya,,0.488,35.306,unit
+P0013.23,Elgeyo Marakwet,county,Kenya,,0.743,35.559,unit
+P0013.24,Kisumu,county,Kenya,,-0.195,34.778,unit
+P0013.25,Kenya,country,Kenya,,0.606,37.817,country
+P0014.1,Nsanje,district,Malawi,,-16.719,35.101,unit
+P0014.2,Chikwawa,district,Malawi,,-16.214,34.724,unit
+P0014.3,Phalombe,district,Malawi,,-15.692,35.669,unit
+P0014.4,Zomba,district,Malawi,,-15.431,35.458,unit
+P0014.5,Blantyre,district,Malawi,,-15.68,34.929,unit
+P0014.6,Chiradzulu,district,Malawi,,-15.763,35.208,unit
+P0014.7,Thyolo,district,Malawi,,-16.129,35.143,unit
+P0014.8,Mulanje,district,Malawi,,-15.899,35.543,unit
+P0014.9,Balaka,district,Malawi,,-15.031,35.063,unit
+P0014.10,Machinga,district,Malawi,,-14.903,35.602,unit
+P0014.11,Mangochi,district,Malawi,,-14.138,35.327,unit
+P0014.12,Ntcheu,district,Malawi,,-14.819,34.768,unit
+P0014.13,Salima,district,Malawi,,-13.764,34.455,unit
+P0014.14,Rumphi,district,Malawi,,-10.789,33.848,unit
+P0014.15,Karonga,district,Malawi,,-10.079,33.866,unit
+P0014.16,Thabwa-Chitseko-Seven East Bank Road,road,Malawi,,-14.736666666666668,34.980266666666665,approx
+P0014.17,Malawi,country,Malawi,,-13.535,34.264,country
+P0015.1,The Gambia,country,The Gambia,,13.45,-15.381,country
+P0016.1,Eritrea,country,Eritrea,,15.377,38.844,country
+P0017.1,Mashare Agricultural Development Institute (Kavango East),institute,Namibia,Kavango East,-18.18,19.593,within
+P0017.2,Shankara,demonstration site,Namibia,,-18.12,20.583,approx
+P0017.3,Salem,demonstration site,Namibia,Kavango East,-17.999,19.639,within
+P0017.4,Sigone,demonstration site,Namibia,Kavango West,-18.225,19.247,within
+P0017.5,Kopano,demonstration site,Namibia,,-18.017,20.378,approx
+P0017.6,Makanga,demonstration site,Namibia,,-18.313,20.507,approx
+P0017.7,Tyeye,demonstration site,Namibia,,-17.939,20.629,approx
+P0017.8,Ditimboro,demonstration site,Namibia,,-18.165,20.237,approx
+P0017.9,Muyako,demonstration site,Namibia,,-18.272,20.73,approx
+P0017.10,Saili,demonstration site,Namibia,Zambezi,-17.98,23.053,within
+P0017.11,Zambezi,region,Namibia,,-17.877,22.848,unit
+P0017.12,Kavango East,region,Namibia,,-18.077,19.388,unit
+P0017.13,Kavango West,region,Namibia,,-18.373,19.517,unit
+P0017.14,Namibia,country,Namibia,,-22.129,17.211,country
+P0010.0,Morocco — project-wide,project-wide,Morocco,,31.875,-6.204,country
+P0011.0,Ethiopia — project-wide,project-wide,Ethiopia,,8.622,39.633,country
+P0012.0,Comoros — project-wide,project-wide,Comoros,,-12.227,44.411,country
+P0013.0,Kenya — project-wide,project-wide,Kenya,,0.606,37.817,country
+P0014.0,Malawi — project-wide,project-wide,Malawi,,-13.535,34.264,country
+P0015.0,The Gambia — project-wide,project-wide,The Gambia,,13.45,-15.381,country
+P0016.0,Eritrea — project-wide,project-wide,Eritrea,,15.377,38.844,country
+P0017.0,Namibia — project-wide,project-wide,Namibia,,-22.129,17.211,country

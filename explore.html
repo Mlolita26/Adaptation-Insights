@@ -1,0 +1,967 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'%3E%3Cpath d='M15.6 2.8c7.9-.3 13.6 5.2 13.6 12.4 0 7.6-6.1 14-13.8 14C7.8 29.2 2.8 23.4 2.8 16.4 2.8 9 8.1 3.1 15.6 2.8z' stroke='%231D3BA8' stroke-width='2.4'/%3E%3Cpath d='M16.3 8.4c4.6-.1 7.6 3.1 7.4 7.1-.2 4.3-3.6 7.6-7.9 7.5-4-.1-6.8-3.2-6.6-7 .2-4.1 3.1-7.5 7.1-7.6z' stroke='%233E8FA8' stroke-width='2.4'/%3E%3Ccircle cx='16.2' cy='15.6' r='3.4' fill='%23DD5B47'/%3E%3C/svg%3E">
+<title>Adaptation Insights — Explore the data</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Public+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#F2F0EB}
+a{color:#1D3BA8}a:hover{color:#0E1747}
+select,input,button{font:inherit}
+.ai-pt:focus-visible{outline:2px solid #F2C014;outline-offset:3px}
+.ai-pt:hover{filter:brightness(1.15)}
+.ai-card::-webkit-scrollbar{width:8px}.ai-card::-webkit-scrollbar-thumb{background:#C9D0E6;border-radius:4px}
+:focus-visible{outline:2px solid #1D3BA8;outline-offset:3px}
+.ai-skip{position:fixed;left:12px;top:-80px;z-index:50;background:#0E1747;color:#FFFFFF;padding:12px 18px;border-radius:999px;text-decoration:none;font-size:14px}.ai-skip:focus{top:12px;color:#FFFFFF}
+@keyframes ai-pulse{0%,100%{opacity:.35;transform:scale(.9)}50%{opacity:1;transform:scale(1)}}.ai-pulse{animation:ai-pulse 1.4s ease-in-out infinite}
+@keyframes ai-ripple{from{transform:scale(.3);opacity:.9}to{transform:scale(1.7);opacity:0}}
+@media (prefers-reduced-motion: reduce){.ai-pulse{animation:none}}
+</style>
+</helmet>
+<div style="height: 100vh; display: flex; flex-direction: column; font-family: 'Public Sans', 'Helvetica Neue', Arial, sans-serif; color: #0E1747; background: #F2F0EB; overflow: hidden">
+<a href="#main" class="ai-skip">Skip to the map</a>
+
+<header style="flex: none; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 32px; padding: 12px clamp(16px, 3vw, 32px); background: #FFFFFF; color: #0E1747">
+<a href="index.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none; color: #0E1747">
+<svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M15.6 2.8c7.9-.3 13.6 5.2 13.6 12.4 0 7.6-6.1 14-13.8 14C7.8 29.2 2.8 23.4 2.8 16.4 2.8 9 8.1 3.1 15.6 2.8z" stroke="#1D3BA8" stroke-width="1.7"></path><path d="M16.3 8.4c4.6-.1 7.6 3.1 7.4 7.1-.2 4.3-3.6 7.6-7.9 7.5-4-.1-6.8-3.2-6.6-7 .2-4.1 3.1-7.5 7.1-7.6z" stroke="#3E8FA8" stroke-width="1.7"></path><circle cx="16.2" cy="15.6" r="3.1" fill="#DD5B47"></circle></svg>
+<span style="font-family: Newsreader, Georgia, serif; font-size: 23px; letter-spacing: -0.01em">Adaptation <em>Insights</em></span>
+</a>
+<nav aria-label="Main" style="display: flex; flex-wrap: wrap; gap: 4px 28px; font-size: 15px">
+<a href="index.html" style="padding: 10px 0; text-decoration: none; color: #0E1747; border-bottom: 2px solid transparent">Home</a>
+<a href="explore.html" aria-current="page" style="padding: 10px 0; text-decoration: none; color: #0E1747; border-bottom: 2px solid #1D3BA8">Explore the data</a>
+<a href="methods.html" style="padding: 10px 0; text-decoration: none; color: #0E1747; border-bottom: 2px solid transparent">Methods</a>
+<a href="about.html" style="padding: 10px 0; text-decoration: none; color: #0E1747; border-bottom: 2px solid transparent">About</a>
+</nav>
+</header>
+<div aria-hidden="true" style="flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); height: 4px">
+<span style="background: #1D3BA8"></span><span style="background: #3E8FA8"></span><span style="background: #E8A317"></span><span style="background: #DD5B47"></span>
+</div>
+
+<main id="main" style="flex: 1; min-height: 0; position: relative; overflow: hidden; background: #F2F0EB" onWheel="{{wheel}}">
+
+<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center">
+<div onPointerDown="{{down}}" onPointerMove="{{move}}" onPointerUp="{{up}}" onPointerCancel="{{cancel}}" ref="{{setStage}}" style="{{stageStyle}}">
+<svg viewBox="{{viewBox}}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Globe of project locations. Drag to rotate, scroll to zoom, click a country to see its subdivisions." style="width: 100%; height: 100%; display: block; overflow: hidden">
+<circle cx="400" cy="400" r="{{R}}" fill="#DCE3E2" stroke="#C3CBCA" stroke-width="1"></circle>
+<path d="{{gratPath}}" fill="none" stroke="#CBD3D2" stroke-width="0.6"></path>
+<path d="{{landPath}}" fill="#ECE9E2" stroke="#D5D0C6" stroke-width="0.6"></path>
+<path d="{{hiPath}}" fill="#BFDCD3" stroke="#FFFFFF" stroke-width="0.6"></path>
+<path d="{{bin0}}" fill="#E3DFD6" stroke="#FFFFFF" stroke-width="0.9"></path>
+<path d="{{bin1}}" fill="#BFDCD3" stroke="#FFFFFF" stroke-width="0.9"></path>
+<path d="{{bin2}}" fill="#86C6B4" stroke="#FFFFFF" stroke-width="0.9"></path>
+<path d="{{bin3}}" fill="#E4EBB0" stroke="#FFFFFF" stroke-width="0.9"></path>
+<path d="{{bin4}}" fill="#F2B373" stroke="#FFFFFF" stroke-width="0.9"></path>
+<path d="{{bin5}}" fill="#DD5B47" stroke="#FFFFFF" stroke-width="0.9"></path>
+<path d="{{outlinePath}}" fill="none" stroke="#0E1747" stroke-width="1.4"></path>
+<path d="{{unitSelPath}}" fill="none" stroke="#0E1747" stroke-width="2.6"></path>
+<path d="{{linkPath}}" fill="none" stroke="#1E5E72" stroke-opacity="0.8" stroke-width="1.7" stroke-linecap="round"></path>
+<path d="{{linkHiPath}}" fill="none" stroke="#DD5B47" stroke-width="3" stroke-linecap="round"></path>
+</svg>
+<sc-for list="{{points}}" as="pt" hint-placeholder-count="0">
+<button type="button" class="ai-pt" onClick="{{pt.pick}}" aria-label="{{pt.aria}}" title="{{pt.aria}}" style="{{pt.style}}"></button>
+</sc-for>
+<sc-if value="{{hasBox}}" hint-placeholder-val="{{ false }}">
+<div aria-hidden="true" style="{{boxStyle}}"></div>
+</sc-if>
+</div>
+</div>
+
+<sc-if value="{{loading}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 16px">
+<svg class="ai-pulse" width="64" height="64" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M15.6 2.8c7.9-.3 13.6 5.2 13.6 12.4 0 7.6-6.1 14-13.8 14C7.8 29.2 2.8 23.4 2.8 16.4 2.8 9 8.1 3.1 15.6 2.8z" stroke="#1D3BA8" stroke-width="1.4"></path><path d="M16.3 8.4c4.6-.1 7.6 3.1 7.4 7.1-.2 4.3-3.6 7.6-7.9 7.5-4-.1-6.8-3.2-6.6-7 .2-4.1 3.1-7.5 7.1-7.6z" stroke="#3E8FA8" stroke-width="1.4"></path><circle cx="16.2" cy="15.6" r="3.1" fill="#DD5B47"></circle></svg>
+<p style="margin: 0; font-family: Newsreader, Georgia, serif; font-size: 19px; color: #26305E">{{loadingText}}</p>
+</div>
+</sc-if>
+<sc-if value="{{empty}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(340px, calc(100% - 40px)); box-sizing: border-box; background: #FFFFFF; border-radius: 16px; box-shadow: 0 10px 30px rgba(14, 23, 71, 0.18); padding: 24px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; z-index: 4">
+<p style="margin: 0; font-family: Newsreader, Georgia, serif; font-size: 23px; line-height: 1.2">No results match these filters</p>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #4B5478">Remove one of them, or start again.</p>
+<button type="button" onClick="{{reset}}" style="margin-top: 6px; height: 44px; padding: 0 20px; border: 0; border-radius: 999px; background: #0E1747; color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">Clear all filters</button>
+</div>
+</sc-if>
+
+<section aria-label="Filters" class="ai-card" style="{{filtersStyle}}">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 16px; background: #FFFFFF; position: sticky; top: 0; border-bottom: 1px solid #D5DAEA; z-index: 1">
+<button type="button" data-tour="filters" onClick="{{toggleFilters}}" aria-expanded="{{filtersOpenStr}}" style="display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 8px 0; min-height: 44px; cursor: pointer; color: #0E1747">
+<span style="font-family: Newsreader, Georgia, serif; font-size: 22px; font-weight: 500">Filters</span>
+<span style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #EEF1FA; color: #1D3BA8">{{activeCount}}</span>
+<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4B5478" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="{{filtersChevStyle}}"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<button type="button" onClick="{{reset}}" style="display: inline-flex; align-items: center; gap: 6px; border: 0; background: #F2F0EB; color: #0E1747; font-size: 13px; padding: 0 12px; height: 34px; border-radius: 999px; cursor: pointer"><svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>Clear</button>
+</div>
+<sc-if value="{{filtersOpen}}" hint-placeholder-val="{{ false }}">
+<ul style="list-style: none; margin: 0; padding: 0">
+<sc-for list="{{facets}}" as="fc" hint-placeholder-count="11">
+<li style="border-bottom: 1px solid #E3E7F2">
+<button type="button" data-tour="{{fc.tourId}}" onClick="{{fc.toggle}}" aria-expanded="{{fc.openStr}}" style="width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) max-content 14px; gap: 10px; align-items: center; text-align: left; border: 0; background: none; padding: 11px 16px; min-height: 44px; cursor: pointer; color: #0E1747">
+<span style="font-size: 14px; font-weight: 600">{{fc.label}}</span>
+<span style="{{fc.summaryStyle}}">{{fc.summary}}</span>
+<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4B5478" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="{{fc.chevStyle}}"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<sc-if value="{{fc.open}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 0 16px 14px">
+<sc-if value="{{fc.isSearch}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: center; gap: 8px; border-bottom: 2px solid #0E1747">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4B5478" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>
+<input type="search" aria-label="Search results" value="{{q}}" onInput="{{onSearch}}" placeholder="irrigation, women, yield…" style="flex: 1; min-width: 0; border: 0; background: transparent; font-size: 15px; min-height: 42px; color: #0E1747; padding: 0">
+</div>
+</sc-if>
+<sc-if value="{{fc.isChips}}" hint-placeholder-val="{{ false }}">
+<div role="group" aria-label="{{fc.label}}" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 250px; overflow: auto; padding: 2px">
+<sc-for list="{{fc.chips}}" as="ch" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{ch.pressed}}" onClick="{{ch.pick}}" style="{{ch.style}}">{{ch.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{fc.isSwitch}}" hint-placeholder-val="{{ false }}">
+<button type="button" role="switch" aria-checked="{{standaloneStr}}" onClick="{{flipStandalone}}" style="display: flex; align-items: center; gap: 12px; border: 0; background: none; padding: 4px 0; cursor: pointer; text-align: left; color: #0E1747; font-size: 13.5px; line-height: 1.45">
+<span aria-hidden="true" style="{{switchTrack}}"><span style="{{switchKnob}}"></span></span>
+<span>Hide breakdowns, earlier values and other measures of a result</span>
+</button>
+</sc-if>
+</div>
+</sc-if>
+</li>
+</sc-for>
+</ul>
+</sc-if>
+</section>
+
+<sc-if value="{{showDetail}}" hint-placeholder-val="{{ false }}">
+<section aria-label="Details" class="ai-card" style="{{detailStyle}}">
+<sc-if value="{{narrow}}" hint-placeholder-val="{{ false }}">
+<div aria-hidden="true" style="width: 40px; height: 4px; border-radius: 2px; background: #C9CFDF; margin: 8px auto 0"></div>
+</sc-if>
+<div style="position: sticky; top: 0; z-index: 1; background: #FFFFFF; border-bottom: 1px solid #D5DAEA; padding: 6px 8px 6px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px">
+<nav aria-label="Breadcrumb" style="display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: 13px; min-height: 44px">
+<sc-for list="{{crumbs}}" as="c" hint-placeholder-count="1">
+<sc-if value="{{c.sep}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9AA3C4" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg></sc-if>
+<button type="button" onClick="{{c.pick}}" aria-current="{{c.current}}" style="{{c.style}}">{{c.label}}</button>
+</sc-for>
+</nav>
+<button type="button" onClick="{{toggleDetail}}" aria-label="Close details" style="width: 40px; height: 40px; flex: none; border: 0; border-radius: 50%; background: #F2F0EB; cursor: pointer; color: #0E1747; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</div>
+<div style="padding: 16px 18px 24px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 5px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 12px; color: #1D3BA8">{{d.kicker}}</p>
+<h1 style="margin: 0; font-family: Newsreader, Georgia, serif; font-weight: 500; font-size: 30px; line-height: 1.1">{{d.name}}</h1>
+<p style="margin: 0; font-size: 13.5px; line-height: 1.5; color: #4B5478">{{d.note}}</p>
+</div>
+<sc-if value="{{d.canDownload}}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{d.download}}" style="align-self: flex-start; display: inline-flex; align-items: center; gap: 10px; padding: 0; min-height: 40px; border: 0; background: none; color: #0E1747; font-size: 14px; font-weight: 500; cursor: pointer"><span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 50%; background: #E8A317; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0E1747" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg></span>Download these {{d.nRes}} results (CSV)</button>
+</sc-if>
+
+<sc-if value="{{d.hasNav}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column">
+<h2 style="margin: 0 0 4px; font-family: 'IBM Plex Mono', Menlo, monospace; font-weight: 400; font-size: 12px; color: #4B5478; border-bottom: 2px solid #0E1747; padding-bottom: 6px">{{d.navTitle}}</h2>
+<ul style="list-style: none; margin: 0; padding: 0">
+<sc-for list="{{d.nav}}" as="n" hint-placeholder-count="6">
+<li style="border-bottom: 1px solid #E3E7F2">
+<button type="button" onClick="{{n.pick}}" style="width: 100%; text-align: left; background: none; border: 0; padding: 11px 0; min-height: 44px; cursor: pointer; display: grid; grid-template-columns: 14px minmax(0, 1fr) max-content; gap: 10px; align-items: center; color: #0E1747">
+<span aria-hidden="true" style="{{n.swatch}}"></span>
+<span style="font-size: 14.5px; line-height: 1.35">{{n.label}}</span>
+<span style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 13px; color: #4B5478">{{n.n}}</span>
+</button>
+</li>
+</sc-for>
+</ul>
+</div>
+</sc-if>
+
+<sc-for list="{{d.projects}}" as="p" hint-placeholder-count="0">
+<section style="display: flex; flex-direction: column; gap: 2px">
+<div style="background: #F2F0EB; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 11.5px; color: #4B5478">{{p.meta}}</p>
+<h3 style="margin: 0; font-family: Newsreader, Georgia, serif; font-weight: 500; font-size: 21px; line-height: 1.25">{{p.title}}</h3>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; border-top: 1px solid #DDD8CD; padding-top: 12px">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #4B5478">Budget</span><span style="font-family: Newsreader, Georgia, serif; font-size: 24px; line-height: 1.1">{{p.budget}}</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #4B5478">{{p.nHereLabel}}</span><span style="font-family: Newsreader, Georgia, serif; font-size: 24px; line-height: 1.1">{{p.nHere}}</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; color: #4B5478">Funded by</span><div style="display: flex; flex-wrap: wrap; gap: 6px"><sc-for list="{{p.funderTags}}" as="t" hint-placeholder-count="1"><span style="font-size: 12.5px; padding: 4px 10px; border-radius: 999px; background: #FFFFFF; border: 1px solid #DDD8CD">{{t}}</span></sc-for></div></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; color: #4B5478">Implemented by</span><div style="display: flex; flex-wrap: wrap; gap: 6px"><sc-for list="{{p.implTags}}" as="t" hint-placeholder-count="2"><span style="font-size: 12.5px; padding: 4px 10px; border-radius: 999px; background: #FFFFFF; border: 1px solid #DDD8CD">{{t}}</span></sc-for></div></div>
+<details style="font-size: 13.5px">
+<summary style="cursor: pointer; color: #1D3BA8; font-size: 13px; padding: 4px 0">More about this project</summary>
+<dl style="margin: 8px 0 0; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 6px 12px; line-height: 1.45">
+<dt style="color: #4B5478">Lead</dt><dd style="margin: 0">{{p.lead}}</dd>
+<dt style="color: #4B5478">Status</dt><dd style="margin: 0">{{p.status}}</dd>
+<dt style="color: #4B5478">Funding</dt><dd style="margin: 0">{{p.mechanism}}</dd>
+<dt style="color: #4B5478">Beneficiaries</dt><dd style="margin: 0">{{p.beneficiaries}}</dd>
+<dt style="color: #4B5478">Source</dt><dd style="margin: 0">{{p.source}}</dd>
+</dl>
+</details>
+</div>
+<sc-for list="{{p.results}}" as="r" hint-placeholder-count="2">
+<article style="display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 0 12px; padding: 14px 0; border-bottom: 1px solid #E3E7F2">
+<span role="img" aria-label="{{r.dirLabel}}" title="{{r.dirLabel}}" style="{{r.dirStyle}}">{{r.dirIcon}}</span>
+<div style="display: flex; flex-direction: column; gap: 5px; min-width: 0">
+<p style="margin: 0; font-size: 12.5px; font-weight: 600; color: #1D3BA8">{{r.metric}}</p>
+<p style="margin: 0; line-height: 1.15"><span style="font-family: Newsreader, Georgia, serif; font-size: 30px; color: #0E1747">{{r.value}}</span> <span style="font-size: 13.5px; color: #4B5478">{{r.unit}}</span></p>
+<p style="margin: 0; font-size: 13.5px; line-height: 1.55">{{r.text}}</p>
+<div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px"><sc-for list="{{r.chips}}" as="c" hint-placeholder-count="3"><span style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 11px; padding: 3px 8px; border-radius: 999px; background: #EEF1FA; color: #26305E">{{c}}</span></sc-for></div>
+</div>
+</article>
+</sc-for>
+</section>
+</sc-for>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{showBar}}" hint-placeholder-val="{{ true }}">
+<div style="{{barStyle}}">
+<sc-if value="{{legendOpen}}" hint-placeholder-val="{{ false }}">
+<div role="region" aria-label="Map legend" style="pointer-events: auto; position: absolute; right: 0; bottom: 60px; width: 250px; display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; background: #FFFFFF; border-radius: 14px; color: #26305E; font-size: 13px; box-shadow: 0 10px 30px rgba(14, 23, 71, 0.2)">
+<p style="margin: 0 0 2px; font-family: Newsreader, Georgia, serif; font-size: 18px; color: #0E1747">Legend</p>
+<span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; background: rgba(14, 23, 71, 0.55); border: 2px solid #FFFFFF; box-shadow: 0 0 0 1px rgba(14, 23, 71, 0.45)"></span>Location-specific results</span>
+<span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; background: rgba(255, 255, 255, 0.5); border: 2px dashed #0E1747; box-shadow: 0 0 0 1px rgba(14, 23, 71, 0.45)"></span>Approximate position</span>
+<span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; background: rgba(232, 163, 23, 0.62); border: 2px solid #FFFFFF; box-shadow: 0 0 0 1px rgba(14, 23, 71, 0.45)"></span>Project-wide results</span>
+<span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 20px; height: 0; border-top: 2px solid #1E5E72"></span>Same project</span>
+<span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 14px; height: 10px; background: #BFDCD3"></span>Area with project activity</span>
+</div>
+</sc-if>
+<div style="pointer-events: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+<div role="group" aria-label="Globe controls" style="display: flex; gap: 8px">
+<button type="button" onClick="{{startTour}}" aria-label="How to use this map" title="How to use this map" style="width: 48px; height: 48px; border: 0; border-radius: 50%; background: #FFFFFF; box-shadow: 0 4px 14px rgba(14, 23, 71, 0.18); cursor: pointer; color: #0E1747; display: flex; align-items: center; justify-content: center; font-family: Newsreader, Georgia, serif; font-size: 22px">?</button>
+<button type="button" data-tour="zoomin" onClick="{{zoomIn}}" aria-label="Zoom in" title="Zoom in" style="width: 48px; height: 48px; border: 0; border-radius: 50%; background: #FFFFFF; box-shadow: 0 4px 14px rgba(14, 23, 71, 0.18); cursor: pointer; color: #0E1747; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+<button type="button" onClick="{{zoomOut}}" aria-label="Zoom out" title="Zoom out" style="width: 48px; height: 48px; border: 0; border-radius: 50%; background: #FFFFFF; box-shadow: 0 4px 14px rgba(14, 23, 71, 0.18); cursor: pointer; color: #0E1747; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"></path></svg></button>
+<button type="button" data-tour="box" onClick="{{toggleBox}}" aria-pressed="{{boxModeStr}}" aria-label="Zoom to an area: drag a box on the map (or hold Shift and drag)" title="Zoom to an area: drag a box (or Shift + drag)" style="{{boxBtnStyle}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" stroke-dasharray="0"></path><circle cx="11.5" cy="11.5" r="3.2"></circle><path d="M14 14l2.6 2.6"></path></svg></button>
+<button type="button" onClick="{{resetView}}" aria-label="Back to the whole globe" title="Back to the whole globe" style="width: 48px; height: 48px; border: 0; border-radius: 50%; background: #FFFFFF; box-shadow: 0 4px 14px rgba(14, 23, 71, 0.18); cursor: pointer; color: #0E1747; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"></path></svg></button>
+</div>
+<button type="button" data-tour="download" onClick="{{downloadFiltered}}" style="display: inline-flex; align-items: center; gap: 10px; height: 48px; padding: 0 18px 0 4px; border: 0; border-radius: 999px; background: #FFFFFF; box-shadow: 0 4px 14px rgba(14, 23, 71, 0.18); cursor: pointer; color: #0E1747; font-weight: 600; font-size: 14px"><span aria-hidden="true" style="width: 40px; height: 40px; border-radius: 50%; background: #E8A317; display: flex; align-items: center; justify-content: center"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0E1747" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg></span>Download selection</button>
+<a href="data/adaptation-insights-data.json" download="adaptation-insights-pilot.json" style="display: inline-flex; align-items: center; gap: 10px; height: 48px; padding: 0 18px 0 4px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 4px 14px rgba(14, 23, 71, 0.18); color: #0E1747; font-size: 14px; text-decoration: none"><span aria-hidden="true" style="width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid #0E1747; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 12px">{ }</span>Full dataset</a>
+<button type="button" data-tour="legend" onClick="{{toggleLegend}}" aria-expanded="{{legendOpenStr}}" style="display: inline-flex; align-items: center; gap: 10px; height: 48px; padding: 0 18px 0 4px; border: 0; border-radius: 999px; background: #FFFFFF; box-shadow: 0 4px 14px rgba(14, 23, 71, 0.18); cursor: pointer; color: #0E1747; font-size: 14px"><span aria-hidden="true" style="width: 40px; height: 40px; border-radius: 50%; background: #EEF1FA; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0E1747" stroke-width="1.9" stroke-linecap="round"><circle cx="6" cy="7" r="2"></circle><path d="M11 7h9"></path><path d="M4.5 15.5l1.5-2 1.5 2-1.5 2z"></path><path d="M11 15.5h9"></path></svg></span>Legend</button>
+</div>
+</div>
+</sc-if>
+<a ref="{{setDl}}" href="#" download="results.csv" aria-hidden="true" tabindex="-1" style="display: none">download</a>
+<sc-if value="{{tourOn}}" hint-placeholder-val="{{ false }}">
+<div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(14, 23, 71, 0.32); z-index: 6; pointer-events: none"></div>
+<section role="dialog" aria-labelledby="ai-tour-title" style="{{tourCardStyle}}">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
+<span style="font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 12px; color: #4B5478">{{tourCounter}}</span>
+<button type="button" onClick="{{tourSkip}}" style="border: 0; background: #F2F0EB; color: #0E1747; font-size: 13px; padding: 0 12px; height: 32px; border-radius: 999px; cursor: pointer">Skip tour</button>
+</div>
+<h2 id="ai-tour-title" style="margin: 0; font-family: Newsreader, Georgia, serif; font-weight: 500; font-size: 26px; line-height: 1.15; color: #0E1747">{{tourTitle}}</h2>
+<p style="margin: 0; font-size: 15px; line-height: 1.55; color: #26305E">{{tourBody}}</p>
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 6px">
+<div aria-hidden="true" style="display: flex; gap: 5px">
+<sc-for list="{{tourDots}}" as="td" hint-placeholder-count="7"><span style="{{td}}"></span></sc-for>
+</div>
+<div style="display: flex; gap: 8px">
+<sc-if value="{{tourHasBack}}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{tourBack}}" aria-label="Previous step" style="width: 44px; height: 44px; border: 1.5px solid #D5DAEA; border-radius: 50%; background: #FFFFFF; cursor: pointer; color: #0E1747; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg></button>
+</sc-if>
+<button type="button" onClick="{{tourNext}}" style="display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 20px; border: 0; border-radius: 999px; background: #0E1747; color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">{{tourNextLabel}}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>
+</div>
+</div>
+</section>
+</sc-if>
+<sc-if value="{{cursorOn}}" hint-placeholder-val="{{ false }}">
+<div aria-hidden="true" style="{{cursorStyle}}">
+<sc-if value="{{cursorDown}}" hint-placeholder-val="{{ false }}"><span style="position: absolute; left: -20px; top: -20px; width: 40px; height: 40px; border-radius: 50%; background: rgba(221, 91, 71, 0.5); animation: ai-ripple .5s ease-out forwards"></span></sc-if>
+<svg width="26" height="26" viewBox="0 0 24 24" style="{{cursorArrowStyle}}"><path d="M4 2.5l15.5 7.2-6.6 1.9-2.1 6.8z" fill="#0E1747" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round"></path></svg>
+</div>
+</sc-if>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+var AI_DATA_URL = 'data/adaptation-insights-data.json';
+var AI_WORLD_URL = 'data/world-countries.json';
+var AI_ADMIN_URL = 'data/admin-boundaries.json';
+var AI_NAME = { MAR: 'Morocco', ETH: 'Ethiopia', COM: 'Comoros', KEN: 'Kenya', MWI: 'Malawi', GMB: 'The Gambia', ERI: 'Eritrea', NAM: 'Namibia' };
+var AI_WORLDNAME = { MAR: 'Morocco', ETH: 'Ethiopia', COM: 'Comoros', KEN: 'Kenya', MWI: 'Malawi', GMB: 'Gambia', ERI: 'Eritrea', NAM: 'Namibia' };
+var AI_PLURAL = { County: 'counties', District: 'districts', Region: 'regions', Province: 'provinces', Island: 'islands', 'Local government area': 'local government areas' };
+var AI_BINS = [0, 2, 5, 10, 20];
+var AI_BIN_COLORS = ['#E3DFD6', '#BFDCD3'];
+var AI_EMPTY = { scope: '', country: '',project: '', funder: '', actor: '', sub: '', metric: '', method: '', dir: '', level: '', q: '', standalone: true };
+var AI_HOME = { lon: 18, lat: 4, zoom: 0.97 };
+var AI_TOUR = [
+  { pos: 'center', act: 'home', title: 'Welcome to the map', body: 'Each point is a place named in a project evaluation or completion report. This short tour shows how to read the map and find what you need.' },
+  { pos: 'left', act: 'spin', hl: 'bar', title: 'Move around', body: 'Drag to turn the globe. Scroll, or use + and −, to zoom in and out. The globe button brings you back to the whole view.' },
+  { pos: 'left', act: 'box', hl: 'bar', title: 'Zoom to an area', body: 'Hold Shift, or press the dashed-square button, then drag a box around a region. When you let go, the map zooms into it.' },
+  { pos: 'legend', act: 'africa', hl: 'bar', title: 'Read the map', body: 'Dark dots are places with their own results; bigger dots hold more results. Amber circles hold results reported for a whole project. Lines join the places of one project.' },
+  { pos: 'left', act: 'country', title: 'Zoom into a country', body: 'Click a country to fly in and see its counties, districts or regions. Here is Kenya: areas where a project works are tinted, and you can click each one.' },
+  { pos: 'left', act: 'unit', title: 'Open an area', body: 'Click a county, district or region and the map zooms into it. The card lists the places inside it and the results reported there.' },
+  { pos: 'left', act: 'place', title: 'See projects and results', body: 'Click a point or an area and a card opens on the right: the project, who funds and implements it, and every result with its evidence and source page. Its lines to the rest of the project light up.' },
+  { pos: 'filters', act: 'filters', hl: 'filters', title: 'Filter the data', body: 'Narrow the map by country, project, funder, result metric, evidence method and more. Tap a filter name to open it; Clear removes them all.' },
+  { pos: 'bottom', act: 'home', point: 'download', hl: 'bar', title: 'Take the data with you', body: 'Download the results you are looking at as a spreadsheet (CSV), or the full dataset. Reopen this tour any time with the ? button.' }
+];
+
+function aiCount(list, keyFn) {
+  var m = {};
+  list.forEach(function (x) { [].concat(keyFn(x)).forEach(function (k) { if (k) m[k] = (m[k] || 0) + 1; }); });
+  return Object.keys(m).sort(function (a, b) { return m[b] - m[a] || a.localeCompare(b); }).map(function (k) { return { v: k, n: m[k] }; });
+}
+function aiFmtNum(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  var n = Number(v);
+  if (!isFinite(n)) return String(v);
+  return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+function aiCsvCell(v) {
+  var s = v === null || v === undefined ? '' : String(v);
+  return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function aiMoney(v) {
+  if (!v) return 'Not reported';
+  if (v >= 1e9) return 'US$ ' + (v / 1e9).toFixed(1) + 'B';
+  if (v >= 1e6) return 'US$ ' + (v / 1e6).toFixed(1) + 'M';
+  return 'US$ ' + aiFmtNum(Math.round(v));
+}
+function aiCap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+function aiBin(n) { if (!n) return 0; for (var i = AI_BINS.length - 1; i >= 0; i--) if (n > AI_BINS[i]) return i + 1; return 0; }
+function aiPip(rings, x, y) {
+  var inside = false;
+  for (var k = 0; k < rings.length; k++) {
+    var r = rings[k];
+    for (var i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
+      var xi = r[i], yi = r[i + 1], xj = r[j], yj = r[j + 1];
+      if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+  }
+  return inside;
+}
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { data: null, world: null, units: null, err: null, lon: AI_HOME.lon, lat: AI_HOME.lat, zoom: AI_HOME.zoom,
+      f: Object.assign({}, AI_EMPTY), focus: null, unit: null, sel: null, filtersOpen: false, detailOpen: false, openF: '', tour: -1, vb: { x0: 0, y0: 0, w: 800, h: 800 } };
+    this.drag = null; this.dl = null; this.stage = null; this.anim = null; this.ro = null;
+    var self = this;
+    this.setStageRef = function (el) {
+      if (el === self.stage) return;
+      self.stage = el;
+      if (self.ro) { self.ro.disconnect(); self.ro = null; }
+      if (el && window.ResizeObserver) { self.ro = new ResizeObserver(function () { self.measure(); }); self.ro.observe(el); }
+      if (el) setTimeout(function () { self.measure(); }, 0);
+    };
+  }
+  componentDidMount() {
+    var self = this;
+    function j(u) { return fetch(u).then(function (r) { return r.json(); }); }
+    Promise.all([j(AI_DATA_URL), j(AI_WORLD_URL), j(AI_ADMIN_URL)])
+      .then(function (res) { self.index(res[0], res[2]); self.setState({ data: res[0], world: res[1], units: res[2] }); self.openFromHome(); self.maybeTour(); })
+      .catch(function () { self.setState({ err: 'The data could not be loaded.' }); });
+  }
+  componentWillUnmount() { if (this.anim) cancelAnimationFrame(this.anim); if (this.ro) this.ro.disconnect(); }
+  // first visit: show the guided tour once
+  maybeTour() {
+    var done = false;
+    try { done = window.localStorage.getItem('ai-tour-done') === '1'; } catch (e) {}
+    if (!done && !this.openedFromHome) this.goTour(0);
+  }
+  // the Kenya place with the most results, used to demonstrate the details card
+  tourPlace() {
+    var n = {}, lm = this.lm, best = null;
+    this.state.data.results.forEach(function (r) { if (r.relation) return; r.locs.forEach(function (id) { var l = lm[id]; if (l && l.iso === 'KEN' && l.coord !== 'country') n[id] = (n[id] || 0) + 1; }); });
+    Object.keys(n).forEach(function (id) { if (!best || n[id] > n[best]) best = id; });
+    return best;
+  }
+  goTour(i) {
+    var s = AI_TOUR[i], self = this, clear = { focus: null, unit: null, sel: null, detailOpen: false };
+    // a scripted pointer: move to a spot, press, then the map reacts
+    function run(steps) { var t = 0; steps.forEach(function (x) { t += x[0]; setTimeout(function () { if (self.state.tour === i) x[1](); }, t); }); }
+    function to(p, instant) { if (p) self.setState({ cursor: { x: p[0], y: p[1], down: false, instant: !!instant } }); }
+    function press(d) { var c = self.state.cursor; if (c) self.setState({ cursor: Object.assign({}, c, { down: d, instant: false }) }); }
+    function click(after) { return [[800, function () { press(true); }], [200, function () { press(false); after(); }]]; }
+    function mid() { var r = self.stage.getBoundingClientRect(); return [r.width / 2, r.height / 2]; }
+    this.setState({ tour: i, filtersOpen: false, openF: '', legendOpen: false, box: null, boxMode: false });
+    if (s.act === 'home') {
+      this.setState(Object.assign({ cursor: null }, clear)); this.flyTo(AI_HOME.lon, AI_HOME.lat, AI_HOME.zoom);
+      if (s.point) run([[900, function () { to(self.elXY(s.point)); }]]);
+    }
+    if (s.act === 'spin') {
+      this.setState(clear); this.flyTo(AI_HOME.lon, AI_HOME.lat, 1.2);
+      var m = mid();
+      run([[750, function () { to([m[0] - 60, m[1]], true); }], [500, function () { press(true); }],
+        [200, function () { to([m[0] + 180, m[1] + 20]); self.flyTo(AI_HOME.lon - 45, 8, 1.2); }],
+        [800, function () { press(false); }],
+        [400, function () { to(self.elXY('zoomin')); }]].concat(click(function () { self.flyTo(20, 3, 1.6); })));
+    }
+    if (s.act === 'box') {
+      this.setState(clear); this.flyTo(this.centred(28, 2, 1.7, true), 2, 1.7);
+      run([[300, function () { to(self.elXY('box')); }]].concat(click(function () { self.setState({ boxMode: true }); }), [
+        [300, function () { to(self.screenOf(32, 7)); }],
+        [850, function () {
+          var a = self.screenOf(32, 7), b = self.screenOf(44, -6), t0 = null;
+          function draw(t) {
+            if (self.state.tour !== i) { self.setState({ box: null, boxMode: false }); return; }
+            if (t0 === null) t0 = t;
+            var k = Math.min(1, (t - t0) / 1000), e = 1 - Math.pow(1 - k, 2), x1 = a[0] + (b[0] - a[0]) * e, y1 = a[1] + (b[1] - a[1]) * e;
+            self.setState({ box: { x0: a[0], y0: a[1], x1: x1, y1: y1 }, cursor: { x: x1, y: y1, down: true, instant: true } });
+            if (k < 1) requestAnimationFrame(draw);
+            else setTimeout(function () { if (self.state.tour !== i) return; self.setState({ box: null, boxMode: false, cursor: { x: x1, y: y1, down: false, instant: true } }); self.flyTo(self.centred(38, 0.5, 4.2, true), 0.5, 4.2); }, 250);
+          }
+          requestAnimationFrame(draw);
+        }]]));
+    }
+    if (s.act === 'africa') {
+      this.setState(clear); this.flyTo(22, 2, 1.7);
+      run([[500, function () { to(self.elXY('legend')); }]].concat(click(function () { self.setState({ legendOpen: true }); })));
+    }
+    if (s.act === 'country') {
+      this.setState(clear);
+      if (this.state.zoom > 3) this.flyTo(22, 2, 1.7);
+      run([[this.state.zoom > 3 ? 800 : 100, function () { to(self.screenOf(37.9, 0.4)); }]].concat(click(function () { self.focusCountry('KEN'); })));
+    }
+    if (s.act === 'unit') {
+      var tp = this.tourPlace(), u = tp && this.um[this.lm[tp].unit], needCountry = this.state.focus !== 'KEN' || !!this.state.unit;
+      this.setState({ unit: null, sel: null });
+      if (needCountry) this.focusCountry('KEN');
+      if (u) run([[needCountry ? 900 : 100, function () { to(self.screenOf(u.c[0], u.c[1])); }]].concat(click(function () { self.pickUnit(u.id); })));
+    }
+    if (s.act === 'place') {
+      var p = this.tourPlace(), l = p && this.lm[p], needUnit = l && this.state.unit !== l.unit;
+      if (needUnit && l.unit) this.pickUnit(l.unit);
+      if (l) run([[needUnit ? 900 : 100, function () { to(self.screenOf(l.lon, l.lat)); }]].concat(click(function () { self.pickPlace(p); })));
+    }
+    if (s.act === 'filters') {
+      this.setState({ detailOpen: false });
+      run([[100, function () { to(self.elXY('filters')); }]].concat(click(function () { self.setState({ filtersOpen: true }); }), [
+        [500, function () { to(self.elXY('facet-country')); }]], click(function () { self.setState({ openF: 'country' }); })));
+    }
+  }
+  // centre of a tagged control, in px inside the map area
+  elXY(name) {
+    var main = this.stage && this.stage.parentNode && this.stage.parentNode.parentNode; if (!main) return null;
+    var el = main.querySelector('[data-tour="' + name + '"]'); if (!el) return null;
+    var r = el.getBoundingClientRect(), m = main.getBoundingClientRect();
+    return [r.left - m.left + r.width / 2, r.top - m.top + r.height / 2];
+  }
+  endTour() {
+    try { window.localStorage.setItem('ai-tour-done', '1'); } catch (e) {}
+    this.setState({ tour: -1, filtersOpen: false, legendOpen: false, openF: '', focus: null, unit: null, sel: null, detailOpen: false, box: null, boxMode: false, cursor: null });
+    this.flyTo(AI_HOME.lon, AI_HOME.lat, AI_HOME.zoom);
+  }
+  // a project row clicked on the home page opens that project here
+  openFromHome() {
+    var code = null, self = this;
+    try { code = window.localStorage.getItem('ai-open-project'); window.localStorage.removeItem('ai-open-project'); } catch (e) {}
+    if (!code || !this.pm[code]) return;
+    this.openedFromHome = true;
+    this.setState({ f: Object.assign({}, this.state.f, { project: code }) });
+    setTimeout(function () { self.focusCountry(self.pm[code].iso[0]); }, 80);
+  }
+  // the map fills the whole window: widen (or heighten) the view box around the 800-unit globe square
+  measure() {
+    if (!this.stage) return;
+    var r = this.stage.getBoundingClientRect(); if (!r.width || !r.height) return;
+    var vb = r.width >= r.height ? { w: 800 * r.width / r.height, h: 800 } : { w: 800, h: 800 * r.height / r.width };
+    vb.x0 = -(vb.w - 800) / 2; vb.y0 = -(vb.h - 800) / 2;
+    var o = this.state.vb, narrow = r.width < 720;
+    if (Math.abs(o.w - vb.w) > 0.5 || Math.abs(o.h - vb.h) > 0.5 || narrow !== !!this.state.narrow) this.setState({ vb: vb, narrow: narrow });
+  }
+  // on a phone the details sheet covers the lower part: aim the target into the upper part of the screen
+  centredLat(lat, zoom) {
+    if (!this.state.narrow || !this.stage) return lat;
+    var rr = this.stage.getBoundingClientRect(), S = Math.min(rr.width, rr.height);
+    var Rpx = 390 * zoom / 800 * S;
+    return lat - Math.asin(Math.min(0.95, rr.height * 0.27 / Rpx)) * 180 / Math.PI;
+  }
+  index(d, units) {
+    var pm = {}, lm = {}, um = {};
+    d.projects.forEach(function (p) { pm[p.code] = p; });
+    d.locations.forEach(function (l) { lm[l.id] = l; });
+    units.forEach(function (u) { um[u.id] = u; });
+    this.pm = pm; this.lm = lm; this.um = um;
+    var R = d.results;
+    function withN(o) { return { v: o.v, l: aiCap(o.v) + ' (' + o.n + ')' }; }
+    this.opts = {
+      scope: [{ v: 'location', l: 'Location-specific' }, { v: 'project', l: 'Project-wide' }],
+      country: aiCount(d.projects, function (p) { return p.iso; }).map(function (o) { return { v: o.v, l: AI_NAME[o.v] || o.v }; }),
+      project: d.projects.map(function (p) { return { v: p.code, l: p.title.length > 60 ? p.title.slice(0, 58) + '…' : p.title }; }),
+      funder: aiCount(d.projects, function (p) { return p.funders; }).map(function (o) { return { v: o.v, l: o.v }; }),
+      actor: aiCount(d.projects, function (p) { return p.implementors.concat([p.lead]); }).map(function (o) { return { v: o.v, l: o.v }; }),
+      sub: aiCount(R, function (r) { return r.sub; }).map(withN),
+      metric: aiCount(R, function (r) { return r.metric; }).map(withN),
+      method: aiCount(R, function (r) { return r.method; }).map(withN),
+      dir: aiCount(R, function (r) { return r.dir; }).map(withN)
+    };
+  }
+  setF(k, v) { var f = Object.assign({}, this.state.f); f[k] = v; this.setState({ f: f }); }
+  flyTo(lon, lat, zoom) {
+    var self = this, s = { lon: this.state.lon, lat: this.state.lat, zoom: this.state.zoom }, t0 = null;
+    var dl = ((lon - s.lon + 540) % 360) - 180;
+    if (this.anim) cancelAnimationFrame(this.anim);
+    function step(t) {
+      if (t0 === null) t0 = t;
+      var k = Math.min(1, (t - t0) / 700), e = 1 - Math.pow(1 - k, 3);
+      self.setState({ lon: s.lon + dl * e, lat: s.lat + (lat - s.lat) * e, zoom: s.zoom * Math.pow(zoom / s.zoom, e) });
+      if (k < 1) self.anim = requestAnimationFrame(step); else self.anim = null;
+    }
+    this.anim = requestAnimationFrame(step);
+  }
+  fitZoom(iso) {
+    var c = this.state.data.countries[iso];
+    var span = Math.max(c.b[2] - c.b[0], (c.b[3] - c.b[1]) * 1.15) * Math.PI / 180;
+    return Math.max(1.4, Math.min(40, 0.9 / span));
+  }
+  // longitude to centre the globe on so that (lon, lat) sits in the middle of the area left of the details card
+  // (during the walkthrough the guide card also sits on the left, so the target goes between the two cards)
+  centred(lon, lat, zoom, noCard) {
+    var host = this.stage; if (!host) return lon;
+    var rr = host.getBoundingClientRect(), W = rr.width, S = Math.min(rr.width, rr.height);
+    if (W < 720 || !S) return lon;
+    var right = noCard ? 0 : Math.min(400, W - 32) + 32, left = this.state.tour >= 0 ? 392 : 0;
+    var dx = (right - left) / 2;
+    var Rpx = 390 * zoom / 800 * S * Math.max(0.2, Math.cos(lat * Math.PI / 180));
+    return lon + Math.asin(Math.max(-0.95, Math.min(0.95, dx / Rpx))) * 180 / Math.PI;
+  }
+  focusCountry(iso) {
+    var c = this.state.data.countries[iso]; if (!c) return;
+    var z = this.fitZoom(iso), lat = (c.b[1] + c.b[3]) / 2;
+    this.setState({ focus: iso, unit: null, sel: null, detailOpen: true, filtersOpen: false, openF: '' });
+    this.flyTo(this.centred((c.b[0] + c.b[2]) / 2, lat, z), this.centredLat(lat, z), z);
+  }
+  pickUnit(uid) {
+    var u = this.um[uid]; if (!u) return;
+    if (this.state.focus !== u.iso) { this.focusCountry(u.iso); return; }
+    this.setState({ unit: uid, sel: null, detailOpen: true, filtersOpen: false, openF: '' });
+    var span = Math.max(u.b[2] - u.b[0], (u.b[3] - u.b[1]) * 1.15, 0.05) * Math.PI / 180;
+    var z = Math.max(this.state.zoom, Math.min(40, 0.75 / span));
+    var cx = (u.b[0] + u.b[2]) / 2, cy = (u.b[1] + u.b[3]) / 2;
+    this.flyTo(this.centred(cx, cy, z), this.centredLat(cy, z), z);
+  }
+  pickPlace(id) {
+    var l = this.lm[id]; if (!l) return;
+    var z = Math.max(this.state.zoom, this.fitZoom(l.iso));
+    this.setState({ sel: id, unit: l.unit || null, focus: l.iso, detailOpen: true, filtersOpen: false, openF: '' });
+    this.flyTo(this.centred(l.lon, l.lat, z), this.centredLat(l.lat, z), z);
+  }
+  // screen position (px inside the map) of a longitude and latitude, for the walkthrough
+  screenOf(lon, lat) {
+    var st = this.state, rad = Math.PI / 180, l = (lon - st.lon) * rad, p = lat * rad, p0 = st.lat * rad, cp = Math.cos(p);
+    var x = cp * Math.sin(l), y = Math.cos(p0) * Math.sin(p) - Math.sin(p0) * cp * Math.cos(l);
+    var R = 390 * st.zoom, vb = st.vb, r = this.stage.getBoundingClientRect();
+    return [(400 + R * x - vb.x0) / vb.w * r.width, (400 - R * y - vb.y0) / vb.h * r.height];
+  }
+  // longitude and latitude under a screen point, or null off the globe
+  lonLatAt(clientX, clientY) {
+    if (!this.stage) return null;
+    var rect = this.stage.getBoundingClientRect(), vb = this.state.vb;
+    var sx = vb.x0 + (clientX - rect.left) / rect.width * vb.w, sy = vb.y0 + (clientY - rect.top) / rect.height * vb.h;
+    var R = 390 * this.state.zoom, X = (sx - 400) / R, Y = (400 - sy) / R, rho = Math.sqrt(X * X + Y * Y);
+    if (rho > 1) return null;
+    if (rho === 0) return [this.state.lon, this.state.lat];
+    var rad = Math.PI / 180, p0 = this.state.lat * rad, s0 = Math.sin(p0), c0 = Math.cos(p0), c = Math.asin(rho);
+    var lat = Math.asin(Math.cos(c) * s0 + Y * Math.sin(c) * c0 / rho) / rad;
+    var lon = this.state.lon + Math.atan2(X * Math.sin(c), rho * c0 * Math.cos(c) - Y * s0 * Math.sin(c)) / rad;
+    return [lon, lat];
+  }
+  hitTest(clientX, clientY) {
+    if (!this.stage || !this.state.units) return null;
+    var rect = this.stage.getBoundingClientRect();
+    var vb = this.state.vb;
+    var sx = vb.x0 + (clientX - rect.left) / rect.width * vb.w, sy = vb.y0 + (clientY - rect.top) / rect.height * vb.h;
+    var R = 390 * this.state.zoom, X = (sx - 400) / R, Y = (400 - sy) / R, rho = Math.sqrt(X * X + Y * Y);
+    if (rho > 1) return null;
+    var rad = Math.PI / 180, p0 = this.state.lat * rad, s0 = Math.sin(p0), c0 = Math.cos(p0), c = Math.asin(rho);
+    var lat = rho === 0 ? this.state.lat : Math.asin(Math.cos(c) * s0 + Y * Math.sin(c) * c0 / rho) / rad;
+    var lon = rho === 0 ? this.state.lon : this.state.lon + Math.atan2(X * Math.sin(c), rho * c0 * Math.cos(c) - Y * s0 * Math.sin(c)) / rad;
+    lon = ((lon + 540) % 360) - 180;
+    var us = this.state.units;
+    for (var i = 0; i < us.length; i++) {
+      var u = us[i];
+      if (lon < u.b[0] || lon > u.b[2] || lat < u.b[1] || lat > u.b[3]) continue;
+      if (aiPip(u.r, lon, lat)) return u;
+    }
+    return null;
+  }
+  filtered() {
+    var f = this.state.f, pm = this.pm, lm = this.lm, q = f.q.trim().toLowerCase();
+    return this.state.data.results.filter(function (r) {
+      var p = pm[r.p];
+      if (f.scope) {
+        var wide = r.locs.every(function (id) { return !lm[id] || lm[id].coord === 'country'; });
+        if (f.scope === 'project' ? !wide : wide) return false;
+      }
+      if (f.standalone && r.relation) return false;
+      if (f.country && p.iso.indexOf(f.country) < 0) return false;
+      if (f.project && r.p !== f.project) return false;
+      if (f.funder && p.funders.indexOf(f.funder) < 0) return false;
+      if (f.actor && p.implementors.indexOf(f.actor) < 0 && p.lead !== f.actor) return false;
+      if (f.sub && r.sub !== f.sub) return false;
+      if (f.metric && r.metric !== f.metric) return false;
+      if (f.method && r.method !== f.method) return false;
+      if (f.dir && r.dir !== f.dir) return false;
+      if (f.level && r.level !== f.level) return false;
+      if (q) {
+        var hay = [r.text, r.metric, r.ivText, r.unit, p.title, r.subStated].join(' ').toLowerCase();
+        if (hay.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+  }
+  download(rows, name) {
+    var pm = this.pm, lm = this.lm, um = this.um;
+    var head = ['result_id', 'project_code', 'project_title', 'country', 'location_ids', 'location_names', 'admin_unit', 'location_position', 'latitude', 'longitude', 'intervention_id', 'intervention', 'subsector_type', 'result_metric', 'result_value', 'result_unit', 'result_unit_standard', 'baseline_value', 'target_value', 'result_level', 'result_direction', 'result_year', 'evidence_methodology', 'relation', 'part_of_result', 'result_stated', 'result_pages', 'project_lead', 'funders', 'implementers', 'budget_total_USD', 'source_document'];
+    var lines = [head.join(',')];
+    rows.forEach(function (r) {
+      var p = pm[r.p];
+      var ls = r.locs.map(function (id) { return lm[id]; }).filter(Boolean);
+      function col(fn) { return ls.map(fn).join('; '); }
+      lines.push([r.id, r.p, p.title, p.country, r.locs.join('; '), col(function (l) { return l.name; }),
+        col(function (l) { return l.unit && um[l.unit] ? um[l.unit].name : ''; }), col(function (l) { return l.coord; }),
+        col(function (l) { return l.lat; }), col(function (l) { return l.lon; }),
+        r.iv, r.ivText, r.sub, r.metric, r.value, r.unit, r.unitStd, r.baseline, r.target, r.level, r.dir, r.year, r.method,
+        r.relation, r.partOf, r.text, r.pages, p.lead, p.funders.join('; '), p.implementors.join('; '), p.budgetUSD, p.docType + ' (' + p.ref + ')'
+      ].map(aiCsvCell).join(','));
+    });
+    var blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    if (this.dl) { this.dl.href = url; this.dl.download = name; this.dl.click(); }
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+  projCard(code, rs, withResults, where) {
+    var p = this.pm[code];
+    var years = (p.start || '?') + '–' + (p.end || (p.status === 'ongoing' ? 'ongoing' : '?'));
+    function tag(n) { return n.replace(' (register name pending)', ' · name pending'); }
+    var DIR = { positive: ['▲', 'Positive change', '#DCEEF2', '#1E5E72'], negative: ['▼', 'Negative change', '#FBE3DF', '#A3321F'],
+      mixed: ['◆', 'Mixed change', '#FBEFD5', '#8A5A00'], 'no change': ['●', 'No change', '#ECEAE4', '#4B5478'] };
+    return {
+      title: p.title,
+      meta: code + ' · ' + years + ' · ' + aiCap(p.status || 'status not stated'),
+      status: aiCap(p.status || 'not stated') + (p.scale ? ', ' + p.scale + ' scale' : ''),
+      lead: p.lead,
+      funderTags: p.funders.map(tag), implTags: p.implementors.map(tag),
+      budget: aiMoney(p.budgetUSD),
+      mechanism: aiCap(p.mechanism || 'not stated'), beneficiaries: aiCap(p.beneficiaries || 'not stated'),
+      source: aiCap(p.docType || '') + (p.ref ? ' · ' + p.ref : ''),
+      nHereLabel: 'Results ' + where, nHere: String(rs.length),
+      results: !withResults ? [] : rs.map(function (r) {
+        var d = DIR[r.dir] || ['?', 'Direction not stated', '#ECEAE4', '#4B5478'];
+        var chips = [aiCap(r.level), r.year, r.method, r.pages].filter(function (x) { return x && x !== 'not specified'; });
+        if (r.baseline) chips.push('baseline ' + aiFmtNum(r.baseline));
+        if (r.target) chips.push('target ' + aiFmtNum(r.target));
+        if (r.relation) chips.push(r.relation + ' ' + r.partOf);
+        chips.push(r.id);
+        return { value: aiFmtNum(r.value), unit: r.unit || '', text: r.text || '', metric: aiCap(r.metric), chips: chips,
+          dirIcon: d[0], dirLabel: d[1],
+          dirStyle: 'width: 26px; height: 26px; margin-top: 2px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; background: ' + d[2] + '; color: ' + d[3] };
+      })
+    };
+  }
+  byProject(rs) { var m = {}; rs.forEach(function (r) { (m[r.p] = m[r.p] || []).push(r); }); return m; }
+  renderVals() {
+    var self = this, st = this.state, f = st.f, vb = st.vb;
+    var out = {
+      viewBox: vb.x0.toFixed(1) + ' ' + vb.y0.toFixed(1) + ' ' + vb.w.toFixed(1) + ' ' + vb.h.toFixed(1),
+      loading: !st.data || !st.world || !st.units, loadingText: st.err || 'Loading the projects…', empty: false,
+      legendOpen: !!st.legendOpen, legendOpenStr: st.legendOpen ? 'true' : 'false',
+      barStyle: 'position: absolute; left: 16px; right: 16px; bottom: 16px; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: flex-end; gap: 10px; pointer-events: none',
+      tourOn: st.tour >= 0, startTour: function () { self.goTour(0); },
+      cursorOn: !!(st.tour >= 0 && st.cursor), cursorDown: !!(st.cursor && st.cursor.down),
+      cursorStyle: st.cursor ? 'position: absolute; z-index: 10; pointer-events: none; width: 0; height: 0; left: ' + st.cursor.x.toFixed(1) + 'px; top: ' + st.cursor.y.toFixed(1) + 'px; transition: ' + (st.cursor.instant ? 'none' : 'left .75s cubic-bezier(.4, 0, .2, 1), top .75s cubic-bezier(.4, 0, .2, 1)') : '',
+      cursorArrowStyle: 'position: absolute; left: -4px; top: -3px; transition: transform .12s; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3)); transform: scale(' + (st.cursor && st.cursor.down ? 0.82 : 1) + '); transform-origin: 4px 3px',
+      tourCardStyle: '', tourTitle: '', tourBody: '', tourCounter: '', tourHasBack: false, tourNextLabel: 'Next', tourDots: [],
+      tourNext: function () {}, tourBack: function () {}, tourSkip: function () {},
+      toggleLegend: function () { self.setState({ legendOpen: !self.state.legendOpen }); },
+      narrow: !!st.narrow, wide: !st.narrow,
+      showBar: !(st.narrow && st.detailOpen && (st.focus || st.unit || st.sel)),
+      filtersStyle: 'position: absolute; top: ' + (st.narrow ? '10px; left: 10px; right: 10px; max-height: 70%;' : '16px; left: 16px; width: min(300px, calc(100% - 32px)); max-height: calc(100% - 104px);') + ' overflow: auto; background: #FFFFFF; border-radius: 14px; box-shadow: 0 10px 30px rgba(14, 23, 71, 0.2); z-index: 3',
+      detailStyle: st.narrow ? 'position: absolute; left: 0; right: 0; bottom: 0; max-height: 62%; overflow: auto; background: #FFFFFF; border-radius: 18px 18px 0 0; box-shadow: 0 -8px 30px rgba(14, 23, 71, 0.22); z-index: 5'
+        : 'position: absolute; right: 16px; top: 16px; width: min(400px, calc(100% - 32px)); max-height: calc(100% - 104px); overflow: auto; background: #FFFFFF; border-radius: 14px; box-shadow: 0 10px 30px rgba(14, 23, 71, 0.2); z-index: 3',
+      filtersChevStyle: 'flex: none; transition: transform .15s; transform: rotate(' + (st.filtersOpen ? 180 : 0) + 'deg)',
+      q: f.q, standalone: !!f.standalone, nRes: 0, nLoc: 0, nProj: 0,
+      filtersOpen: st.filtersOpen, filtersOpenStr: st.filtersOpen ? 'true' : 'false', filtersChevron: st.filtersOpen ? '▲' : '▼',
+      detailOpen: st.detailOpen, detailOpenStr: st.detailOpen ? 'true' : 'false', detailChevron: st.detailOpen ? '▲' : '▼',
+      activeCount: '0 active',
+      R: 390, gratPath: '', landPath: '', hiPath: '', bin0: '', bin1: '', bin2: '', bin3: '', bin4: '', bin5: '',
+      outlinePath: '', unitSelPath: '', linkPath: '', linkHiPath: '', points: [], levels: [], selects: [], crumbs: [],
+      d: { kicker: '', name: '', note: '', canDownload: false, nRes: 0, download: function () {}, hasNav: false, navTitle: '', nav: [], projects: [] },
+      setDl: function (el) { self.dl = el; },
+      setStage: this.setStageRef,
+      toggleFilters: function () { self.setState({ filtersOpen: !self.state.filtersOpen }); },
+      toggleDetail: function () { self.setState({ detailOpen: false }); },
+      showDetail: !!(st.detailOpen && (st.focus || st.unit || st.sel)), facets: [],
+      hint: st.focus ? '' : 'Click a country to explore it',
+      reset: function () { self.setState({ f: Object.assign({}, AI_EMPTY), filtersOpen: false, openF: '' }); },
+      onSearch: function (e) { self.setF('q', e.target.value); },
+      toggleStandalone: function (e) { self.setF('standalone', e.target.checked); },
+      flipStandalone: function () { self.setF('standalone', !self.state.f.standalone); },
+      standaloneStr: f.standalone ? 'true' : 'false',
+      switchTrack: 'flex: none; width: 40px; height: 24px; border-radius: 999px; padding: 3px; box-sizing: border-box; display: flex; transition: background .15s; justify-content: ' + (f.standalone ? 'flex-end' : 'flex-start') + '; background: ' + (f.standalone ? '#1D3BA8' : '#C9CFDF'),
+      switchKnob: 'width: 18px; height: 18px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.25)',
+      zoomIn: function () { self.flyTo(self.state.lon, self.state.lat, Math.min(40, self.state.zoom * 1.6)); },
+      zoomOut: function () { self.flyTo(self.state.lon, self.state.lat, Math.max(0.9, self.state.zoom / 1.6)); },
+      resetView: function () { self.setState({ focus: null, unit: null, sel: null }); self.flyTo(AI_HOME.lon, AI_HOME.lat, AI_HOME.zoom); },
+      wheel: function (e) { if (!self.stage || !self.stage.contains(e.target)) return; var z = self.state.zoom * Math.exp(-e.deltaY * 0.0015); self.setState({ zoom: Math.max(0.9, Math.min(40, z)) }); },
+      down: function (e) {
+        if (e.target && e.target.closest && e.target.closest('button')) return;
+        if (self.anim) { cancelAnimationFrame(self.anim); self.anim = null; }
+        if (self.state.boxMode || e.shiftKey) {
+          var r0 = e.currentTarget.getBoundingClientRect();
+          self.boxing = { x: e.clientX, y: e.clientY };
+          self.setState({ box: { x0: e.clientX - r0.left, y0: e.clientY - r0.top, x1: e.clientX - r0.left, y1: e.clientY - r0.top } });
+          try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+          return;
+        }
+        self.drag = { x: e.clientX, y: e.clientY, lon: self.state.lon, lat: self.state.lat, w: (function (r) { return Math.min(r.width, r.height); })(e.currentTarget.getBoundingClientRect()), moved: false };
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+      },
+      move: function (e) {
+        if (self.boxing) {
+          var r1 = e.currentTarget.getBoundingClientRect(), b0 = self.boxing;
+          self.setState({ box: { x0: b0.x - r1.left, y0: b0.y - r1.top, x1: e.clientX - r1.left, y1: e.clientY - r1.top } });
+          return;
+        }
+        var d = self.drag; if (!d) return;
+        if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 4) d.moved = true;
+        if (!d.moved) return;
+        var k = 180 / (d.w * self.state.zoom);
+        self.setState({ lon: d.lon - (e.clientX - d.x) * k, lat: Math.max(-75, Math.min(75, d.lat + (e.clientY - d.y) * k)) });
+      },
+      up: function (e) {
+        if (self.boxing) {
+          var b = self.boxing, r = self.stage.getBoundingClientRect(); self.boxing = null;
+          var w = Math.abs(e.clientX - b.x), h = Math.abs(e.clientY - b.y);
+          self.setState({ box: null, boxMode: false });
+          if (w < 12 || h < 12) return;
+          var ll = self.lonLatAt((e.clientX + b.x) / 2, (e.clientY + b.y) / 2);
+          if (!ll) return;
+          self.flyTo(ll[0], ll[1], Math.max(0.9, Math.min(40, self.state.zoom * Math.min(r.width / w, r.height / h) * 0.9)));
+          return;
+        }
+        var d = self.drag; self.drag = null;
+        if (!d || d.moved || !self.state.data) return;
+        var u = self.hitTest(e.clientX, e.clientY);
+        if (u) self.pickUnit(u.id);
+      },
+      cancel: function () { self.drag = null; if (self.boxing) { self.boxing = null; self.setState({ box: null }); } },
+      toggleBox: function () { self.setState({ boxMode: !self.state.boxMode }); },
+      boxModeStr: st.boxMode ? 'true' : 'false',
+      boxBtnStyle: 'width: 48px; height: 48px; border: 0; border-radius: 50%; box-shadow: 0 4px 14px rgba(14, 23, 71, 0.18); cursor: pointer; display: flex; align-items: center; justify-content: center; ' + (st.boxMode ? 'background: #0E1747; color: #FFFFFF' : 'background: #FFFFFF; color: #0E1747'),
+      stageStyle: 'position: absolute; inset: 0; touch-action: none; cursor: ' + (st.boxMode ? 'crosshair' : 'grab'),
+      hasBox: !!st.box,
+      boxStyle: st.box ? 'position: absolute; z-index: 2; pointer-events: none; border: 2px dashed #1D3BA8; background: rgba(29, 59, 168, 0.08); border-radius: 6px; left: ' + Math.min(st.box.x0, st.box.x1) + 'px; top: ' + Math.min(st.box.y0, st.box.y1) + 'px; width: ' + Math.abs(st.box.x1 - st.box.x0) + 'px; height: ' + Math.abs(st.box.y1 - st.box.y0) + 'px' : '',
+      downloadFiltered: function () {}
+    };
+    if (out.loading) return out;
+
+    var pm = this.pm, lm = this.lm, um = this.um, opts = this.opts, data = st.data;
+    var rows = this.filtered();
+    out.downloadFiltered = function () { self.download(rows, 'adaptation-insights-selection.csv'); };
+    var nAct = ['scope', 'country','project', 'funder', 'actor', 'sub', 'metric', 'method', 'dir', 'level', 'q'].filter(function (k) { return f[k]; }).length + (f.standalone ? 0 : 1);
+    out.activeCount = nAct + ' active';
+
+    var cnt = {}, ucnt = {}, projSet = {}, isoSet = {};
+    rows.forEach(function (r) {
+      projSet[r.p] = (projSet[r.p] || 0) + 1;
+      pm[r.p].iso.forEach(function (i) { isoSet[i] = true; });
+      var seenU = {};
+      r.locs.forEach(function (id) { cnt[id] = (cnt[id] || 0) + 1; var l = lm[id]; if (l && l.unit && !seenU[l.unit]) { seenU[l.unit] = 1; ucnt[l.unit] = (ucnt[l.unit] || 0) + 1; } });
+    });
+    out.nRes = rows.length; out.nLoc = Object.keys(cnt).length; out.nProj = Object.keys(projSet).length;
+    out.empty = rows.length === 0 && st.tour < 0;
+    if (st.tour >= 0) {
+      var ts = AI_TOUR[st.tour], lastStep = st.tour === AI_TOUR.length - 1, step = st.tour;
+      var POS = { center: 'left: 50%; top: 50%; transform: translate(-50%, -50%);', upper: 'left: 50%; top: 12%; transform: translateX(-50%);', right: 'right: 16px; top: 16px;',
+        filters: 'left: 332px; top: 16px;', legend: 'right: 290px; bottom: 84px;', bottom: 'right: 16px; bottom: 84px;', leftBottom: 'left: 16px; bottom: 84px;', left: 'left: 16px; top: 50%; transform: translateY(-50%);' };
+      out.tourCardStyle = 'position: absolute; z-index: 9; box-sizing: border-box; background: #FFFFFF; border-radius: 16px; padding: 20px 22px 18px; box-shadow: 0 16px 40px rgba(14, 23, 71, 0.3); display: flex; flex-direction: column; gap: 10px; ' +
+        (st.narrow ? 'left: 10px; right: 10px; bottom: 10px;' : 'width: 360px; ' + POS[ts.pos]);
+      out.tourTitle = ts.title; out.tourBody = ts.body; out.tourCounter = (step + 1) + ' of ' + AI_TOUR.length;
+      out.tourHasBack = step > 0; out.tourNextLabel = lastStep ? 'Start exploring' : 'Next';
+      out.tourNext = function () { if (lastStep) self.endTour(); else self.goTour(step + 1); };
+      out.tourBack = function () { self.goTour(step - 1); };
+      out.tourSkip = function () { self.endTour(); };
+      out.tourDots = AI_TOUR.map(function (x, i) { return 'display: block; width: ' + (i === step ? 18 : 6) + 'px; height: 6px; border-radius: 3px; transition: width .2s; background: ' + (i === step ? '#1D3BA8' : '#D5DAEA'); });
+      if (ts.hl === 'filters') out.filtersStyle += '; z-index: 8; box-shadow: 0 0 0 4px #E8A317, 0 10px 30px rgba(14, 23, 71, 0.2)';
+      if (ts.hl === 'bar') out.barStyle += '; z-index: 8';
+      if (ts.act === 'box') out.boxBtnStyle += '; box-shadow: 0 0 0 4px #E8A317, 0 4px 14px rgba(14, 23, 71, 0.18)';
+    }
+
+    var lvDefs = [{ v: '', l: 'All' }, { v: 'output', l: 'Output' }, { v: 'outcome', l: 'Outcome' }, { v: 'process', l: 'Process' }];
+    out.levels = lvDefs.map(function (dd, i) {
+      var on = f.level === dd.v;
+      return { label: dd.l, pressed: on ? 'true' : 'false', pick: function () { self.setF('level', dd.v); },
+        style: 'padding: 0 2px; min-height: 40px; border: 0; ' + (i ? 'border-left: 1px solid #1D3BA8; ' : '') + 'border-radius: 0; font-size: 13px; cursor: pointer; background: ' + (on ? '#1D3BA8' : '#FFFFFF') + '; color: ' + (on ? '#FFFFFF' : '#0E1747') };
+    });
+    var selDefs = [['scope', 'Result scope', 'All results'], ['country', 'Country', 'All countries'], ['project', 'Project', 'All projects'], ['funder', 'Funder', 'All funders'],
+      ['actor', 'Lead or implementing actor', 'All actors'], ['sub', 'Subsector', 'All subsectors'], ['metric', 'Result metric', 'All metrics'],
+      ['method', 'Evidence method', 'All methods'], ['dir', 'Direction of change', 'Any direction']];
+    function facet(key, label, summary, active, extra) {
+      var open = st.openF === key;
+      return Object.assign({ tourId: 'facet-' + key, label: label, summary: summary, open: open, openStr: open ? 'true' : 'false', chevStyle: 'flex: none; transition: transform .15s; transform: rotate(' + (open ? 180 : 0) + 'deg)',
+        summaryStyle: 'font-size: 12.5px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; ' + (active ? 'color: #1D3BA8; font-weight: 600' : 'color: #4B5478'),
+        toggle: function () { self.setState({ openF: self.state.openF === key ? '' : key }); },
+        isSearch: false, isChips: false, isSwitch: false, chips: [] }, extra || {});
+    }
+    function chip(label, on, pick) {
+      return { label: label, pressed: on ? 'true' : 'false', pick: pick,
+        style: 'padding: 7px 12px; min-height: 36px; border-radius: 999px; font-size: 13px; line-height: 1.3; cursor: pointer; text-align: left; border: 1px solid ' + (on ? '#0E1747' : '#D5DAEA') + '; background: ' + (on ? '#0E1747' : '#FFFFFF') + '; color: ' + (on ? '#FFFFFF' : '#0E1747') };
+    }
+    var levelLabel = (lvDefs.filter(function (x) { return x.v === f.level; })[0] || lvDefs[0]).l;
+    var facets = [facet('q', 'Search', f.q || 'Any', !!f.q, { isSearch: true }), facet('level', 'Result type', levelLabel, !!f.level, { isChips: true, chips: lvDefs.map(function (x) { return chip(x.l, f.level === x.v, function () { self.setF('level', x.v); }); }) })];
+    selDefs.forEach(function (dd) {
+      var o = opts[dd[0]].filter(function (x) { return x.v === f[dd[0]]; })[0];
+      var chips = [chip(dd[2], !f[dd[0]], function () { self.setF(dd[0], ''); })].concat(opts[dd[0]].map(function (x) {
+        return chip(x.l, f[dd[0]] === x.v, function () { self.setF(dd[0], f[dd[0]] === x.v ? '' : x.v); });
+      }));
+      facets.push(facet(dd[0], dd[1], o ? o.l : 'Any', !!f[dd[0]], { isChips: true, chips: chips }));
+    });
+    facets.push(facet('standalone', 'Standalone results only', f.standalone ? 'On' : 'Off', !f.standalone, { isSwitch: true }));
+    out.facets = facets;
+
+    // projection
+    var R = 390 * st.zoom, rad = Math.PI / 180, l0 = st.lon, p0 = st.lat * rad, s0 = Math.sin(p0), c0 = Math.cos(p0);
+    out.R = R.toFixed(1);
+    function V(lon, lat) {
+      var l = (lon - l0) * rad, p = lat * rad, cp = Math.cos(p);
+      return [cp * Math.sin(l), c0 * Math.sin(p) - s0 * cp * Math.cos(l), s0 * Math.sin(p) + c0 * cp * Math.cos(l)];
+    }
+    function P(lon, lat) {
+      var v = V(lon, lat), x = v[0], y = v[1];
+      if (v[2] < 0) { var m = Math.sqrt(x * x + y * y) || 1; x /= m; y /= m; }
+      return [400 + R * x, 400 - R * y, v[2]];
+    }
+    function ringPath(flat) {
+      var s = '', vis = false, pts = [], minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+      for (var i = 0; i < flat.length; i += 2) {
+        var q = P(flat[i], flat[i + 1]); if (q[2] > 0) vis = true; pts.push(q);
+        if (q[0] < minx) minx = q[0]; if (q[0] > maxx) maxx = q[0]; if (q[1] < miny) miny = q[1]; if (q[1] > maxy) maxy = q[1];
+      }
+      if (!vis || maxx < vb.x0 - 50 || minx > vb.x0 + vb.w + 50 || maxy < vb.y0 - 50 || miny > vb.y0 + vb.h + 50) return '';
+      for (var j = 0; j < pts.length; j++) s += (j ? 'L' : 'M') + pts[j][0].toFixed(1) + ' ' + pts[j][1].toFixed(1);
+      return s + 'Z';
+    }
+    var projWorld = {};
+    Object.keys(AI_WORLDNAME).forEach(function (k) { projWorld[AI_WORLDNAME[k]] = true; });
+    var land = '';
+    st.world.forEach(function (c) { if (!projWorld[c.n]) land += c.r.map(ringPath).join(''); });
+    var hi = '', bins = ['', '', '', '', '', ''], outline = '', unitSel = '';
+    st.units.forEach(function (u) {
+      var d = u.r.map(ringPath).join(''); if (!d) return;
+      if (st.focus === u.iso) { bins[ucnt[u.id] ? 1 : 0] += d; }
+      else if (isoSet[u.iso]) hi += d; else land += d;
+      if (st.unit === u.id) unitSel = d;
+    });
+    out.landPath = land; out.hiPath = hi; out.unitSelPath = unitSel;
+    bins.forEach(function (b, i) { out['bin' + i] = b; });
+    var g = '';
+    for (var la = -60; la <= 60; la += 30) {
+      var on = false;
+      for (var lo = -180; lo <= 180; lo += 3) { var q = P(lo, la); if (q[2] > 0) { g += (on ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1); on = true; } else on = false; }
+    }
+    for (var lo2 = -180; lo2 < 180; lo2 += 30) {
+      var on2 = false;
+      for (var la2 = -88; la2 <= 88; la2 += 3) { var q2 = P(lo2, la2); if (q2[2] > 0) { g += (on2 ? 'L' : 'M') + q2[0].toFixed(1) + ' ' + q2[1].toFixed(1); on2 = true; } else on2 = false; }
+    }
+    out.gratPath = g;
+
+    // links between places of the same project: arcs from the project hub (country centre) to each place
+    var hiProj = {};
+    if (st.sel) rows.forEach(function (r) { if (r.locs.indexOf(st.sel) >= 0) hiProj[r.p] = true; });
+    else if (f.project) hiProj[f.project] = true;
+    else if (st.unit) rows.forEach(function (r) { r.locs.forEach(function (id) { if (lm[id] && lm[id].unit === st.unit) hiProj[r.p] = true; }); });
+    function arc(a, b) {
+      var A = V(a[0], a[1]), B = V(b[0], b[1]);
+      var dot = Math.max(-1, Math.min(1, A[0] * B[0] + A[1] * B[1] + A[2] * B[2])), om = Math.acos(dot);
+      if (om < 1e-4) return '';
+      var s = '', on = false, n = 18, so = Math.sin(om);
+      for (var i = 0; i <= n; i++) {
+        var t = i / n, ka = Math.sin((1 - t) * om) / so, kb = Math.sin(t * om) / so, h = 1 + 0.35 * om * Math.sin(Math.PI * t);
+        var x = (ka * A[0] + kb * B[0]) * h, y = (ka * A[1] + kb * B[1]) * h, z = ka * A[2] + kb * B[2];
+        if (z > 0) { s += (on ? 'L' : 'M') + (400 + R * x).toFixed(1) + ' ' + (400 - R * y).toFixed(1); on = true; } else on = false;
+      }
+      return s;
+    }
+    var links = '', linksHi = '';
+    Object.keys(projSet).forEach(function (code) {
+      var p = pm[code], hub = data.countries[p.iso[0]].c;
+      Object.keys(cnt).forEach(function (id) {
+        if (id.indexOf(code + '.') !== 0) return;
+        var l = lm[id]; if (!l || l.coord === 'country') return;
+        var a = arc(hub, [l.lon, l.lat]);
+        if (hiProj[code]) linksHi += a; else links += a;
+      });
+    });
+    out.linkPath = links; out.linkHiPath = linksHi;
+
+    // points
+    var pts = [];
+    Object.keys(cnt).forEach(function (id) {
+      var l = lm[id]; if (!l) return;
+      var q = P(l.lon, l.lat);
+      if (q[2] <= 0.02 || q[0] < vb.x0 || q[0] > vb.x0 + vb.w || q[1] < vb.y0 || q[1] > vb.y0 + vb.h) return;
+      var n = cnt[id], isSel = st.sel === id, hub = l.coord === 'country';
+      var size = hub ? Math.min(24, 12 + 1.6 * Math.sqrt(n)) : Math.min(26, 9 + 2.6 * Math.sqrt(n));
+      var edge = ' border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 1px rgba(14, 23, 71, 0.45);';
+      var look = hub ? 'background: ' + (isSel ? '#E8A317' : 'rgba(232, 163, 23, 0.62)') + '; border: 2px solid rgba(255, 255, 255, 0.9);' + edge
+        : (l.approx ? 'background: ' + (isSel ? '#FFFFFF' : 'rgba(255, 255, 255, 0.5)') + '; border: 2px dashed #0E1747;' + edge
+          : 'background: ' + (isSel ? '#0E1747' : 'rgba(14, 23, 71, 0.55)') + '; border: 2px solid rgba(255, 255, 255, 0.9);' + edge);
+      pts.push({ n: hub ? 1e6 : n, aria: (hub ? AI_NAME[l.iso] + ': ' + n + ' project-wide result' + (n === 1 ? '' : 's') + ' (' + l.id.split('.')[0] + ')' : l.name + ', ' + (AI_NAME[l.iso] || '') + ' — ' + n + ' location-specific result' + (n === 1 ? '' : 's') + (l.approx ? ' (approximate position)' : '')),
+        pick: function () { self.pickPlace(id); },
+        style: 'position: absolute; left: ' + ((q[0] - vb.x0) / vb.w * 100).toFixed(3) + '%; top: ' + ((q[1] - vb.y0) / vb.h * 100).toFixed(3) + '%; width: ' + size.toFixed(0) + 'px; height: ' + size.toFixed(0) + 'px; padding: 0; box-sizing: border-box; cursor: pointer; ' + look +
+          (isSel ? ' box-shadow: 0 0 0 1px rgba(14, 23, 71, 0.45), 0 0 0 4px #FFFFFF, 0 0 0 7px #DD5B47; z-index: 3;' : '') });
+    });
+    pts.sort(function (a, b) { return b.n - a.n; });
+    out.points = pts;
+
+    // breadcrumb
+    function crumb(label, pick, current) {
+      return { label: label, pick: pick, current: current ? 'page' : 'false',
+        style: 'border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 13px; ' + (current ? 'background: #0E1747; color: #FFFFFF; font-weight: 600;' : 'background: #EEF1FA; color: #1D3BA8;') };
+    }
+    var crumbs = [crumb('Africa', out.resetView, !st.focus)];
+    if (st.focus) crumbs.push(crumb(AI_NAME[st.focus], function () { self.setState({ unit: null, sel: null }); }, !st.unit && !st.sel));
+    if (st.unit && um[st.unit]) crumbs.push(crumb(um[st.unit].name, function () { self.setState({ sel: null }); }, !st.sel));
+    if (st.sel && lm[st.sel] && lm[st.sel].coord !== 'unit') crumbs.push(crumb(lm[st.sel].name, function () {}, true));
+    out.crumbs = crumbs.map(function (c, i) { c.sep = i > 0; return c; });
+
+    function swatch(n) { return 'width: 12px; height: 12px; background: ' + AI_BIN_COLORS[n ? 1 : 0] + '; display: block'; }
+    var d = out.d;
+    if (st.sel && lm[st.sel] && cnt[st.sel]) {
+      var l = lm[st.sel];
+      var here = rows.filter(function (r) { return r.locs.indexOf(st.sel) >= 0; });
+      var bp = this.byProject(here);
+      var posNote = { register: 'Coordinates from the location register.', unit: 'Shown at the centre of this ' + (data.countries[l.iso].label || 'area').toLowerCase() + '.',
+        within: 'Inside ' + (l.unit && um[l.unit] ? um[l.unit].name : 'this area') + '; exact position not geocoded yet.',
+        approx: 'Approximate position near the project’s other places; not geocoded yet.', country: 'Project-wide results: reported for the whole project or country, not for one specific place.' };
+      Object.assign(d, { kicker: [l.type, AI_NAME[l.iso], l.id].filter(Boolean).join(' · '), name: l.name, note: posNote[l.coord] || '',
+        canDownload: true, nRes: here.length, download: function () { self.download(here, 'adaptation-insights-' + st.sel + '.csv'); },
+        projects: Object.keys(bp).map(function (code) { return self.projCard(code, bp[code], true, 'at this place'); }) });
+    } else if (st.unit && um[st.unit]) {
+      var u = um[st.unit], label = data.countries[u.iso].label;
+      var places = Object.keys(cnt).filter(function (id) { return lm[id] && lm[id].unit === st.unit; });
+      var inU = rows.filter(function (r) { return r.locs.some(function (id) { return places.indexOf(id) >= 0; }); });
+      var bpu = this.byProject(inU);
+      Object.assign(d, { kicker: label + ' · ' + AI_NAME[u.iso], name: u.name,
+        note: inU.length ? inU.length + ' results reported for places in this ' + label.toLowerCase() + '.' : 'No results in the current selection for this ' + label.toLowerCase() + '.',
+        canDownload: inU.length > 0, nRes: inU.length, download: function () { self.download(inU, 'adaptation-insights-' + u.name.replace(/\W+/g, '-') + '.csv'); },
+        hasNav: places.length > 1 || (places.length === 1 && lm[places[0]].coord !== 'unit'), navTitle: 'Places here',
+        nav: places.map(function (id) { return { label: lm[id].name, n: String(cnt[id]), swatch: 'width: 10px; height: 10px; border-radius: 50%; background: #0E1747; display: block', pick: function () { self.pickPlace(id); } }; }),
+        projects: Object.keys(bpu).map(function (code) { return self.projCard(code, bpu[code], true, 'in ' + u.name); }) });
+    } else if (st.focus) {
+      var iso = st.focus, lab = data.countries[iso].label;
+      var inC = rows.filter(function (r) { return pm[r.p].iso.indexOf(iso) >= 0; });
+      var bpc = this.byProject(inC);
+      var us = st.units.filter(function (x) { return x.iso === iso; }).sort(function (a, b) { return (ucnt[b.id] || 0) - (ucnt[a.id] || 0) || a.name.localeCompare(b.name); });
+      var withRes = us.filter(function (x) { return ucnt[x.id]; });
+      Object.assign(d, { kicker: 'Country', name: AI_NAME[iso],
+        note: withRes.length + ' of ' + us.length + ' ' + (AI_PLURAL[lab] || 'areas') + ' have project activity. Click one on the globe or in the list.',
+        canDownload: inC.length > 0, nRes: inC.length, download: function () { self.download(inC, 'adaptation-insights-' + iso + '.csv'); },
+        hasNav: us.length > 0, navTitle: aiCap(AI_PLURAL[lab] || 'areas') + ' · results',
+        nav: us.map(function (x) { return { label: x.name, n: String(ucnt[x.id] || 0), swatch: swatch(ucnt[x.id] || 0), pick: function () { self.pickUnit(x.id); } }; }),
+        projects: Object.keys(bpc).map(function (code) { return self.projCard(code, bpc[code], false, 'in ' + AI_NAME[iso]); }) });
+    } else {
+      var isos = Object.keys(isoSet).sort(function (a, b) { return AI_NAME[a].localeCompare(AI_NAME[b]); });
+      Object.assign(d, { kicker: 'Pilot dataset · 18.11.2026', name: 'Click a country',
+        note: 'Zoom into a country to see its counties, districts or regions. Lines join the places of one project.',
+        hasNav: true, navTitle: 'Countries · results',
+        nav: isos.map(function (iso) { var n = rows.filter(function (r) { return pm[r.p].iso.indexOf(iso) >= 0; }).length; return { label: AI_NAME[iso], n: String(n), swatch: 'width: 10px; height: 10px; background: #BFDCD3; display: block', pick: function () { self.focusCountry(iso); } }; }) });
+    }
+    return out;
+  }
+}
+</script>
+</body>
+</html>
